@@ -1,5 +1,5 @@
 import type { AuditEntry, Locale } from '../types.js'
-import { lower } from './rules/text.js'
+import { comparable } from './rules/text.js'
 import { matchSourceEscaping } from '../po/escapes.js'
 
 /**
@@ -35,12 +35,14 @@ export type MemoryDecision = { kind: 'approve' } | { kind: 'repair'; text: strin
  * so the locale manager's ruling was that either casing is acceptable. The
  * contributor's is kept rather than rewritten to the memory's, since nothing
  * is gained by changing one acceptable text into another. Compared the way
- * the locale's own language folds case, through the same lower() every rule
- * uses: for Turkish that is I and İ lowering to ı and i, and a comparison that
- * ignored it would match words that differ and miss words that do not. For
- * every other language it is the ordinary mapping. Folding everyone the
+ * the locale's own language folds case, through the same comparable() the
+ * rules use: for Turkish that is I and İ lowering to ı and i, and a comparison
+ * that ignored it would match words that differ and miss words that do not.
+ * For every other language it is the ordinary mapping. Folding everyone the
  * Turkish way made "Ix" and "ıx" one word in German, and lowered "DIE" to
- * "dıe" so it no longer matched "die".
+ * "dıe" so it no longer matched "die". comparable() also makes two encodings
+ * of one letter the same text, so a submission that differs from the memory
+ * only in encoding is approved as written too.
  *
  * Different wording is a judgement even when the memory looks better, which on
  * the sampled file it nearly always did, because the same source can mean
@@ -64,7 +66,7 @@ export function decideFromMemory(
   if (memory.length === 0 || !exact) return undefined
   if (entry.msgidPlural !== undefined || entry.msgstr.length !== 1) return undefined
   const submitted = entry.msgstr[0]!
-  const fold = (s: string) => lower(s, locale)
+  const fold = (s: string) => comparable(s, locale)
 
   // A submission left in English is never approved from the memory, even when
   // the memory holds the same English. The memory carries English for

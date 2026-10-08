@@ -9,6 +9,7 @@ import { missingPlaceholders } from '../../draft/placeholders.js'
 import {
   acronymStem,
   capitalizedWords,
+  comparable,
   isAcronym,
   isTitleCase,
   isUpperFirst,
@@ -115,7 +116,8 @@ export function buildRuleContext(opts: BuildRuleContextOptions): RuleContext {
     for (const word of words(entry.msgid)) {
       if (lower(word, opts.locale) === word) lowercased.add(word)
     }
-    const text = entry.msgstr.filter(Boolean).join('\0')
+    // Normalised, or two encodings of one translation count as two wordings.
+    const text = entry.msgstr.filter(Boolean).join('\0').normalize('NFC')
     if (!text) continue
     const seen = translationsByMsgid.get(entry.msgid) ?? new Set<string>()
     seen.add(text)
@@ -518,11 +520,11 @@ export function glossaryMatches(msgid: string, ctx: RuleContext): GlossaryMatch[
 const glossary: Rule = (entry, ctx) => {
   const text = entry.msgstr.find(Boolean)
   if (!text) return []
-  const target = lower(text, ctx.locale)
+  const target = comparable(text, ctx.locale)
 
   const missed: string[] = []
   for (const match of glossaryMatches(entry.msgid, ctx)) {
-    const approved = match.translations.map((t) => lower(t, ctx.locale))
+    const approved = match.translations.map((t) => comparable(t, ctx.locale))
     if (approved.some((t) => containsTerm(target, t, ctx.profile.glossaryStemRatio))) continue
     missed.push(`"${lower(match.term, ctx.locale)}" -> ${approved.map((t) => `"${t}"`).join(' / ')}`)
   }
@@ -590,7 +592,7 @@ export function tmKey(msgid: string, msgctxt?: string): string {
 // reporting them would have buried the 336 that mattered.
 function sameWording(a: string, b: string, locale: Locale): boolean {
   const norm = (v: string): string =>
-    lower(v, locale)
+    comparable(v, locale)
       .trim()
       .replace(/\s+/g, ' ')
       .replace(/[.:…]+$/, '')

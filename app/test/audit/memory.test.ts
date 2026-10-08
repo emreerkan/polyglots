@@ -151,6 +151,20 @@ describe('decideFromMemory and the source escaping', () => {
 
 // Folding the Turkish way for every locale made "Ix" and "ıx" one word in
 // German, so a different wording was approved as the memory's own.
+// ਸ਼ is one code point (U+0A36) or ਸ plus a nukta, and they render the same.
+// Approved pa core and WooCommerce spell "Uncategorized" each way.
+describe('decideFromMemory: canonically equivalent text', () => {
+  it('approves a submission that differs from the memory only in encoding', () => {
+    expect(decideFromMemory(entry('Uncategorized', 'ਸ\u0A3C੍ਰੇਣੀ-ਰਹਿਤ'), ['\u0A36੍ਰੇਣੀ-ਰਹਿਤ'], true, 'pa')).toEqual({ kind: 'approve' })
+  })
+
+  // One wording stored in two encodings is still one answer to the source.
+  it('repairs English from a memory that holds one wording in two encodings', () => {
+    const memory = ['\u0A36੍ਰੇਣੀ-ਰਹਿਤ', 'ਸ\u0A3C੍ਰੇਣੀ-ਰਹਿਤ']
+    expect(decideFromMemory(entry('Uncategorized', 'Uncategorized'), memory, true, 'pa')).toEqual({ kind: 'repair', text: [memory[0]] })
+  })
+})
+
 describe('decideFromMemory: case folding by locale', () => {
   it('does not fold a dotted and a dotless i together outside Turkish', () => {
     expect(decideFromMemory(entry('Example', 'Ix'), ['ıx'], true, 'de')).toBeUndefined()

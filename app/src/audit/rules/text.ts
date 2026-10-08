@@ -9,6 +9,23 @@ export function lower(value: string, locale: Locale): string {
   return value.toLocaleLowerCase(intlTag(locale))
 }
 
+/**
+ * Text as the rules compare it with other text: canonically equivalent
+ * spellings made one, then folded by the locale's case.
+ *
+ * Many letters in Indian scripts have two encodings that render the same, a
+ * Devanagari ड़ as one code point or as ड with a nukta, Bengali য়, Gurmukhi ਸ਼.
+ * Approved translations carry both, often for the same word, so a comparison
+ * of raw strings reported text a reviewer sees as identical. Kept out of lower()
+ * itself, because isUpperFirst and isAcronym read a letter that changes under
+ * lower() as a capital, and normalising turns a one-code-point letter into two.
+ * Nor is the text normalised when the file is read: the translation is written
+ * back as the contributor typed it.
+ */
+export function comparable(value: string, locale: Locale): string {
+  return lower(value.normalize('NFC'), locale)
+}
+
 export function isUpperFirst(word: string, locale: Locale): boolean {
   const first = [...word][0]
   if (!first || !/\p{L}/u.test(first)) return false

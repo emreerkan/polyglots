@@ -465,6 +465,46 @@ describe('tm-conflict with alternatives', () => {
 })
 
 /**
+ * Many letters in Indian scripts have two encodings that render identically:
+ * Devanagari ड़ as one code point (U+095C) or ड plus a nukta, Bengali য় the
+ * same way (U+09DF), Gurmukhi ਸ਼ (U+0A36). Approved WordPress core carries both
+ * for the same word (कड़ी 19 and 23 times), so the rules that compare a
+ * translation with other text have to see them as one. The texts below are
+ * approved WordPress core and WooCommerce strings, except the last case, which
+ * changes the wording on purpose to show a real difference is still reported.
+ */
+describe('canonically equivalent text', () => {
+  const ctx = (locale: string, opts: { glossary?: GlossaryEntry[]; entries?: AuditEntry[]; tm?: Map<string, string[]> } = {}) =>
+    buildRuleContext({ locale, glossary: opts.glossary ?? [], nplurals: 2, entries: opts.entries ?? [], ...(opts.tm ? { tm: opts.tm } : {}) })
+  const unit = (msgid: string, msgstr: string, key = msgid) => ({ key, msgid, msgstr: [msgstr], comments: [], references: [], fuzzy: false })
+
+  it('finds a glossary term written in the other encoding', () => {
+    // The bn glossary writes য় as one code point (U+09DF); the translation as য plus a nukta (U+09BC).
+    const glossary = [{ locale: 'bn', sourceTerm: 'media', translation: 'মিডি\u09DFা', partOfSpeech: 'noun' }]
+    const e = unit('Failed to load media file.', 'মিডিয\u09BCা ফাইল লোড করতে ব্যর্থ হয\u09BCেছে।')
+    expect(runRules(e, ctx('bn', { glossary })).map((f) => f.rule)).not.toContain('glossary')
+  })
+
+  it('does not report a memory conflict that is only an encoding', () => {
+    const tm = new Map([[tmKey('No results found'), ['কোন ফলাফল পাও\u09DFা যা\u09DFনি']]])
+    const e = unit('No results found', 'কোন ফলাফল পাওয\u09BCা যায\u09BCনি')
+    expect(runRules(e, ctx('bn', { tm })).map((f) => f.rule)).not.toContain('tm-conflict')
+  })
+
+  it('does not count two encodings of one translation as inconsistent', () => {
+    const a = unit('Link', 'क\u095Cी')
+    const b = { ...unit('Link', 'कड\u093Cी', 'ctxLink'), msgctxt: 'ctx' }
+    expect(runRules(a, ctx('hi', { entries: [a, b] })).map((f) => f.rule)).not.toContain('inconsistent')
+  })
+
+  it('still reports a translation that differs in more than the encoding', () => {
+    const a = unit('Link', 'कड\u093Cी')
+    const b = { ...unit('Link', 'लिंक', 'ctxLink'), msgctxt: 'ctx' }
+    expect(runRules(a, ctx('hi', { entries: [a, b] })).map((f) => f.rule)).toContain('inconsistent')
+  })
+})
+
+/**
  * A `.po` line quotes its string, so `\"` in the file is a plain quote in the
  * string. A contributor pasting from a tool that wrote the file's spelling
  * submits a backslash that renders in the UI. Nothing caught it: the four found

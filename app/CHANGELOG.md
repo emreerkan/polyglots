@@ -13,6 +13,7 @@ Entries say what changed. For why and how, read the commit.
 ### Fixed
 
 - The punctuation check recognises sentence marks beyond `.!?`, such as the danda `।`, `。`, `؟` and `۔`, so correct Hindi, Bengali, Japanese, Chinese, Arabic and Urdu translations are no longer reported as missing their final stop.
+- Text that looks the same but is encoded differently, as Hindi ड़, Bengali য় and Punjabi ਸ਼ often are, now counts as the same text in the glossary, translation memory and consistency checks.
 
 ## [0.26.2] - 2026-10-08
 
