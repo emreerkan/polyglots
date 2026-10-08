@@ -1,6 +1,6 @@
 import type { AuditEntry, Finding, GlossaryEntry, Locale } from '../../types.js'
 import { controlFindings, controlSpec } from '../control.js'
-import { localeDisplayName } from '../../wporg/locales.js'
+import { languageOf, localeDisplayName } from '../../wporg/locales.js'
 import { customFindings } from '../../rules/custom.js'
 import { loadLocaleRules } from '../../rules/load.js'
 import { CUSTOM_RULE } from '../../rules/names.js'
@@ -317,13 +317,68 @@ const punctuation: Rule = (entry) => {
   ]
 }
 
+/**
+ * How a language ends a sentence where the Unicode property above cannot say,
+ * keyed by language so a regional locale or a formal set inherits its
+ * language's entry.
+ *
+ * Each case is narrower than an extra mark, because a mark added to the class
+ * would count in both directions and in every context. Measured over approved
+ * wp/dev and wp/dev/admin before this table existed: 246 Greek, 2,331 Tibetan,
+ * 350 Dzongkha and 2,975 Thai translations were reported as dropped stops,
+ * and nearly all of them were correct.
+ *
+ * - `answers` ends a sentence only as the reply to a source that ends one.
+ *   Counted the other way it would be read as a sentence the translation
+ *   invented, on strings that are no such thing.
+ * - `unmarked` says the language writes no final mark, so a translation
+ *   without one has dropped nothing.
+ * - `notEnding` is a final mark that looks like a stop and is not one.
+ */
+interface SentenceStyle {
+  answers?: (source: string, text: string) => boolean
+  unmarked?: true
+  notEnding?: RegExp
+}
+
+// The shad, the double shad that closes a section, or a bare ཀ or ག, after
+// which the shad is implied and not written (Unicode's notes on Tibetan line
+// breaking). All of them only as an answer: Tibetan closes a phrase with the
+// shad too, and counting it the other way reported 2,357 Tibetan and 863
+// Dzongkha labels, weekday names among them, as invented sentences.
+const TIBETAN: SentenceStyle = {
+  answers: (_source, text) => /[\u0F0D\u0F0E\u0F40\u0F42]\s*$/u.test(text),
+}
+
+const SENTENCE_STYLES: Record<string, SentenceStyle> = {
+  // Greek asks with a semicolon, U+037E by name and U+003B in practice, since
+  // NFC folds one to the other. Paired with the source's question rather than
+  // counted on its own: a final semicolon is also an HTML entity or a line of
+  // untranslated code, and neither ends a sentence.
+  el: { answers: (source, text) => /\?\s*$/.test(source) && /[;\u037E]\s*$/u.test(text) },
+  bo: TIBETAN,
+  dzo: TIBETAN,
+  // Thai ends a sentence with a space. It uses the full stop only to
+  // abbreviate: every approved translation the check reported as inventing a
+  // stop was a month, a weekday, or น. after a time. A stop after a Latin word
+  // is still a sentence end.
+  th: { unmarked: true, notEnding: /\p{Script=Thai}\p{M}*\.\s*$/u },
+}
+
 // The same concern as the rule above, at the end of a sentence rather than a
 // label: a full stop the source has and the translation drops, or the reverse.
-const sentenceEnd: Rule = (entry) => {
+const sentenceEnd: Rule = (entry, ctx) => {
   const text = entry.msgstr.find(Boolean)
   if (!text) return []
+  const style = SENTENCE_STYLES[languageOf(ctx.locale)]
+  // The source is English, so only the translation is read in its own style.
   const source = endsSentence(entry.msgid)
-  if (source === endsSentence(text)) return []
+  const target =
+    style?.notEnding?.test(text) === true
+      ? false
+      : endsSentence(text) || (source && style?.answers?.(entry.msgid, text) === true)
+  if (source === target) return []
+  if (source && style?.unmarked) return []
   return [
     {
       rule: 'punctuation',
