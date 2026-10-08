@@ -10,6 +10,10 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Fixed
+
+- The punctuation check recognises sentence marks beyond `.!?`, such as the danda `।`, `。`, `؟` and `۔`, so correct Hindi, Bengali, Japanese, Chinese, Arabic and Urdu translations are no longer reported as missing their final stop.
+
 ## [0.26.2] - 2026-10-08
 
 ### Changed

@@ -287,8 +287,14 @@ const TRAILING = /([:…]|\.\.\.)\s*$/
  * stop. That trade is the locale's own convention ("deleted successfully!" is
  * approved as "başarıyla silindi."), so comparing the marks themselves would
  * report a house style as an error.
+ *
+ * Any mark Unicode calls a sentence terminator counts, not only ".!?": the
+ * danda (।) ends a Hindi or Bengali sentence, 。 a Japanese or Chinese one, ؟ an
+ * Arabic question. A Latin-only class reported every correct translation in
+ * those scripts as a dropped stop. The property leaves out the ellipsis and the
+ * colon, which TRAILING handles, and the semicolon.
  */
-const ENDS_SENTENCE = /[.!?]\s*$/
+const ENDS_SENTENCE = /\p{Sentence_Terminal}\s*$/u
 const endsSentence = (value: string): boolean => !TRAILING.test(value) && ENDS_SENTENCE.test(value)
 
 const punctuation: Rule = (entry) => {

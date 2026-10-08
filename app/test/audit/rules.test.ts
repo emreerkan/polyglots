@@ -542,6 +542,36 @@ describe('rules measured against approved work', () => {
     it('says nothing when neither ends with one', () => {
       expect(check('Save changes', 'Değişiklikleri kaydet')).not.toContain('punctuation')
     })
+
+    /**
+     * Many scripts end a sentence with their own mark rather than a Latin full
+     * stop: the danda in Hindi, Nepali and Bengali, 。 in Japanese and Chinese,
+     * ؟ in Arabic, ۔ in Urdu, ։ in Armenian, ។ in Khmer, ። in Amharic.
+     * In a local measurement over approved WordPress core translations in those
+     * ten locales, a check that only knew ".!?" reported 18,148 correct endings
+     * as dropped stops. Each case below is an approved core string.
+     */
+    it.each([
+      ['hi', 'Please contact your site administrator.', 'कृपया अपने साइट प्रशासक से संपर्क करें।'],
+      ['ne', 'Please contact your site administrator.', 'कृपया आफ्नो साइट प्रशासकलाई सम्पर्क गर्नुहोस्।'],
+      ['bn', 'Failed to load media file.', 'মিডিয়া ফাইল লোড করতে ব্যর্থ হয়েছে।'],
+      ['ja', 'Please contact your site administrator.', 'サイト管理者にお問い合わせください。'],
+      ['zh-cn', 'Please contact your site administrator.', '请联系您的站点管理员。'],
+      ['ar', 'Use images attached to the post?', 'هل تريد استخدام الصور المرفقة بالمقالة؟'],
+      ['ur', 'Protect your site from spam.', 'اپنی سائٹ کو اسپیم سے محفوظ رکھیں۔'],
+      ['hy', 'Posts page updated.', 'Գրառումների էջը թարմացված է։'],
+      ['km', 'There was an error installing fonts.', 'មានកំហុសមួយកើតឡើងនៅពេលកំពុងដំឡើងហ្វុងអក្សរ។'],
+      ['am', 'Delete selection.', 'ምርጫ ሰርዝ።'],
+    ])('accepts the %s sentence mark as the end of a sentence', (locale, msgid, msgstr) => {
+      expect(check(msgid, msgstr, locale)).not.toContain('punctuation')
+    })
+
+    // The same marks count the other way: a danda on a label the source leaves
+    // open is a sentence the translation invented, as with a Latin stop above.
+    // 272 approved strings in those locales do this; this one is from core.
+    it('reports a danda the source does not have', () => {
+      expect(check('Term ID', 'टर्म आईडी।', 'hi')).toContain('punctuation')
+    })
   })
 
   // 15 of 69,229 (0.02%). A dropped line in an email body is structure, not
