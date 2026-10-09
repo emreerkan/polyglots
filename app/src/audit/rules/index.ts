@@ -345,9 +345,11 @@ interface SentenceStyle {
 // which the shad is implied and not written (Unicode's notes on Tibetan line
 // breaking). All of them only as an answer: Tibetan closes a phrase with the
 // shad too, and counting it the other way reported 2,357 Tibetan and 863
-// Dzongkha labels, weekday names among them, as invented sentences.
+// Dzongkha labels, weekday names among them, as invented sentences. The ཀ or
+// ག may carry a tsheg after it, because many Tibetan keyboards type one for
+// the space bar; four approved translations end that way.
 const TIBETAN: SentenceStyle = {
-  answers: (_source, text) => /[\u0F0D\u0F0E\u0F40\u0F42]\s*$/u.test(text),
+  answers: (_source, text) => /(?:[\u0F0D\u0F0E]|[\u0F40\u0F42]\u0F0B?)\s*$/u.test(text),
 }
 
 const SENTENCE_STYLES: Record<string, SentenceStyle> = {
@@ -365,6 +367,14 @@ const SENTENCE_STYLES: Record<string, SentenceStyle> = {
   th: { unmarked: true, notEnding: /\p{Script=Thai}\p{M}*\.\s*$/u },
 }
 
+// Single letters each closed by a dot, as in a.m., π.μ. or the Lao month ທ.ວ.,
+// are an abbreviation in any script, so their last dot invents no sentence.
+// Only the letter-dot pairs count: a whole word before the stop is a sentence,
+// and Lao, unlike Thai, ends one that way. Measured over approved wp/dev and
+// wp/dev/admin, this cleared 12 Lao, 4 German and 2 Greek translations and
+// nothing the check should have reported.
+const DOTTED_ABBREVIATION = /(?:^|[\s(])(?:\p{L}\p{M}*\.){2,}\s*$/u
+
 // The same concern as the rule above, at the end of a sentence rather than a
 // label: a full stop the source has and the translation drops, or the reverse.
 const sentenceEnd: Rule = (entry, ctx) => {
@@ -373,8 +383,10 @@ const sentenceEnd: Rule = (entry, ctx) => {
   const style = SENTENCE_STYLES[languageOf(ctx.locale)]
   // The source is English, so only the translation is read in its own style.
   const source = endsSentence(entry.msgid)
+  // Where the source ends a sentence, the abbreviation's dot ends it too, as
+  // English writes "at 9 a.m." without a second stop.
   const target =
-    style?.notEnding?.test(text) === true
+    style?.notEnding?.test(text) === true || (!source && DOTTED_ABBREVIATION.test(text))
       ? false
       : endsSentence(text) || (source && style?.answers?.(entry.msgid, text) === true)
   if (source === target) return []

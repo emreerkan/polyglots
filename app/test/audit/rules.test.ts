@@ -686,6 +686,20 @@ describe('rules measured against approved work', () => {
         expect(check('Pattern category renamed.', 'དཔེ་རིས་སྡེ་ཚན་གྱི་མིང་བརྗེ་སྒྱུར', 'bo')).toContain('punctuation')
       })
 
+      // Many Tibetan keyboards type a tsheg for the space bar, so a sentence
+      // ending in ག can carry one after it. The shad is still implied.
+      it.each([
+        ['dzo', 'There are no widgets available.', 'བརྡ་སྒྲོམ་མིན་འདུག་'],
+        ['dzo', 'The excerpt is hidden.', 'ཟུན་དོན་འདི་སྦ་བཞག་ནུག་'],
+      ])('accepts a %s sentence ending in ག and a trailing tsheg', (locale, msgid, msgstr) => {
+        expect(check(msgid, msgstr, locale)).not.toContain('punctuation')
+      })
+
+      // The tsheg excuses nothing after any other letter.
+      it('still reports a Tibetan sentence ending in a tsheg after another letter', () => {
+        expect(check('Pattern category renamed.', 'དཔེ་རིས་སྡེ་ཚན་གྱི་མིང་བརྗེ་སྒྱུར་', 'bo')).toContain('punctuation')
+      })
+
       // Thai ends a sentence with a space, so a translation without a final
       // mark is the house style rather than a loss.
       it('accepts a Thai sentence with no final mark', () => {
@@ -711,6 +725,21 @@ describe('rules measured against approved work', () => {
       // Lao keeps the full stop, so nothing above reaches it.
       it('still reports a Lao translation that drops the stop', () => {
         expect(check('No fonts activated.', 'ບໍ່ມີຟອນທີ່ເປີດໃຊ້ງານ', 'lo')).toContain('punctuation')
+      })
+
+      // Single letters each followed by a dot are an abbreviation in any
+      // script: 12 Lao months, and German and Greek a.m. and p.m.
+      it.each([
+        ['lo', 'Dec', 'ທ.ວ.'],
+        ['de', 'PM', 'p.m.'],
+        ['el', 'Select AM or PM', 'Επιλέξτε π.μ. ή μ.μ.'],
+      ])('does not read a %s dotted abbreviation as a sentence', (locale, msgid, msgstr) => {
+        expect(check(msgid, msgstr, locale)).not.toContain('punctuation')
+      })
+
+      // A whole word before the stop is a sentence, as Lao writes one.
+      it('still reports a Lao label given a stop the source does not have', () => {
+        expect(check('Notes', 'ໝາຍເຫດ.', 'lo')).toContain('punctuation')
       })
     })
   })
