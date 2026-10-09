@@ -24,6 +24,9 @@ let previous: string | undefined
 // accident gets a refused connection in a millisecond instead of reaching
 // ada.tools. A test that wants a real endpoint starts one and passes its URL.
 process.env.POLYGLOTS_USAGE_URL = 'http://127.0.0.1:9/polyglots/api/usage'
+// And the update check, for a test that runs a command on a terminal
+// without faking it: npm's registry is never asked from the suite.
+process.env.POLYGLOTS_UPDATE_URL = 'http://127.0.0.1:9/polyglots/latest'
 
 beforeEach(() => {
   previous = process.env.POLYGLOTS_HOME

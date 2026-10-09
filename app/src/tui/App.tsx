@@ -43,6 +43,9 @@ export interface AppProps {
   activity?: Activity
   services?: Services
   onExit?: () => void
+  // The update check main() started; the header names a newer version once
+  // it answers.
+  update?: Promise<string | undefined>
 }
 
 type Overlay = 'help' | 'palette' | 'quit'
@@ -112,7 +115,7 @@ export function App(props: AppProps) {
   )
 }
 
-function Shell({ cwd = process.cwd(), onExit }: AppProps) {
+function Shell({ cwd = process.cwd(), onExit, update }: AppProps) {
   // The wrapped commands, so a run started from here is recorded for the
   // exit line: read through the context the App just provided, not the prop.
   const commands = useCommands()
@@ -123,6 +126,14 @@ function Shell({ cwd = process.cwd(), onExit }: AppProps) {
   const typing = useTyping()
   const busy = useBusy()
   const services = useServices()
+  const [latest, setLatest] = useState<string | undefined>()
+  useEffect(() => {
+    let live = true
+    update?.then((v) => live && setLatest(v), () => undefined)
+    return () => {
+      live = false
+    }
+  }, [update])
   const statsUrl = useStatsUrl()
   const statsError = useStatsError()
 
@@ -417,6 +428,7 @@ function Shell({ cwd = process.cwd(), onExit }: AppProps) {
           {...(statusFocus === undefined ? {} : { focusedStep: statusFocus })}
           {...(statsUrl === undefined ? {} : { statsUrl })}
           {...(statsError === undefined ? {} : { statsError })}
+          {...(latest === undefined ? {} : { update: latest })}
         />
       ) : null}
       <Box flexDirection="column" flexGrow={1} marginTop={layout.fits ? 1 : 0} overflow="hidden">

@@ -108,7 +108,9 @@ approved translations for consistency checks) and to the services you choose:
 your review agent, and DeepL, OpenAI or your local model server for drafts.
 If you opt in to [usage statistics](https://ada.tools/polyglots/docs/usage-statistics/),
 a weekly count of strings reviewed goes to ada.tools/polyglots; it is off
-unless you turn it on. Nothing else.
+unless you turn it on. Once a day, polyglots asks registry.npmjs.org for its
+latest version number, to say when an update is out; turn that off with
+`polyglots config set updateCheck off` or `NO_UPDATE_NOTIFIER=1`. Nothing else.
 
 ## Contributing
 

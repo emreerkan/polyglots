@@ -114,6 +114,9 @@ const configSchema = z.object({
   // answered, which the wizard needs to tell apart from an answered no.
   // Either way nothing is sent unless it is true (src/usage).
   usageStats: z.boolean().optional(),
+  // Optional and absent means on: the update check is the default, and
+  // writing it into every config would make an untouched one look set.
+  updateCheck: z.boolean().optional(),
 })
 
 const SECRET_KEYS: ReadonlyArray<keyof Secrets> = ['DEEPL_API_KEY', 'OPENAI_API_KEY']

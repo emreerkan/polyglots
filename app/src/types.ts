@@ -278,6 +278,8 @@ export interface PolyglotsConfig {
   // answered, which counts as no: nothing is sent and no install id exists.
   // DO_NOT_TRACK turns it off whatever this says.
   usageStats?: boolean
+  // Absent means on. Whether to ask npm once a day for a newer version (src/update).
+  updateCheck?: boolean
 }
 
 export interface Secrets {

@@ -182,8 +182,9 @@ With no review provider, `polyglots review` runs the rules only, exactly as
 `--no-ai` does, and says so when it starts. The app's Review screen holds
 "Skip AI checks" on, and `polyglots doctor` reports the mode rather than a
 missing agent. The only network calls left are to translate.wordpress.org,
-for the glossary and the consistency lookups, and the weekly usage totals if
-you turned those on.
+for the glossary and the consistency lookups, the daily check for a newer
+version on npm (off with `polyglots config set updateCheck off`), and the
+weekly usage totals if you turned those on.
 
 **What the rules check.** Placeholders (printf and `{brace}` forms), HTML
 tags, the number of plural forms, leading and trailing whitespace and line

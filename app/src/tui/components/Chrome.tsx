@@ -21,6 +21,8 @@ export interface HeaderProps {
   focusedStep?: SetupStep
   statsUrl?: string
   statsError?: string
+  // A newer version on npm, when the update check found one.
+  update?: string
 }
 
 function StepMark({ step, status, focused }: { step: SetupStep; status: SetupStatus; focused: boolean }) {
@@ -87,13 +89,22 @@ function StatsLine({ url, error }: { url?: string | undefined; error?: string | 
   )
 }
 
-const Version = () => (
-  <Text>
-    <Text {...TOKENS.heading.ink}>polyglots</Text> <Text {...TOKENS.muted.ink}>{VERSION}</Text>
-  </Text>
-)
+function Version({ update }: { update?: string | undefined }) {
+  const glyphs = useGlyphs()
+  return (
+    <Text>
+      <Text {...TOKENS.heading.ink}>polyglots</Text> <Text {...TOKENS.muted.ink}>{VERSION}</Text>
+      {update ? (
+        <Text {...TOKENS.warn.ink}>
+          {' '}
+          {glyphs.warn} {update} available
+        </Text>
+      ) : null}
+    </Text>
+  )
+}
 
-export function Header({ wordmark, provider, model, status, focusedStep, statsUrl, statsError }: HeaderProps) {
+export function Header({ wordmark, provider, model, status, focusedStep, statsUrl, statsError, update }: HeaderProps) {
   const glyphs = useGlyphs()
   // Narrow terminals stack the status under the name: side by side, the
   // setup line alone is wider than the space beside the wordmark.
@@ -101,7 +112,7 @@ export function Header({ wordmark, provider, model, status, focusedStep, statsUr
     return (
       <Box flexDirection="column" width="100%" flexShrink={0}>
         <Box justifyContent="space-between">
-          <Version />
+          <Version update={update} />
           <ProviderLine provider={provider} model={model} />
         </Box>
         <Box justifyContent="space-between">
@@ -121,7 +132,7 @@ export function Header({ wordmark, provider, model, status, focusedStep, statsUr
         ))}
       </Box>
       <Box flexDirection="column" alignItems="flex-end">
-        <Version />
+        <Version update={update} />
         <ProviderLine provider={provider} model={model} />
         <SetupLine status={status} focusedStep={focusedStep} />
         <StatsLine url={statsUrl} error={statsError} />

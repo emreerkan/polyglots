@@ -47,7 +47,8 @@ wizard** for whenever you want it.
 
 The top of the screen shows:
 
-- the version,
+- the version, and beside it the newer one when npm has a newer release. The
+  same notice, with the command to update, is printed when you quit,
 - `review` and the agent that reviews (`p` on home switches it),
 - `setup` and how many of the five steps are done, with a tick or a cross for
   each. Press `tab` to move onto them, arrows to choose one, and `enter` to

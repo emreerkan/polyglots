@@ -26,6 +26,9 @@ export interface RunTuiOptions {
   // For tests: sends the signal on once it has been recorded, which for real
   // ends the process.
   raise?: (signal: NodeJS.Signals) => void
+  // The update check main() started, for the header. Undefined when it is
+  // off; resolves undefined when there is nothing newer.
+  update?: Promise<string | undefined>
 }
 
 export async function runTui(opts: RunTuiOptions = {}): Promise<void> {
@@ -49,7 +52,7 @@ export async function runTui(opts: RunTuiOptions = {}): Promise<void> {
   const services = createServices()
   const stderr = opts.stderr ?? process.stderr
   const writeOut = (stream: NodeJS.WritableStream, text: string) => writeBounded(stream, text, opts.writeTimeoutMs)
-  const instance = render(<App commands={commands} cwd={cwd} activity={activity} services={services} />, renderOptions)
+  const instance = render(<App commands={commands} cwd={cwd} activity={activity} services={services} {...(opts.update === undefined ? {} : { update: opts.update })} />, renderOptions)
   // A signal never reaches the quit prompt or the exit code below, so a run
   // stopped by one is recorded as it happens; see stopOnSignal.
   const stopRuns = (commands ?? defaultCommands).stopOwnRuns

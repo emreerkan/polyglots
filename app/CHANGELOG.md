@@ -10,6 +10,10 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Added
+
+- A daily check for a newer version on npm, shown in the app's header and as a yellow line saying how to update at the end of a command or on quitting the app. Off with `config set updateCheck off` or `NO_UPDATE_NOTIFIER=1`.
+
 ### Fixed
 
 - The punctuation check recognises sentence marks beyond `.!?`, such as the danda `।`, `。`, `؟` and `۔`, so correct Hindi, Bengali, Japanese, Chinese, Arabic and Urdu translations are no longer reported as missing their final stop.

@@ -66,6 +66,7 @@ import type { RunTuiOptions } from './tui/index.js'
 import type { DraftEngineChoice, Locale, PolyglotsConfig } from './types.js'
 import { VERSION } from './version.js'
 import { previewUsagePayload, resetUsageState, sendUsageInBackground, usageStatus, usageStateFile } from './usage/index.js'
+import { checkForUpdate, updateCheckEnabled, updateNotice } from './update/index.js'
 
 const EXIT_OK = 0
 const EXIT_ERROR = 1
@@ -110,6 +111,9 @@ export interface CliDeps {
   // Starts the weekly usage send without waiting for it (src/usage). Injected
   // so a test can see whether a command starts one without any request.
   sendUsage?: () => void
+  // Resolves with the newer version npm holds, or undefined (src/update).
+  // Injected so no test, and no website demo, asks the registry.
+  checkUpdate?: () => Promise<string | undefined>
 }
 
 interface Cli {
@@ -390,7 +394,8 @@ function resolveBatchSize(config: PolyglotsConfig, flag: string | undefined): nu
 // defaultLocale named first and by hand: it has no default, so it is not a key
 // of DEFAULT_CONFIG, and leaving it out would make it impossible to set.
 // usageStats likewise: absent means never asked, so it has no default either.
-const CONFIG_KEYS = ['defaultLocale', ...Object.keys(DEFAULT_CONFIG), 'usageStats'] as Array<keyof PolyglotsConfig>
+// updateCheck too: absent means on, so it is not written into every config.
+const CONFIG_KEYS = ['defaultLocale', ...Object.keys(DEFAULT_CONFIG), 'usageStats', 'updateCheck'] as Array<keyof PolyglotsConfig>
 // The parts of the two local server settings, settable on their own. Dotted
 // rather than a nested `config set ollama '{...}'`, because nobody should have
 // to type JSON to change a model name.
@@ -471,7 +476,8 @@ function coerceConfigValue(key: keyof PolyglotsConfig, raw: string): PolyglotsCo
         .map((entry) => parseHttpUrl(key, entry))
     // on and off, the words the issue and the docs use; true and false too,
     // since that is what config.json holds and what someone will type.
-    case 'usageStats': {
+    case 'usageStats':
+    case 'updateCheck': {
       const value = raw.trim().toLowerCase()
       if (value === 'on' || value === 'true') return true
       if (value === 'off' || value === 'false') return false
@@ -510,6 +516,7 @@ function formatConfigValue(key: keyof PolyglotsConfig, value: PolyglotsConfig[ke
   }
   if (key === 'defaultLocale' && value === undefined) return '(not set)'
   if (key === 'usageStats') return value === true ? 'on' : value === false ? 'off' : '(not asked; off)'
+  if (key === 'updateCheck') return value === false ? 'off' : 'on'
   if (key !== 'properNouns') return String(value)
   const byLocale = value as Record<string, string[]>
   const locales = Object.keys(byLocale).sort()
@@ -630,6 +637,7 @@ const ENVIRONMENT_HELP = [
   '  POLYGLOTS_ASCII=1     plain ASCII glyphs instead of Unicode (also NO_COLOR, FORCE_COLOR)',
   '  DO_NOT_TRACK=1        never send usage statistics, whatever usageStats says',
   '  POLYGLOTS_USAGE_URL   where opted-in usage statistics go (default: https://ada.tools/polyglots/api/usage)',
+  '  NO_UPDATE_NOTIFIER=1  never check npm for a newer version (also CI, or: config set updateCheck off)',
 ].join('\n')
 
 const LIVE_WARNING = 'Sends one prompt to each usable agent; this spends a request on metered plans.'
@@ -1198,9 +1206,48 @@ function usageStatsShow(cli: Cli): void {
   cli.out(JSON.stringify(payload, null, 2))
 }
 
+/**
+ * Starts the daily update check for the same commands that start a usage
+ * send, when stderr is a terminal: the notice goes there, and a run whose
+ * stderr is piped or captured has nobody reading it as it happens. The
+ * environment is the injected one, so tests and the website's demos decide
+ * CI and NO_UPDATE_NOTIFIER for themselves.
+ */
+function startUpdateCheck(cli: Cli, argv: string[], deps: CliDeps): UpdateCheck | undefined {
+  try {
+    if (!startsUsageSend(argv) || cli.streams.stderr.isTTY !== true) return undefined
+    if (!updateCheckEnabled(cli.config(), deps.env ?? process.env)) return undefined
+    const check: UpdateCheck = { promise: (deps.checkUpdate ?? checkForUpdate)() }
+    check.promise = check.promise.then(
+      (latest) => (check.latest = latest),
+      () => undefined,
+    )
+    return check
+  } catch {
+    // An unreadable config, or a check that throws, has no business failing
+    // a command; the command reports the config itself.
+    return undefined
+  }
+}
+
+interface UpdateCheck {
+  promise: Promise<string | undefined>
+  // Set once the check has answered. Read at the end without waiting: a check
+  // still out then is dropped, and the next command reads what it saved.
+  latest?: string | undefined
+}
+
+function sayUpdate(cli: Cli, check: UpdateCheck | undefined): void {
+  if (check?.latest === undefined) return
+  // Yellow throughout, not only the glyph as messages.ts does elsewhere: this
+  // is the one line meant to be noticed after a run's own output.
+  cli.err(cli.ui.err.paint('warn', `${cli.ui.err.glyphs.warn} ${updateNotice(check.latest)}`))
+}
+
 export async function main(argv: string[], deps: CliDeps = {}): Promise<number> {
   const cli = createCli(deps)
   let exitCode = EXIT_OK
+  const update = startUpdateCheck(cli, argv, deps)
   // Started, never awaited: it reads the setting itself and does nothing when
   // off, and a request still out when the command ends dies with the process.
   if (startsUsageSend(argv)) {
@@ -1212,13 +1259,17 @@ export async function main(argv: string[], deps: CliDeps = {}): Promise<number> 
   }
   try {
     if (argv.length === 0) {
-      await cli.runTui()
+      await cli.runTui(update === undefined ? {} : { update: update.promise })
+      sayUpdate(cli, update)
       return EXIT_OK
     }
     await buildProgram(cli, (code) => (exitCode = code)).parseAsync(argv, { from: 'user' })
+    sayUpdate(cli, update)
     return exitCode
   } catch (error) {
-    return exitCodeFor(cli, error)
+    const code = exitCodeFor(cli, error)
+    sayUpdate(cli, update)
+    return code
   }
 }
 
