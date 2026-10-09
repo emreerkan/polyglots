@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-09
+
 ### Added
 
 - A daily check for a newer version on npm, shown in the app's header and as a yellow line saying how to update at the end of a command or on quitting the app. Off with `config set updateCheck off` or `NO_UPDATE_NOTIFIER=1`.
