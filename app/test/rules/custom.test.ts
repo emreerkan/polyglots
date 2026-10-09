@@ -70,6 +70,61 @@ describe('customFindings', () => {
   })
 })
 
+/**
+ * Two encodings of one letter (#25). Hindi ड़ is U+095C or ड plus a nukta,
+ * Bengali য় is U+09DF or য plus a nukta, and approved core carries both, often
+ * for the same word. A pack pattern written in one must find the other, as the
+ * glossary, memory and consistency checks already do.
+ */
+describe('text in either encoding', () => {
+  const COMPOSED = 'क\u095Cी'
+  const DECOMPOSED = 'क\u0921\u093Cी'
+  const hint = (text: string): CustomPattern => ({ kind: 'pattern', text, level: 'hint', ignoreCase: true })
+
+  it('finds the decomposed spelling with a pattern written precomposed', () => {
+    expect(customFindings(entry('Link', `${DECOMPOSED} जोड़ें`), [hint(COMPOSED)], 'hi')).toHaveLength(1)
+  })
+
+  it('finds the precomposed spelling with a pattern written decomposed', () => {
+    expect(customFindings(entry('Link', `${COMPOSED} जोड़ें`), [hint(DECOMPOSED)], 'hi')).toHaveLength(1)
+  })
+
+  it('finds a Bengali letter in either encoding', () => {
+    expect(customFindings(entry('Time', 'স\u09AF\u09BC'), [hint('স\u09DF')], 'bn')).toHaveLength(1)
+  })
+
+  // A word that mixes the two, and case on top: a capital O with a combining
+  // diaeresis is the same Ö the pattern spells precomposed in lower case.
+  it('still pairs Turkish capitals when the capital is decomposed', () => {
+    expect(customFindings(entry('Preview', 'O\u0308nizleme yap'), [mistake('önizleme')], 'tr')).toHaveLength(1)
+  })
+
+  // The nukta is part of the letter: a pattern for ड़ is not one for ड.
+  it('does not find a letter without the mark the pattern spells', () => {
+    expect(customFindings(entry('Link', 'कडी'), [hint(COMPOSED)], 'hi')).toHaveLength(0)
+  })
+
+  // A regular expression is compared on normalised text for a finding, which
+  // needs no position in the original.
+  it('finds a regular expression in either encoding', () => {
+    const p: CustomPattern = { kind: 'pattern', find: `^${COMPOSED}`, level: 'hint', ignoreCase: false }
+    expect(customFindings(entry('Link', `${DECOMPOSED} जोड़ें`), [p], 'hi')).toHaveLength(1)
+  })
+
+  // A repair replaces what matched and leaves the rest as the contributor
+  // typed it, encoding included: the precomposed ड़ after the match stays
+  // U+095C.
+  it('repairs a match in the other encoding and leaves the rest as typed', () => {
+    const p: CustomPattern = { kind: 'pattern', text: COMPOSED, replace: 'लिंक', level: 'fix', ignoreCase: true }
+    expect(applyFixPatterns(entry('Link', `${DECOMPOSED} और \u095C`), [p], 'hi')?.forms).toEqual(['लिंक और \u095C'])
+  })
+
+  it('keeps a leading capital that was typed decomposed', () => {
+    const p: CustomPattern = { kind: 'pattern', text: 'önizleme', replace: 'ön izleme', level: 'fix', ignoreCase: true }
+    expect(applyFixPatterns(entry('Preview', 'O\u0308nizleme yap'), [p], 'tr')?.forms).toEqual(['Ön izleme yap'])
+  })
+})
+
 describe('applyFixPatterns', () => {
   const ellipsis: CustomPattern = { kind: 'pattern', find: '\\.\\.\\.', replace: '…', level: 'fix', ignoreCase: false, note: 'Use the ellipsis character' }
 

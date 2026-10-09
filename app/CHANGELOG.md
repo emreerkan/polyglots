@@ -15,6 +15,7 @@ Entries say what changed. For why and how, read the commit.
 - The punctuation check recognises sentence marks beyond `.!?`, such as the danda `।`, `。`, `؟` and `۔`, so correct Hindi, Bengali, Japanese, Chinese, Arabic and Urdu translations are no longer reported as missing their final stop.
 - Text that looks the same but is encoded differently, as Hindi ड़, Bengali য় and Punjabi ਸ਼ often are, now counts as the same text in the glossary, translation memory and consistency checks.
 - Greek questions ending in `;`, Tibetan and Dzongkha sentences ending in a shad or in ཀ or ག, and Thai sentences with no final mark are no longer reported as missing their final stop, and Thai abbreviations such as `ธ.ค.` are no longer read as sentences.
+- Locale rule patterns and mistakes find text in either Unicode encoding, and a glossary translation stored in both encodings is listed once.
 
 ## [0.26.2] - 2026-10-08
 

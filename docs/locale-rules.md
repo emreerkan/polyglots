@@ -74,6 +74,12 @@ Every section is optional.
   (always wrong, and the reviewer must fix it) or `fix` (replaced
   automatically with `replace`). `when: { source: ... }` applies a pattern
   only when the English source contains that text.
+
+  A letter can be stored in two ways that look the same, such as Hindi ड़ as
+  one character or as ड with a dot below. `mistakes` and `text` patterns find
+  both, whichever one you typed. A `find` hint or error finds both too, but a
+  `find` fix only replaces text stored the way the expression spells it; use
+  `text` for a fix if the letters in it can be stored both ways.
 - **`guidance`** is prose added to the reviewer's instructions: your style
   guide's few most important lines.
 

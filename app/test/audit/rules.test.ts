@@ -497,6 +497,18 @@ describe('canonically equivalent text', () => {
     expect(runRules(a, ctx('hi', { entries: [a, b] })).map((f) => f.rule)).not.toContain('inconsistent')
   })
 
+  // A term stored in both encodings is one approved translation, so a finding
+  // that lists it lists it once.
+  it('names a glossary translation stored in both encodings once', () => {
+    const glossary = [
+      { locale: 'bn', sourceTerm: 'media', translation: 'মিডি\u09DFা', partOfSpeech: 'noun' },
+      { locale: 'bn', sourceTerm: 'media', translation: 'মিডিয\u09BCা', partOfSpeech: 'noun' },
+    ]
+    const e = unit('Failed to load media file.', 'ফাইল লোড করতে ব্যর্থ হয\u09BCেছে।')
+    const finding = runRules(e, ctx('bn', { glossary })).find((f) => f.rule === 'glossary')
+    expect(finding?.message).toBe(`glossary term not used: "media" -> "${'মিডি\u09DFা'.normalize('NFC')}"`)
+  })
+
   it('still reports a translation that differs in more than the encoding', () => {
     const a = unit('Link', 'कड\u093Cी')
     const b = { ...unit('Link', 'लिंक', 'ctxLink'), msgctxt: 'ctx' }

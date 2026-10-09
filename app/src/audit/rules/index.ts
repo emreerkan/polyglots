@@ -566,7 +566,10 @@ export function glossaryMatches(msgid: string, ctx: RuleContext): GlossaryMatch[
     if (term.length < 3) continue
     if (!hasWord(source, term)) continue
     const found = byTerm.get(term) ?? { term: item.sourceTerm, translations: [] }
-    if (!found.translations.includes(item.translation)) found.translations.push(item.translation)
+    // Compared under NFC, so a translation stored in both encodings is listed
+    // once; the first spelling stored is the one kept.
+    const nfc = item.translation.normalize('NFC')
+    if (!found.translations.some((t) => t.normalize('NFC') === nfc)) found.translations.push(item.translation)
     byTerm.set(term, found)
   }
   return [...byTerm.values()]
