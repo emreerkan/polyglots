@@ -465,6 +465,53 @@ describe('tm-conflict with alternatives', () => {
 })
 
 /**
+ * A trailing full stop is not a disagreement in any script, so the danda, the
+ * Urdu ۔ and the ideographic 。 have to be read like the Latin "." that the
+ * rule already ignored. The pairs are approved WooCommerce translations checked
+ * against approved WordPress core, except where a case says it was made up.
+ */
+describe('tm-conflict and the full stop of other scripts', () => {
+  const conflicts = (locale: string, msgid: string, submitted: string, approved: string) => {
+    const e = { key: msgid, msgid, msgstr: [submitted], comments: [], references: [], fuzzy: false }
+    const tm = new Map([[tmKey(msgid), [approved]]])
+    return runRules(e, buildRuleContext({ locale, glossary: [], nplurals: 2, entries: [e], tm })).some(
+      (f) => f.rule === 'tm-conflict',
+    )
+  }
+
+  it('ignores a danda where the memory has a Latin stop, or the reverse', () => {
+    expect(conflicts('hi', 'Item added.', 'आइटम जोड़ा गया.', 'आइटम जोड़ा गया।')).toBe(false)
+    expect(conflicts('pa', 'Item selected.', 'ਚੀਜ਼ ਚੁਣੀ।', 'ਚੀਜ਼ ਚੁਣੀ.')).toBe(false)
+  })
+
+  it('ignores a dropped danda, Urdu stop or ideographic stop', () => {
+    expect(conflicts('bn', '%1$s and %2$s', '%1$s এবং %2$s', '%1$s এবং %2$s।')).toBe(false)
+    // Made up: approved core with its stop dropped.
+    expect(conflicts('ur', 'Post updated.', 'پوسٹ اپڈیٹ کر دی گئی', 'پوسٹ اپڈیٹ کر دی گئی۔')).toBe(false)
+    expect(conflicts('zh-cn', '%s removed.', '%s 已移除', '%s 已移除。')).toBe(false)
+  })
+
+  it('ignores a space before the mark and the fullwidth colon', () => {
+    expect(conflicts('bn', 'Write title…', 'শিরোনাম লিখুন…', 'শিরোনাম লিখুন ...')).toBe(false)
+    // Made up: approved core with a space typed before the danda.
+    expect(conflicts('hi', 'Post updated.', 'पोस्ट अपडेट किया गया ।', 'पोस्ट अपडेट किया गया।')).toBe(false)
+    expect(conflicts('zh-cn', 'Parent %s:', '上级 %s:', '上级 %s：')).toBe(false)
+  })
+
+  // Made up: a question answered with a statement still says something else,
+  // in any script, as "?" against "." already did.
+  it('still reports a question mark against a full stop', () => {
+    expect(conflicts('hi', 'Disconnect pattern?', 'डिस्कनेक्ट पैटर्न।', 'डिस्कनेक्ट पैटर्न?')).toBe(true)
+    expect(conflicts('ur', 'Disconnect pattern?', 'پیٹرن کو منقطع کریں۔', 'پیٹرن کو منقطع کریں؟')).toBe(true)
+  })
+
+  // Made up: a different word before the same danda.
+  it('still reports a different wording that ends with the same mark', () => {
+    expect(conflicts('hi', 'Page updated.', 'पृष्ठ अपडेट किया गया।', 'पेज अपडेट किया गया।')).toBe(true)
+  })
+})
+
+/**
  * Many letters in Indian scripts have two encodings that render identically:
  * Devanagari ड़ as one code point (U+095C) or ड plus a nukta, Bengali য় the
  * same way (U+09DF), Gurmukhi ਸ਼ (U+0A36). Approved WordPress core carries both
