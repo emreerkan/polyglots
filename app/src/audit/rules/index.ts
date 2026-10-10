@@ -657,6 +657,33 @@ export function tmKey(msgid: string, msgctxt?: string): string {
   return `${msgctxt ?? ''}\u0000${msgid}`
 }
 
+/**
+ * The question and exclamation marks among Unicode's sentence terminators, as of
+ * Unicode 17. They change what a sentence says, so a question against a
+ * statement is still a different wording.
+ */
+const ASKS_OR_EXCLAIMS =
+  /[!?\u061F\u07F9\u1367\u1944\u1945\u203C\u203D\u2047-\u2049\u2CFA\u2CFB\u2E2E\u2E53\u2E54\uA60F\uA6F7\uFE15\uFE16\uFE56\uFE57\uFF01\uFF1F\u{11143}]/u
+
+/**
+ * The full stop of any script, with the colon and the ellipsis, and any space
+ * before them.
+ *
+ * A Latin-only class held every other script to a stricter standard: the danda
+ * (।) ends 1,759 of 5,941 approved Hindi core translations, ۔ 1,295 of 4,061
+ * Urdu ones and 。 3,241 of 8,142 Japanese ones, and a submission that dropped
+ * one, or wrote "." for it, was reported as a different approved translation
+ * where the same difference in German was not. So any mark Unicode calls a
+ * sentence terminator counts, as in ENDS_SENTENCE, except the ones above. The
+ * space is part of it because some translators type one before the danda
+ * ("हो गया ।" in 28 approved Hindi translations, 37 Nepali), and the fullwidth
+ * colon is the colon of Chinese, where it ends 117 approved translations.
+ */
+const TRAILING_STOP = new RegExp(
+  `(?:[\\s:\\uFF1A\\u2026]|(?!${ASKS_OR_EXCLAIMS.source})\\p{Sentence_Terminal})+$`,
+  'u',
+)
+
 // Case, spacing and a trailing full stop or colon are not a disagreement worth
 // a reviewer's time. On a real submission they were 138 of 474 differences, and
 // reporting them would have buried the 336 that mattered.
@@ -665,7 +692,7 @@ function sameWording(a: string, b: string, locale: Locale): boolean {
     comparable(v, locale)
       .trim()
       .replace(/\s+/g, ' ')
-      .replace(/[.:…]+$/, '')
+      .replace(TRAILING_STOP, '')
   return norm(a) === norm(b)
 }
 
