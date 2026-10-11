@@ -60,7 +60,7 @@
     "dotenv": "^17.4.2",
     "fast-xml-parser": "^5.11.1",
     "gettext-parser": "^9.1.1",
-    "ink": "^7.1.1",
+    "ink": "^8.0.0",
     "ink-select-input": "^6.2.0",
     "ink-text-input": "^6.0.0",
     "openai": "^7.10.0",
