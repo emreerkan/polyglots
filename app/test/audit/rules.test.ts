@@ -498,11 +498,28 @@ describe('tm-conflict and the full stop of other scripts', () => {
     expect(conflicts('zh-cn', 'Parent %s:', '上级 %s:', '上级 %s：')).toBe(false)
   })
 
+  // Made up: approved core with its shad dropped. The shads are not Unicode
+  // sentence terminators, so they have to be named.
+  it('ignores a dropped Tibetan or Dzongkha shad', () => {
+    expect(conflicts('bo', 'Post updated.', 'ཡིག་ཆ་གསར་བསྒྱུར་བྱས', 'ཡིག་ཆ་གསར་བསྒྱུར་བྱས།')).toBe(false)
+    expect(conflicts('dz', 'Post updated.', 'ཡིག་ཆ་གསར་བསྒྱུར་འབད་ཡི', 'ཡིག་ཆ་གསར་བསྒྱུར་འབད་ཡི༎')).toBe(false)
+  })
+
   // Made up: a question answered with a statement still says something else,
   // in any script, as "?" against "." already did.
   it('still reports a question mark against a full stop', () => {
     expect(conflicts('hi', 'Disconnect pattern?', 'डिस्कनेक्ट पैटर्न।', 'डिस्कनेक्ट पैटर्न?')).toBe(true)
     expect(conflicts('ur', 'Disconnect pattern?', 'پیٹرن کو منقطع کریں۔', 'پیٹرن کو منقطع کریں؟')).toBe(true)
+  })
+
+  // Made up. Neither mark has question or exclamation in its name, but
+  // Unicode's notes say they work as one: AAF1 is glossed "question mark", and
+  // Pahawh Hmong's VOS THOM and VOS TSHAB CEEB "function as" a question and an
+  // exclamation mark.
+  it('still reports a question or exclamation mark named as a sign', () => {
+    expect(conflicts('mni', 'Delete?', 'ꯃꯨꯠꯊꯠꯀꯅꯤ꫱', 'ꯃꯨꯠꯊꯠꯀꯅꯤ꫰')).toBe(true)
+    expect(conflicts('hmn', 'Delete?', 'Rho \u{16B37}', 'Rho')).toBe(true)
+    expect(conflicts('hmn', 'Delete!', 'Rho \u{16B38}', 'Rho')).toBe(true)
   })
 
   // Made up: a different word before the same danda.

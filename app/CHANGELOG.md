@@ -16,7 +16,7 @@ Entries say what changed. For why and how, read the commit.
 
 ### Fixed
 
-- The translation memory check ignores trailing script-specific full stops such as `।`, `۔` and `。`, plus a space before them, as it already did for `.`, so a translation that drops one or writes `.` for it no longer conflicts with the memory.
+- The translation memory check ignores a trailing `।`, `۔`, `。`, Tibetan shad or other script full stop, and a space before it, as it did for `.`.
 
 ## [0.27.0] - 2026-10-09
 
