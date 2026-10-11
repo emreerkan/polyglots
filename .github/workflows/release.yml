@@ -1,0 +1,73 @@
+name: Release
+
+# Pushed by npm run ship (app/scripts/ship.mjs) once CI is green on the
+# release commit. Publishes that commit to npm and makes the GitHub Release.
+#
+# npm trusted publishing: npm accepts this workflow, on this repository, as a
+# publisher, through a short-lived OIDC token GitHub issues to the job. There
+# is no npm token here or on the maintainer's machine, and npm records
+# provenance, so the package page shows the commit and workflow that built it.
+# The trusted publisher is configured on npmjs.com, in the package's settings.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+# Not cancelled: a publish half done is worse than one that waits. The group is
+# deliberately not named after the workflow. The CI it calls groups by
+# workflow and ref, which inside a called workflow resolves to this one's
+# name, and concurrency groups ignore case: a group called release-<ref> here
+# would be the same group as CI's Release-<ref>, and each would wait on the
+# other forever.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # the GitHub Release
+      id-token: write # the OIDC token npm trusted publishing exchanges
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+        working-directory: app
+
+      # A tag on a commit whose package.json says another version would
+      # publish the wrong number under the right tag.
+      - name: The tag names the package version
+        working-directory: app
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME, but package.json says $version"
+            exit 1
+          fi
+
+      # Trusted publishing needs npm 11.5.1 or later; Node 24 ships 11.x.
+      - run: npm publish --provenance --access public
+        working-directory: app
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node app/scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"

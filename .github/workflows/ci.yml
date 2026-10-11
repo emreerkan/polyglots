@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # The publish workflow runs this whole file again on the tag before it
+  # publishes, so a tag pushed by hand cannot skip the checks.
+  workflow_call:
 
 # The workflow only reads the repository. Nothing here publishes, tags or
 # comments, so the token gets nothing more, including on pushes to main.

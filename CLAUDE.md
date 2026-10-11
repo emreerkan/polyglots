@@ -154,7 +154,13 @@ release time. A release only moves them under a dated heading.
 
 `npm run release -- <patch|minor>` is the whole release: it refuses on a dirty
 tree or a running job, typechecks, tests, runs the website's demo snapshot,
-bumps, cuts the changelog, builds and commits. It never pushes. The size is the
+bumps, cuts the changelog, builds and commits, then ships through
+`scripts/ship.mjs`. Shipping asks once, then pushes main, waits for CI, tags,
+pushes the tag (`.github/workflows/release.yml` publishes to npm with trusted
+publishing and makes the GitHub Release) and runs `deploy.sh`. It resumes from
+what has already happened, so `npm run ship` carries on after a failure. An
+agent runs the release with `--no-ship` and leaves shipping to the maintainer:
+it publishes and deploys, which are theirs to start. The size is the
 caller's call: minor when the next run behaves differently for someone already
 using the tool (a new command, key, provider or rule, different output or
 requester wording, or anything that moves `configHash` or an engine id and so

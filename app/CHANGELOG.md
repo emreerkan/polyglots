@@ -15,6 +15,7 @@ Entries say what changed. For why and how, read the commit.
 - A model fix is checked with the rules once accepted; what it brought in that the submission did not have is noted beside it as `fix-suspect`, and is not counted in the requester message.
 - Reply templates per locale, created, edited and deleted in Configuration › Reply templates or with `polyglots template edit|list|delete|path`, filled after a review with the requester (`--requester`), a choice on whether the review found anything and the requester message; printed by `review` (`--template`) and shown in the app, where `y` copies and `t` switches it.
 - Every pull request and push to main is tested on GitHub: typecheck, tests on Node 24 and 26, the built CLI and the website build. Dependabot proposes grouped weekly dependency updates.
+- Releases are published to npm from GitHub Actions with provenance, and each version gets a GitHub Release with its changelog section.
 
 ### Changed
 

@@ -48,6 +48,7 @@
     "stats-i18n": "node scripts/stats-i18n.mjs",
     "stats-client": "node scripts/stats-client.mjs",
     "release": "node scripts/release.mjs",
+    "ship": "node scripts/ship.mjs",
     "prepack": "node scripts/prepack.mjs"
   },
   "license": "MIT",

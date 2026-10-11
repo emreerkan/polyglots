@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// npm run release -- <patch|minor>
+// npm run release -- <patch|minor> [--no-ship]
 //
 // Verify, bump, cut the changelog, build and commit, in that order. Each step
 // can stop the release, and the order is the point: a version bumped onto a
@@ -9,9 +9,14 @@
 // Two decisions stay with people. The size is passed in, because whether a
 // change is minor is a judgement about what it does to someone already using
 // the tool. The changelog lines are written under Unreleased when the work is
-// merged; this only moves them. Nothing is pushed.
+// merged; this only moves them.
+//
+// Then it ships, through ship.mjs: push, CI, tag, publish from GitHub, deploy.
+// ship.mjs asks before the first step anyone else sees, and --no-ship stops
+// at the commit, for a release to look over first; npm run ship carries on
+// from there.
 
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -31,7 +36,8 @@ function fail(message) {
 }
 
 const size = process.argv[2]
-if (size !== 'patch' && size !== 'minor') fail('Usage: npm run release -- <patch|minor>')
+const noShip = process.argv.slice(3).includes('--no-ship')
+if (size !== 'patch' && size !== 'minor') fail('Usage: npm run release -- <patch|minor> [--no-ship]')
 
 // A release commit carries only the release. Anything else uncommitted would
 // either ride along unexplained or be left out of the build that is tagged.
@@ -88,10 +94,21 @@ try {
   run('git', ['add', ...files])
   run('git', ['commit', '-q', '-m', `Release ${version}`, '-m', notes])
   console.log(`✓ Released ${version}: ${read('git', ['log', '--oneline', '-1'])}`)
-  console.log('› Not pushed. Push when ready.')
 } catch (error) {
   // Leaves the tree as it was, so a failed build cannot leave a bumped
   // version or a cut changelog behind to be committed by accident later.
   execFileSync('git', ['checkout', '--', ...files], { cwd: app })
   fail(`Release stopped, version and changelog restored: ${error instanceof Error ? error.message : String(error)}`)
+}
+
+if (noShip) {
+  console.log('› Not shipped. Ship with: npm run ship')
+} else {
+  // A separate process, so a ship that stops part way is the same thing to
+  // resume as one started by hand: npm run ship.
+  const shipped = spawnSync('node', ['scripts/ship.mjs'], { cwd: app, stdio: 'inherit' })
+  if (shipped.status !== 0) {
+    console.error('› The release commit is made. Ship it, or carry on after a failure, with: npm run ship')
+    process.exit(shipped.status ?? 1)
+  }
 }
