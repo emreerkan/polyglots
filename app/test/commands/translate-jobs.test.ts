@@ -7,6 +7,7 @@ import { openJobsDb } from '../../src/jobs/db.js'
 import { openDb, replaceGlossary } from '../../src/storage/index.js'
 import { translateFile } from '../../src/commands/translate.js'
 import type { DraftEngine, ReviewInput, ReviewResult } from '../../src/types.js'
+import { DEFAULT_QWEN_MODEL } from '../../src/draft/qwen.js'
 
 let dir: string
 let jobsDb: Database.Database
@@ -248,7 +249,7 @@ msgstr "Kaydet"
   // Storing every local model as `qwen` meant switching models served one
   // model's drafts as the other's, and collapsed them into one row in stats.
   it('names the local model rather than the menu choice', async () => {
-    expect(await runWithoutInjectedEngine('qwen')).toBe('ollama:qwen3.8:27b-mlx')
+    expect(await runWithoutInjectedEngine('qwen')).toBe(`ollama:${DEFAULT_QWEN_MODEL}`)
   })
 
   it('leaves a metered engine as its own name', async () => {

@@ -4,6 +4,7 @@ import { App } from '../../src/tui/App.js'
 import { loadConfig } from '../../src/config.js'
 import type { ModelServer } from '../../src/draft/discover.js'
 import { fakeCommands, flat, openFromHome, keys, makeHome, modelServer, render, tick, waitFor, waitForText, cleanup, type Home } from './helpers.js'
+import { DEFAULT_QWEN_MODEL } from '../../src/draft/qwen.js'
 
 let home: Home
 
@@ -18,7 +19,7 @@ afterEach(async () => {
 
 const ollama = modelServer({
   models: [
-    { name: 'qwen3.8:27b-mlx', model: 'qwen3.8:27b-mlx', size: 17_200_000_000, parameterSize: '27B', quantization: 'Q4_K_M' },
+    { name: `${DEFAULT_QWEN_MODEL}`, model: `${DEFAULT_QWEN_MODEL}`, size: 17_200_000_000, parameterSize: '27B', quantization: 'Q4_K_M' },
     { name: 'llama3.2:latest', model: 'llama3.2:latest', size: 2_019_393_189, parameterSize: '3.2B', quantization: 'Q4_K_M' },
   ],
 })
@@ -59,7 +60,7 @@ describe('Local models', () => {
     await openLocalModels(stdin, lastFrame)
     await waitForText(lastFrame, 'llama3.2:latest')
     const frame = lastFrame()
-    expect(lineOf(frame, 'qwen3.8:27b-mlx')).toMatch(/17\.2 GB\s+27B\s+Q4_K_M\s+\(current\)/)
+    expect(lineOf(frame, `${DEFAULT_QWEN_MODEL}`)).toMatch(/17\.2 GB\s+27B\s+Q4_K_M\s+\(current\)/)
     expect(lineOf(frame, 'llama3.2:latest')).toMatch(/2\.0 GB\s+3\.2B\s+Q4_K_M/)
     expect(lineOf(frame, 'llama3.2:latest')).not.toContain('(current)')
     expect(flat(frame)).toContain('Not running: llama.cpp server (http://localhost:8080)')
@@ -86,7 +87,7 @@ describe('Local models', () => {
       openaiCompatible: { baseUrl: 'http://localhost:1234', model: 'qwen2.5-7b-instruct' },
     })
     expect(loadConfig().localServerKind).toBe('openai-compatible')
-    expect(lineOf(lastFrame(), 'qwen3.8:27b-mlx')).not.toContain('(current)')
+    expect(lineOf(lastFrame(), `${DEFAULT_QWEN_MODEL}`)).not.toContain('(current)')
   })
 
   it('switches back to Ollama when an Ollama model is chosen', async () => {
@@ -122,13 +123,13 @@ describe('Local models', () => {
       localServerKind: 'ollama',
       ollama: { baseUrl: 'http://localhost:11434', model: 'llama3.2:latest' },
     })
-    expect(lineOf(lastFrame(), 'qwen3.8:27b-mlx')).not.toContain('(current)')
+    expect(lineOf(lastFrame(), `${DEFAULT_QWEN_MODEL}`)).not.toContain('(current)')
   })
 
   // A context length belongs to the model and server it was set for; carried
   // to another, it would be sent as num_ctx to a model it was never meant for.
   it('drops the context length when the model changes', async () => {
-    fakeCommands().saveConfig({ ollama: { baseUrl: 'http://localhost:11434', model: 'qwen3.8:27b-mlx', contextLength: 16384 } })
+    fakeCommands().saveConfig({ ollama: { baseUrl: 'http://localhost:11434', model: `${DEFAULT_QWEN_MODEL}`, contextLength: 16384 } })
     const saveConfig = vi.fn(fakeCommands().saveConfig)
     const commands = fakeCommands({ discoverModels: vi.fn(async () => [ollama]), saveConfig })
     const { lastFrame, stdin } = render(<App commands={commands} />)
@@ -142,7 +143,7 @@ describe('Local models', () => {
   })
 
   it('keeps the context length when the current model is chosen again', async () => {
-    fakeCommands().saveConfig({ ollama: { baseUrl: 'http://localhost:11434', model: 'qwen3.8:27b-mlx', contextLength: 16384 } })
+    fakeCommands().saveConfig({ ollama: { baseUrl: 'http://localhost:11434', model: `${DEFAULT_QWEN_MODEL}`, contextLength: 16384 } })
     const commands = fakeCommands({ discoverModels: vi.fn(async () => [ollama]) })
     const { lastFrame, stdin } = render(<App commands={commands} />)
     await openLocalModels(stdin, lastFrame)
@@ -166,7 +167,7 @@ describe('Local models', () => {
     await tick()
     stdin.write(keys.enter)
     await waitForText(() => flat(lastFrame()), 'Could not save that: EACCES: permission denied')
-    expect(lineOf(lastFrame(), 'qwen3.8:27b-mlx')).toContain('(current)')
+    expect(lineOf(lastFrame(), `${DEFAULT_QWEN_MODEL}`)).toContain('(current)')
     expect(lineOf(lastFrame(), 'llama3.2:latest')).not.toContain('(current)')
   })
 

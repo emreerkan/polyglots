@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { saveConfig } from '../../src/config.js'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { App } from '../../src/tui/App.js'
 import { cleanup, fakeCommands, flat, keys, makeHome, openFromHome, render, tick, waitFor, waitForText, type Home } from './helpers.js'
@@ -184,7 +184,15 @@ describe('the file picker on a short terminal', () => {
     { columns: 80, rows: 24 },
     { columns: 60, rows: 20 },
   ])('keeps the selected file in view at $columns x $rows', async (size) => {
-    for (let i = 0; i < 20; i++) await writeFile(join(cwd, `file-${String(i).padStart(2, '0')}.po`), '')
+    // The picker lists newest first. Writing the files in a loop gives each
+    // its own mtime on APFS, but ext4's coarser clock hands several the same
+    // one, the tie falls back to name order, and file-19 drops out of view.
+    // So the order is set, not left to the filesystem.
+    for (let i = 0; i < 20; i++) {
+      const file = join(cwd, `file-${String(i).padStart(2, '0')}.po`)
+      await writeFile(file, '')
+      await utimes(file, 1_700_000_000 + i, 1_700_000_000 + i)
+    }
     const view = render(<App commands={fakeCommands()} cwd={cwd} />, size)
     await openFromHome(view.stdin, 'review')
     await waitForText(view.lastFrame, 'file-19.po')

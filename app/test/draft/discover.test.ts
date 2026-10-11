@@ -11,6 +11,7 @@ import {
   sanitizeDisplay,
   type ModelServer,
 } from '../../src/draft/discover.js'
+import { DEFAULT_QWEN_MODEL } from '../../src/draft/qwen.js'
 
 // Every test here injects fetch. None of them opens a socket: whether the
 // machine running the suite happens to have Ollama or LM Studio up must not
@@ -53,8 +54,8 @@ function fakeFetch(answers: Record<string, Answer>): typeof fetch & { calls: Cal
 const TAGS = {
   models: [
     {
-      name: 'qwen3.8:27b-mlx',
-      model: 'qwen3.8:27b-mlx',
+      name: `${DEFAULT_QWEN_MODEL}`,
+      model: `${DEFAULT_QWEN_MODEL}`,
       size: 17_200_000_000,
       details: { parameter_size: '27B', quantization_level: 'Q4_K_M', family: 'qwen3' },
       digest: 'abc',
@@ -122,8 +123,8 @@ describe('discoverModels', () => {
     const ollama = server(servers, 'http://localhost:11434')
     expect(ollama).toMatchObject({ state: 'up', kind: 'ollama', selectable: true })
     expect(ollama.models[0]).toEqual({
-      name: 'qwen3.8:27b-mlx',
-      model: 'qwen3.8:27b-mlx',
+      name: `${DEFAULT_QWEN_MODEL}`,
+      model: `${DEFAULT_QWEN_MODEL}`,
       size: 17_200_000_000,
       parameterSize: '27B',
       quantization: 'Q4_K_M',
@@ -239,7 +240,7 @@ describe('matchesModel', () => {
   })
 
   it('compares against model as well as name', () => {
-    expect(matchesModel('qwen3.8:27b-mlx', { name: 'my-alias', model: 'qwen3.8:27b-mlx' })).toBe(true)
+    expect(matchesModel(`${DEFAULT_QWEN_MODEL}`, { name: 'my-alias', model: `${DEFAULT_QWEN_MODEL}` })).toBe(true)
   })
 
   it('is case-sensitive, as Ollama stores names', () => {
@@ -250,8 +251,8 @@ describe('matchesModel', () => {
 describe('checkOllamaModel', () => {
   it('says installed when the listing holds the model', async () => {
     const fetch = fakeFetch({ 'http://localhost:11434/api/tags': { body: TAGS } })
-    const check = await checkOllamaModel({ baseUrl: 'http://localhost:11434', model: 'qwen3.8:27b-mlx' }, { fetch })
-    expect(check).toEqual({ state: 'installed', model: 'qwen3.8:27b-mlx', baseUrl: 'http://localhost:11434' })
+    const check = await checkOllamaModel({ baseUrl: 'http://localhost:11434', model: `${DEFAULT_QWEN_MODEL}` }, { fetch })
+    expect(check).toEqual({ state: 'installed', model: `${DEFAULT_QWEN_MODEL}`, baseUrl: 'http://localhost:11434' })
   })
 
   it('says missing with the pull command and the installed siblings', async () => {
@@ -259,14 +260,14 @@ describe('checkOllamaModel', () => {
     const check = await checkOllamaModel({ baseUrl: 'http://localhost:11434', model: 'qwen3.8:9b' }, { fetch })
     expect(check.state).toBe('missing')
     expect(check.message).toContain('qwen3.8:9b is not installed in Ollama at http://localhost:11434')
-    expect(check.message).toContain('Installed: qwen3.8:27b-mlx')
+    expect(check.message).toContain(`Installed: ${DEFAULT_QWEN_MODEL}`)
     expect(check.message).not.toContain('llama3.2')
     expect(check.message).toMatch(/Pull it with: ollama pull qwen3\.8:9b$/)
   })
 
   it('says unreachable and how to start it', async () => {
     const fetch = fakeFetch({})
-    const check = await checkOllamaModel({ baseUrl: 'http://localhost:11434', model: 'qwen3.8:27b-mlx' }, { fetch })
+    const check = await checkOllamaModel({ baseUrl: 'http://localhost:11434', model: `${DEFAULT_QWEN_MODEL}` }, { fetch })
     expect(check.state).toBe('unreachable')
     expect(check.message).toBe('Ollama is not reachable at http://localhost:11434 (not running). Start it with: ollama serve')
   })
@@ -289,12 +290,12 @@ describe('checkOllamaModel', () => {
 
 describe('pullCommand', () => {
   it('is bare for the default host', () => {
-    expect(pullCommand('qwen3.8:27b-mlx', 'http://localhost:11434')).toBe('ollama pull qwen3.8:27b-mlx')
-    expect(pullCommand('qwen3.8:27b-mlx', 'http://localhost:11434/')).toBe('ollama pull qwen3.8:27b-mlx')
+    expect(pullCommand(`${DEFAULT_QWEN_MODEL}`, 'http://localhost:11434')).toBe(`ollama pull ${DEFAULT_QWEN_MODEL}`)
+    expect(pullCommand(`${DEFAULT_QWEN_MODEL}`, 'http://localhost:11434/')).toBe(`ollama pull ${DEFAULT_QWEN_MODEL}`)
   })
 
   it('names any other host, so the pull lands where the run will ask', () => {
-    expect(pullCommand('qwen3.8:27b-mlx', 'http://box:11434')).toBe('OLLAMA_HOST=http://box:11434 ollama pull qwen3.8:27b-mlx')
+    expect(pullCommand(`${DEFAULT_QWEN_MODEL}`, 'http://box:11434')).toBe(`OLLAMA_HOST=http://box:11434 ollama pull ${DEFAULT_QWEN_MODEL}`)
   })
 })
 
@@ -365,7 +366,7 @@ describe('checkLocalModel', () => {
   it('asks Ollama the way checkOllamaModel does, and says which kind it checked', async () => {
     const fetch = fakeFetch({ 'http://localhost:11434/api/tags': { body: TAGS } })
     const check = await checkLocalModel({ kind: 'ollama', ...DEFAULT_CONFIG.ollama }, { fetch })
-    expect(check).toEqual({ state: 'installed', kind: 'ollama', model: 'qwen3.8:27b-mlx', baseUrl: 'http://localhost:11434' })
+    expect(check).toEqual({ state: 'installed', kind: 'ollama', model: `${DEFAULT_QWEN_MODEL}`, baseUrl: 'http://localhost:11434' })
   })
 
   it('treats a target without a kind as Ollama, which is what such a caller means', async () => {

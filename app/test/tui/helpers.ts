@@ -19,6 +19,7 @@ import type { AgentStatus } from '../../src/agent/discover.js'
 import type { ModelCheck, ModelServer } from '../../src/draft/discover.js'
 import type { ReviewProvider, ReviewSummary } from '../../src/types.js'
 import type { FetchStatus, ProjectRef } from '../../src/wporg/projects.js'
+import { DEFAULT_QWEN_MODEL } from '../../src/draft/qwen.js'
 
 const ANSI = /\x1b\[[0-9;]*m/g
 const strip = (s: string | undefined): string => (s ?? '').replace(ANSI, '')
@@ -287,7 +288,7 @@ export function modelServer(patch: Partial<ModelServer> = {}): ModelServer {
     state: 'up',
     kind: 'ollama',
     selectable: true,
-    models: [{ name: 'qwen3.8:27b-mlx', model: 'qwen3.8:27b-mlx', size: 17_200_000_000, parameterSize: '27B', quantization: 'Q4_K_M' }],
+    models: [{ name: `${DEFAULT_QWEN_MODEL}`, model: `${DEFAULT_QWEN_MODEL}`, size: 17_200_000_000, parameterSize: '27B', quantization: 'Q4_K_M' }],
     ...patch,
   }
 }

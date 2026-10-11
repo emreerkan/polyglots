@@ -11,6 +11,11 @@ import { displayWidth } from '../../src/ui/layout.js'
 import type { TranslateOptions, TranslateSummary } from '../../src/commands/translate.js'
 import type { AgentStatus, DiscoverOptions } from '../../src/agent/discover.js'
 import type { DiscoverModelsOptions, ModelCheck, ModelServer } from '../../src/draft/discover.js'
+import { DEFAULT_QWEN_MODEL } from '../../src/draft/qwen.js'
+
+// The default local model differs by platform (the MLX build on Apple silicon
+// only), so patterns name whichever this machine gets.
+const MODEL_RE = DEFAULT_QWEN_MODEL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 const samplePo = fileURLToPath(new URL('../fixtures/po/sample.po', import.meta.url))
 const pkg = createRequire(import.meta.url)('../../package.json') as { version: string }
@@ -1129,7 +1134,7 @@ describe('local models', () => {
     kind: 'ollama',
     selectable: true,
     models: [
-      { name: 'qwen3.8:27b-mlx', model: 'qwen3.8:27b-mlx', size: 17_200_000_000, parameterSize: '27B', quantization: 'Q4_K_M' },
+      { name: `${DEFAULT_QWEN_MODEL}`, model: `${DEFAULT_QWEN_MODEL}`, size: 17_200_000_000, parameterSize: '27B', quantization: 'Q4_K_M' },
       { name: 'llama3.2:latest', model: 'llama3.2:latest', size: 2_019_393_189, parameterSize: '3.2B', quantization: 'Q4_K_M' },
     ],
   }
@@ -1148,7 +1153,7 @@ describe('local models', () => {
     models: [],
   }
   const down = (s: ModelServer): ModelServer => ({ target: s.target, state: 'down', error: 'not running', selectable: false, models: [] })
-  const installed: ModelCheck = { state: 'installed', model: 'qwen3.8:27b-mlx', baseUrl: 'http://localhost:11434' }
+  const installed: ModelCheck = { state: 'installed', model: `${DEFAULT_QWEN_MODEL}`, baseUrl: 'http://localhost:11434' }
   const missing = (model: string): ModelCheck => ({
     state: 'missing',
     model,
@@ -1191,21 +1196,21 @@ describe('local models', () => {
       expect(code).toBe(0)
       const out = h.stdout.text
       expect(out).toMatch(/Ollama\s+http:\/\/localhost:11434\s+2 models/)
-      expect(out).toMatch(/qwen3\.8:27b-mlx\s+17\.2 GB\s+27B\s+Q4_K_M\s+\(configured\)/)
+      expect(out).toMatch(new RegExp(String.raw`${MODEL_RE}\s+17\.2 GB\s+27B\s+Q4_K_M\s+\(configured\)`))
       expect(out).toMatch(/llama3\.2:latest\s+2\.0 GB\s+3\.2B\s+Q4_K_M/)
       // Selectable since #5, so no longer marked as listing only.
       expect(out).toMatch(/LM Studio\s+http:\/\/localhost:1234\s+1 model\n/)
       expect(out).not.toContain('listing only')
       expect(out).toContain('qwen2.5-7b-instruct')
       expect(out).toContain('Not running: llama.cpp server (http://localhost:8080)')
-      expect(out).toContain('Local model: qwen3.8:27b-mlx (Ollama, installed)')
+      expect(out).toContain(`Local model: ${DEFAULT_QWEN_MODEL} (Ollama, installed)`)
       expect(discover.calls[0]).toMatchObject({ refresh: true })
     })
 
     it('marks the local model line by whether it is installed', async () => {
       const ok = harness()
       await ok.run(['models'], { discoverModels: fakeModels([ollama]).fn, checkLocalModel: fakeCheck(installed).fn })
-      expect(ok.stdout.text).toMatch(/^✓ Local model: qwen3\.8:27b-mlx \(Ollama, installed\)$/m)
+      expect(ok.stdout.text).toMatch(new RegExp(String.raw`^✓ Local model: ${MODEL_RE} \(Ollama, installed\)$`, 'm'))
       const gone = harness()
       await gone.run(['models'], { discoverModels: fakeModels([ollama]).fn, checkLocalModel: fakeCheck(missing('qwen3.8:9b')).fn })
       expect(gone.stdout.text).toMatch(/^! Local model: qwen3\.8:9b \(Ollama, not installed\)$/m)
@@ -1270,11 +1275,11 @@ describe('local models', () => {
       await useQwen()
       const h = harness()
       const translate = fakeTranslate()
-      const check = fakeCheck(missing('qwen3.8:27b-mlx'))
+      const check = fakeCheck(missing(`${DEFAULT_QWEN_MODEL}`))
       const code = await h.run(['translate', file], { translate: translate.fn, checkLocalModel: check.fn })
       expect(code).toBe(0)
-      expect(check.calls).toEqual([{ kind: 'ollama', baseUrl: 'http://localhost:11434', model: 'qwen3.8:27b-mlx' }])
-      expect(h.stderr.text).toContain('! qwen3.8:27b-mlx is not installed in Ollama at http://localhost:11434. Pull it with: ollama pull qwen3.8:27b-mlx')
+      expect(check.calls).toEqual([{ kind: 'ollama', baseUrl: 'http://localhost:11434', model: `${DEFAULT_QWEN_MODEL}` }])
+      expect(h.stderr.text).toContain(`! ${DEFAULT_QWEN_MODEL} is not installed in Ollama at http://localhost:11434. Pull it with: ollama pull ${DEFAULT_QWEN_MODEL}`)
       expect(translate.calls).toHaveLength(1)
     })
 
@@ -1326,7 +1331,7 @@ describe('local models', () => {
 
     it('says nothing more when the model is installed', async () => {
       const h = harness()
-      await h.run(['config', 'set', 'ollama.model', 'qwen3.8:27b-mlx'], { checkLocalModel: fakeCheck(installed).fn })
+      await h.run(['config', 'set', 'ollama.model', `${DEFAULT_QWEN_MODEL}`], { checkLocalModel: fakeCheck(installed).fn })
       expect(h.stderr.text).toBe('')
     })
 
@@ -1338,7 +1343,7 @@ describe('local models', () => {
     it('sets ollama.baseUrl, keeping the model', async () => {
       const h = harness()
       expect(await h.run(['config', 'set', 'ollama.baseUrl', 'http://box:11434/'])).toBe(0)
-      expect((await configJson()).ollama).toEqual({ baseUrl: 'http://box:11434/', model: 'qwen3.8:27b-mlx' })
+      expect((await configJson()).ollama).toEqual({ baseUrl: 'http://box:11434/', model: `${DEFAULT_QWEN_MODEL}` })
     })
 
     it('refuses an ollama.baseUrl that is not an http URL', async () => {
@@ -1367,7 +1372,7 @@ describe('local models', () => {
     it('prints the bare model name for config get ollama.model', async () => {
       const h = harness()
       await h.run(['config', 'get', 'ollama.model'])
-      expect(h.stdout.text).toBe('qwen3.8:27b-mlx\n')
+      expect(h.stdout.text).toBe(`${DEFAULT_QWEN_MODEL}\n`)
       const url = harness()
       await url.run(['config', 'get', 'ollama.baseUrl'])
       expect(url.stdout.text).toBe('http://localhost:11434\n')
@@ -1526,11 +1531,11 @@ describe('local model support', () => {
       expect(h.stderr.text).toContain('Local review is experimental')
       // Stock Ollama with no context set: always one line saying to set it.
       expect(h.stderr.text).toContain('polyglots config set ollama.contextLength')
-      expect(check.calls).toEqual([{ kind: 'ollama', baseUrl: 'http://localhost:11434', model: 'qwen3.8:27b-mlx' }])
+      expect(check.calls).toEqual([{ kind: 'ollama', baseUrl: 'http://localhost:11434', model: `${DEFAULT_QWEN_MODEL}` }])
     })
 
     it('keeps an explicit --batch-size, and warns when it will not fit the context', async () => {
-      await writeConfig({ reviewProvider: 'local', ollama: { baseUrl: 'http://localhost:11434', model: 'qwen3.8:27b-mlx', contextLength: 8192 } })
+      await writeConfig({ reviewProvider: 'local', ollama: { baseUrl: 'http://localhost:11434', model: `${DEFAULT_QWEN_MODEL}`, contextLength: 8192 } })
       const h = harness()
       const review = fakeReviewFile()
       await h.run(['review', file, '--batch-size', '100'], { reviewFile: review.fn, checkLocalModel: fakeCheck().fn })
@@ -1627,7 +1632,7 @@ describe('local model support', () => {
       await writeConfig({ reviewProvider: 'local' })
       const h = harness()
       expect(await h.run(['doctor'], { discoverAgents: agents, checkLocalModel: fakeCheck().fn })).toBe(0)
-      expect(h.stdout.text).toContain('Review provider: local (experimental) ollama:qwen3.8:27b-mlx (installed)')
+      expect(h.stdout.text).toContain(`Review provider: local (experimental) ollama:${DEFAULT_QWEN_MODEL} (installed)`)
       const missing = harness()
       const code = await missing.run(['doctor'], {
         discoverAgents: agents,

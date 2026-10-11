@@ -6,6 +6,7 @@ import { saveConfig } from '../../../src/config.js'
 import { translateFile, type TranslateOptions } from '../../../src/commands/translate.js'
 import type { LocalChatRequest } from '../../../src/draft/local-chat.js'
 import { fakeEngine, fakeReview, makeWorkspace, PENDING_KEYS, type Workspace } from './helpers.js'
+import { DEFAULT_QWEN_MODEL } from '../../../src/draft/qwen.js'
 
 let ws: Workspace
 
@@ -77,7 +78,7 @@ describe('translateFile with a local reviewer', () => {
     const jobs = openJobsDb()
     const engines = jobs.prepare('SELECT DISTINCT engine FROM draft_verdict').all()
     jobs.close()
-    expect(engines).toEqual([{ engine: 'local:ollama:qwen3.8:27b-mlx' }])
+    expect(engines).toEqual([{ engine: `local:ollama:${DEFAULT_QWEN_MODEL}` }])
   })
 
   it('re-asks only when what it was told changes, the glossary included', async () => {
@@ -121,7 +122,7 @@ describe('translateFile with a local reviewer', () => {
 describe('translateFile with the local draft engine', () => {
   it('accepts qwen, the old name, and keeps the engine id cached drafts are stored under', async () => {
     await translateFile(base({ draftEngine: 'qwen', review: fakeReview(), localChat: localChat().chat }))
-    expect(lastRunEngine()).toBe('ollama:qwen3.8:27b-mlx')
+    expect(lastRunEngine()).toBe(`ollama:${DEFAULT_QWEN_MODEL}`)
   })
 
   it('takes a model for this run only, under that model\'s own id', async () => {

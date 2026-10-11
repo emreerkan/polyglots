@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# The workflow only reads the repository. Nothing here publishes, tags or
+# comments, so the token gets nothing more, including on pushes to main.
+permissions:
+  contents: read
+
+# A new push to a pull request makes the run for the previous push worthless,
+# so it is cancelled. Runs on main are never cancelled: each one is the record
+# of whether that commit was green.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  app:
+    name: app (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # engines says >=24 with no upper bound, so whoever runs npm install -g
+        # on the newest release gets it. 24 is the floor the package promises;
+        # 26 is the newest line. better-sqlite3 ships N-API prebuilds inside
+        # the package, so neither needs a compiler.
+        node: ['24', '26']
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # npm ci runs prepare, which is npm run build: the no-live-run guard
+      # (it fails open, as there is no jobs database here), the two generators,
+      # and tsc's emit. A broken emit fails this step.
+      - run: npm ci
+
+      # The build regenerates src/stats/client-bundle.ts and
+      # src/stats/translations-data.ts. The test that catches a stale bundle
+      # would pass vacuously after that, so a diff here is the real check that
+      # the committed copies were regenerated.
+      - name: Generated files are committed
+        run: git diff --exit-code --stat
+
+      - run: npm run typecheck
+      - run: npm test
+
+      # The emitted CLI starts and resolves its dependencies, which the tests,
+      # running from source through Vitest, never prove.
+      - name: Built CLI runs
+        run: node dist/cli.js --help > /dev/null
+
+  website:
+    # npm run release runs the demo snapshot, and deploy.sh runs the full site
+    # build. Both import app/src directly, so a change to the CLI's output or
+    # to CliDeps can break them without touching website/.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            website/package-lock.json
+
+      # The snapshot runs on the app's tsc and tsx, and imports app/src.
+      - run: npm ci
+        working-directory: app
+      - run: npm ci
+        working-directory: website
+
+      - name: Demo snapshot (the release gate)
+        run: npm run snapshot
+        working-directory: website
+      - run: npm test
+        working-directory: website
+      # astro check and astro build. Its prebuild runs the snapshot again,
+      # which costs two seconds and keeps the step identical to a deploy.
+      - run: npm run build
+        working-directory: website

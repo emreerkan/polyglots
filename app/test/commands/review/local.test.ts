@@ -9,6 +9,7 @@ import { openJobsDb } from '../../../src/jobs/index.js'
 import { reviewFile } from '../../../src/commands/review.js'
 import { dataDir } from '../../../src/paths.js'
 import type { LocalChatRequest } from '../../../src/draft/local-chat.js'
+import { DEFAULT_QWEN_MODEL } from '../../../src/draft/qwen.js'
 
 const PO = `msgid ""
 msgstr ""
@@ -75,9 +76,9 @@ describe('reviewFile with the local provider', () => {
   it('records and caches its verdicts under its own engine id', async () => {
     await reviewFile({ file, locale: 'tr', db, jobsDb: jobs, provider: 'local', localChat: clearingChat().chat })
     const run = jobs.prepare('SELECT engine FROM run ORDER BY id DESC LIMIT 1').get() as { engine: string }
-    expect(run.engine).toBe('local:ollama:qwen3.8:27b-mlx')
+    expect(run.engine).toBe(`local:ollama:${DEFAULT_QWEN_MODEL}`)
     const engines = jobs.prepare('SELECT DISTINCT engine FROM audit_verdict').all() as Array<{ engine: string }>
-    expect(engines).toEqual([{ engine: 'local:ollama:qwen3.8:27b-mlx' }])
+    expect(engines).toEqual([{ engine: `local:ollama:${DEFAULT_QWEN_MODEL}` }])
   })
 
   it('takes a per-run model, which keys apart from the configured one', async () => {
@@ -112,7 +113,7 @@ describe('reviewFile with the local provider', () => {
     const hashes = (engine: string) =>
       (jobs.prepare('SELECT src_hash FROM audit_verdict WHERE engine = ?').all(engine) as Array<{ src_hash: string }>).map((r) => r.src_hash)
     const agent = hashes('claude')
-    const local = hashes('local:ollama:qwen3.8:27b-mlx')
+    const local = hashes(`local:ollama:${DEFAULT_QWEN_MODEL}`)
     expect(agent).toHaveLength(2)
     expect(local).toHaveLength(2)
     expect(local.filter((h) => agent.includes(h))).toEqual([])

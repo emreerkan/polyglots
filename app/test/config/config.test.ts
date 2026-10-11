@@ -11,6 +11,7 @@ import {
   saveConfig,
   saveSecret,
 } from '../../src/config.js'
+import { DEFAULT_QWEN_MODEL } from '../../src/draft/qwen.js'
 
 let home: string
 
@@ -53,7 +54,7 @@ describe('loadConfig', () => {
       // Empty by default: until a reviewer says who they are on wp.org, the
       // requester message cannot honestly link to "their" translations.
       wporgUsername: '',
-      ollama: { baseUrl: 'http://localhost:11434', model: 'qwen3.8:27b-mlx' },
+      ollama: { baseUrl: 'http://localhost:11434', model: `${DEFAULT_QWEN_MODEL}` },
       batchSize: 25,
       consistencyTtlDays: 30,
       properNouns: {},
@@ -345,7 +346,7 @@ describe('loadConfig and the local engine', () => {
       JSON.stringify({ defaultLocale: 'tr', defaultDraftEngine: 'deepl', batchSize: 25, consistencyTtlDays: 30, properNouns: {} }),
     )
     const config = loadConfig()
-    expect(config.ollama.model).toBe('qwen3.8:27b-mlx')
+    expect(config.ollama.model).toBe(`${DEFAULT_QWEN_MODEL}`)
     expect(config.ollama.baseUrl).toBe('http://localhost:11434')
   })
 

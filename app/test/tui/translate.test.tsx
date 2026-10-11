@@ -9,6 +9,7 @@ import { CommandsProvider } from '../../src/tui/commands.js'
 import { Translate } from '../../src/tui/screens/Translate.js'
 import { formatSummary } from '../../src/tui/components/Progress.js'
 import { ESC_DELAY, fakeCommands, flat, keys, makeHome, render, scriptedTranslate, tick, waitFor, waitForText, cleanup, type Home } from './helpers.js'
+import { DEFAULT_QWEN_MODEL } from '../../src/draft/qwen.js'
 
 let home: Home
 let cwd: string
@@ -310,19 +311,19 @@ describe('Translate with the local engine', () => {
     const { lastFrame, stdin } = mount(commands)
     await pickFile(stdin, lastFrame)
     await toQwen(stdin, lastFrame)
-    await waitForText(() => flat(lastFrame()), 'Model: qwen3.8:27b-mlx at http://localhost:11434 (Ollama)')
-    expect(commands.checkLocalModel).toHaveBeenCalledWith({ kind: 'ollama', baseUrl: 'http://localhost:11434', model: 'qwen3.8:27b-mlx' })
+    await waitForText(() => flat(lastFrame()), `Model: ${DEFAULT_QWEN_MODEL} at http://localhost:11434 (Ollama)`)
+    expect(commands.checkLocalModel).toHaveBeenCalledWith({ kind: 'ollama', baseUrl: 'http://localhost:11434', model: `${DEFAULT_QWEN_MODEL}` })
   })
 
   it('shows the warning when the model is missing, and still starts', async () => {
-    const message = 'qwen3.8:27b-mlx is not installed in Ollama at http://localhost:11434. Pull it with: ollama pull qwen3.8:27b-mlx'
+    const message = `${DEFAULT_QWEN_MODEL} is not installed in Ollama at http://localhost:11434. Pull it with: ollama pull ${DEFAULT_QWEN_MODEL}`
     const commands = fakeCommands({
       checkLocalModel: vi.fn(async (o: { baseUrl: string; model: string }) => ({ state: 'missing' as const, ...o, message })),
     })
     const { lastFrame, stdin } = mount(commands)
     await pickFile(stdin, lastFrame)
     await toQwen(stdin, lastFrame)
-    await waitForText(() => flat(lastFrame()), 'Pull it with: ollama pull qwen3.8:27b-mlx')
+    await waitForText(() => flat(lastFrame()), `Pull it with: ollama pull ${DEFAULT_QWEN_MODEL}`)
     for (let i = 0; i < 3; i++) {
       stdin.write(keys.down)
       await tick()
@@ -337,7 +338,7 @@ describe('Translate with the local engine', () => {
     const { lastFrame, stdin } = mount(commands)
     await pickFile(stdin, lastFrame)
     await toQwen(stdin, lastFrame)
-    await waitForText(() => flat(lastFrame()), 'Model: qwen3.8:27b-mlx')
+    await waitForText(() => flat(lastFrame()), `Model: ${DEFAULT_QWEN_MODEL}`)
     await tick(10)
     expect(lastFrame()).not.toContain('boom')
   })
