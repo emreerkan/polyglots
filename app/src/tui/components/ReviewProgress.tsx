@@ -4,6 +4,7 @@ import type { ReviewEntry, ReviewEntryOutcome, ReviewEvent, ReviewSummary } from
 import type { Token } from '../../ui/tokens.js'
 import { RecentEntries, recentEntries, RECENT_LIMIT, type PanelRow } from './RecentEntries.js'
 import { buildReport } from '../../review/message.js'
+import { fillTemplate, replyCaution, type Template } from '../../reply/templates.js'
 import { copyToClipboard } from '../clipboard.js'
 import { openInDefaultApp } from '../open-file.js'
 import { renderBar } from './Progress.js'
@@ -231,17 +232,43 @@ function resumeLine(state: ReviewProgressState): string {
   return `${judged}, ${left} ${left === 1 ? 'batch' : 'batches'} left.`
 }
 
+export interface ReviewProgressProps {
+  events: ReviewEvent[]
+  wporgUsername?: string
+  // The locale's reply templates, approved first, and the requester's username
+  // for {username}. Read by the screen when the run ends, not here, for the
+  // same reason as wporgUsername.
+  templates?: readonly Template[]
+  requester?: string
+}
+
 /**
  * `wporgUsername` is threaded in as a prop rather than read from the config
  * here, so this stays a component of its inputs and the tests that render it
  * with a handful of events keep working without a config on disk.
  */
-export function ReviewProgress({ events, wporgUsername = '' }: { events: ReviewEvent[]; wporgUsername?: string }) {
+export function ReviewProgress({ events, wporgUsername = '', templates = [], requester = '' }: ReviewProgressProps) {
   const state = reduceReviewProgress(events)
   const elapsed = useElapsed(state.inFlight, state.batchIndex)
   const [copied, setCopied] = useState<'yes' | 'no' | undefined>(undefined)
+  const [replyCopied, setReplyCopied] = useState<'yes' | 'no' | undefined>(undefined)
+  const [templateIndex, setTemplateIndex] = useState(0)
   const [opened, setOpened] = useState(false)
   const report = state.summary === undefined ? undefined : buildReport(state.summary, wporgUsername)
+  // The whole reply, around the report. Unlike the report it is offered on a
+  // clean run too, since "no problems, PTE approved" is exactly the reply a
+  // clean run wants. Not on a run that stopped early: its unreached entries
+  // have been judged by nobody, and the reply would be a verdict on them.
+  const template = templates[templateIndex % Math.max(1, templates.length)]
+  const reply =
+    state.summary === undefined || state.summary.pending > 0 || template === undefined
+      ? undefined
+      : fillTemplate(template.text, {
+          ...(requester === '' ? {} : { username: requester }),
+          repaired: state.summary.repaired,
+          flagged: state.summary.needsReview + state.summary.unreviewed,
+          results: report ?? '',
+        })
   // The repaired file, which is the thing worth opening: the submission itself is
   // unchanged on disk and reviewing it again would show none of this run's work.
   const repairedFile = state.summary?.problemsFile
@@ -253,6 +280,15 @@ export function ReviewProgress({ events, wporgUsername = '' }: { events: ReviewE
     reviewResult: {
       open: repairedFile === undefined ? undefined : () => setOpened(openInDefaultApp(repairedFile)),
       copy: report === undefined ? undefined : () => setCopied(copyToClipboard(report) ? 'yes' : 'no'),
+      reply: reply === undefined ? undefined : () => setReplyCopied(copyToClipboard(reply) ? 'yes' : 'no'),
+      // A copy confirmation belongs to the text it copied, so switching clears it.
+      template:
+        reply === undefined || templates.length < 2
+          ? undefined
+          : () => {
+              setTemplateIndex((i) => (i + 1) % templates.length)
+              setReplyCopied(undefined)
+            },
     },
   })
 
@@ -361,6 +397,31 @@ export function ReviewProgress({ events, wporgUsername = '' }: { events: ReviewE
               {copied === 'no' && (
                 <Text color="yellow">Could not reach the clipboard; copy the line above by hand.</Text>
               )}
+            </Box>
+          )}
+          {reply !== undefined && template !== undefined && (
+            <Box flexDirection="column" marginTop={1}>
+              <Text dimColor>
+                Reply · {template.name} template · y to copy{templates.length > 1 ? ' · t for the next template' : ''}
+              </Text>
+              {replyCaution(summary) !== undefined && <Text color="yellow">{replyCaution(summary)}</Text>}
+              {/* Unstyled, and copied exactly as filled: Ink may wrap it to
+                  the terminal on screen, but the clipboard gets the text with
+                  its own line breaks and nothing else. */}
+              <Text>{reply}</Text>
+              {replyCopied === 'yes' && <Text color="green">Reply copied to the clipboard.</Text>}
+              {replyCopied === 'no' && (
+                <Text color="yellow">Could not reach the clipboard; copy the reply above by hand.</Text>
+              )}
+            </Box>
+          )}
+          {/* The Requester field and the reply only appear once a template
+              exists, so without this a person who never uses the CLI would
+              never learn either is there. Not on a stopped run, which gets
+              no reply even with templates. */}
+          {templates.length === 0 && summary.pending === 0 && (
+            <Box marginTop={1}>
+              <Text dimColor>No reply template for this locale yet. Create one in Configuration › Reply templates.</Text>
             </Box>
           )}
           {summary.problemsFile ? (

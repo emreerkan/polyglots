@@ -89,6 +89,11 @@ strings:
 polyglots config set wporgUsername your-name
 ```
 
+To post a whole reply rather than the sentence alone, with a greeting, the PTE
+verdict and your team's links around it, write a
+[reply template](reply-templates.md). The review then prints the filled reply
+under the message.
+
 ## Rules only
 
 `--no-ai` runs the deterministic checks and nothing else: no agent, no model,

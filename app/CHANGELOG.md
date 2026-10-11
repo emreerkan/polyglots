@@ -13,6 +13,11 @@ Entries say what changed. For why and how, read the commit.
 ### Added
 
 - A model fix is checked with the rules once accepted; what it brought in that the submission did not have is noted beside it as `fix-suspect`, and is not counted in the requester message.
+- Reply templates per locale, created, edited and deleted in Configuration › Reply templates or with `polyglots template edit|list|delete|path`, filled after a review with the requester (`--requester`), a choice on whether the review found anything and the requester message; printed by `review` (`--template`) and shown in the app, where `y` copies and `t` switches it.
+
+### Changed
+
+- The guidance editor in Locale rules moves the cursor anywhere in the text, clears it with ctrl+x and undoes with ctrl+z; it used to only add at the end. ctrl+k there now only opens the palette.
 
 ### Fixed
 

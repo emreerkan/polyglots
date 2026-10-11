@@ -17,7 +17,8 @@ Documentation: https://ada.tools/polyglots/docs/
   locale's rules and consistency with approved translations. An AI agent
   judges the findings a rule cannot settle. The entries that need work are
   written to a `-problems.po` file, already repaired where the fix is
-  mechanical, with a short message you can post back to the contributor.
+  mechanical, with a short message you can post back to the contributor, or
+  a whole reply filled in from your locale's template.
 - **Translate.** Pending entries are filled from translation memory first,
   then drafted by DeepL, OpenAI or a local model, and reviewed by the agent
   before they are written.
@@ -92,7 +93,7 @@ or read the file's `Language` header when nothing else names one.
 ## Where your data lives
 
 - `~/.config/polyglots/`: settings (`config.json`), API keys (`.env`, readable
-  by you only) and your locale rules.
+  by you only), your locale rules and your reply templates.
 - `~/.local/share/polyglots/polyglots.db`: translation memory and glossary.
   It is built from your imports and cannot be rebuilt from anything else, so
   back it up.

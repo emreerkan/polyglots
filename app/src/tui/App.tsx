@@ -28,6 +28,7 @@ import { Home, Submenu } from './screens/Home.js'
 import { ImportTm } from './screens/ImportTm.js'
 import { About, Help, Interface } from './screens/Info.js'
 import { LocaleRules } from './screens/LocaleRules.js'
+import { ReplyTemplates } from './screens/ReplyTemplates.js'
 import { LocalModels } from './screens/LocalModels.js'
 import { Review } from './screens/Review.js'
 import { Split } from './screens/Split.js'
@@ -384,6 +385,8 @@ function Shell({ cwd = process.cwd(), onExit, update }: AppProps) {
         return <SyncGlossary onBack={back} />
       case 'locale-rules':
         return <LocaleRules onBack={back} />
+      case 'reply-templates':
+        return <ReplyTemplates onBack={back} onSetup={openLocaleSetup} />
       case 'configure-keys':
         return <ConfigureKeys onBack={back} />
       case 'help':

@@ -95,7 +95,10 @@ export class FakeStdout extends EventEmitter {
   readonly flushed: string[] = []
   write = (chunk: string, encodingOrCallback?: unknown, callback?: unknown): boolean => {
     this.frames.push(chunk)
-    this.raw = chunk
+    // A chunk of nothing but control sequences is a terminal mode switch, not
+    // a frame: the template editor turns bracketed paste off as it unmounts,
+    // after Ink has drawn the screen that replaced it.
+    if (chunk === '' || stripAll(chunk) !== '') this.raw = chunk
     if (stripAll(chunk).trim().length > 0) this.last = stripAll(chunk)
     const done = typeof encodingOrCallback === 'function' ? encodingOrCallback : callback
     setTimeout(() => {

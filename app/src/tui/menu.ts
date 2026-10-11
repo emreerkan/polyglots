@@ -20,6 +20,7 @@ export type ScreenId =
   | 'export-tm'
   | 'sync-glossary'
   | 'locale-rules'
+  | 'reply-templates'
   | 'agents'
   | 'local-models'
   | 'configure-keys'
@@ -91,6 +92,15 @@ export const CONFIGURATION: MenuNode[] = [
     icon: '§§§',
     asciiIcon: '$$$',
     help: "Edits the locale's rules file: which built-in checks run, proper nouns, common mistakes, patterns and guidance for the reviewer.",
+  },
+  {
+    id: 'reply-templates',
+    key: 't',
+    label: 'Reply templates',
+    description: 'The comment posted on a PTE request',
+    icon: '«@»',
+    asciiIcon: '<@>',
+    help: "Creates, previews and deletes the locale's reply templates: the whole comment posted back on a PTE request, filled in after every review with the requester, the verdict and the message for the requester.",
   },
   {
     id: 'agents',
@@ -204,7 +214,7 @@ export const HOME: MenuNode[] = [
     description: 'Glossary, rules, agents, keys',
     icon: '[≡]',
     asciiIcon: '[=]',
-    help: 'Glossary, locale rules, agents, local models, API keys, setup, interface settings and usage statistics.',
+    help: 'Glossary, locale rules, reply templates, agents, local models, API keys, setup, interface settings and usage statistics.',
     children: CONFIGURATION,
   },
   {

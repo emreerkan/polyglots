@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Box, Text } from 'ink'
 import { normalizeLocale } from '../../tmx/parse.js'
 import { resolveLocale } from '../../wporg/locales.js'
@@ -20,6 +20,8 @@ import { batchSizeChoices } from '../batch-size.js'
 import { useKeys } from '../hooks/useKeys.js'
 import { TextInput } from '../input.js'
 import { useFooterStage } from '../footer-stage.js'
+import { listTemplates, loadTemplates, normaliseRequester, type Template } from '../../reply/templates.js'
+import type { Locale } from '../../types.js'
 
 export interface ReviewProps {
   cwd: string
@@ -29,12 +31,31 @@ export interface ReviewProps {
 type Phase = 'pick' | 'options' | 'running'
 
 const PO_EXTENSIONS = ['.po']
-const FIELD_LOCALE = 0
-const FIELD_BATCH = 1
-const FIELD_NO_AI = 2
-const FIELD_FRESH = 3
-const FIELD_START = 4
-const FIELD_COUNT = 5
+// The form's fields in order. Requester is only there when the locale has a
+// reply template, since {username} is the only thing it fills: a field that
+// does nothing for most people would be one more stop on the way to Start.
+type Field = 'locale' | 'requester' | 'batch' | 'noAi' | 'fresh' | 'start'
+
+// The locale as typed, read the way Start reads it, for a template lookup
+// that must never throw while the person is still typing.
+function templatesFor(typed: string): readonly string[] {
+  try {
+    const locale: Locale = resolveLocale(typed)?.id ?? normalizeLocale(typed)
+    return locale === '' ? [] : listTemplates(locale)
+  } catch {
+    return []
+  }
+}
+
+// Read when the run ends, so a template edited while it ran is the one used.
+// A file that cannot be read loses the reply, not the results screen.
+function loadTemplatesSafely(locale: Locale): Template[] {
+  try {
+    return loadTemplates(locale)
+  } catch {
+    return []
+  }
+}
 
 function step(values: number[], current: number, by: number): number {
   const i = values.indexOf(current)
@@ -63,7 +84,11 @@ export function Review({ cwd, onBack }: ReviewProps) {
   const noAi = noReviewer || skipAi
   const [fresh, setFresh] = useState(false)
   const [batchSize, setBatchSize] = useState(initialBatchSize(config))
-  const [focus, setFocus] = useState(FIELD_LOCALE)
+  const [requester, setRequester] = useState('')
+  const hasTemplates = useMemo(() => templatesFor(locale).length > 0, [locale])
+  const fields: Field[] = ['locale', ...(hasTemplates ? (['requester'] as const) : []), 'batch', 'noAi', 'fresh', 'start']
+  const [focus, setFocus] = useState(0)
+  const field = fields[Math.min(focus, fields.length - 1)]!
   const [events, setEvents] = useState<ReviewEvent[]>([])
   // Held in a ref so a keypress reaches the run in flight without re-rendering
   // the whole screen on every state change.
@@ -72,7 +97,9 @@ export function Review({ cwd, onBack }: ReviewProps) {
 
   const finished = phase === 'running' && task.state.status !== 'running'
   const stage = finished ? 'done' : phase
-  const typing = stage === 'options' && focus === FIELD_LOCALE
+  const typing = stage === 'options' && (field === 'locale' || field === 'requester')
+  const templates = useMemo(() => (finished ? loadTemplatesSafely(locale) : []), [finished, locale])
+  const requesterName = normaliseRequester(requester)
   useFooterStage(stage)
 
   const start = (chosenLocale: string) => {
@@ -124,24 +151,24 @@ export function Review({ cwd, onBack }: ReviewProps) {
     runForm: {
       move: options
         ? (_input, key) =>
-            key.upArrow || (key.tab && key.shift) ? setFocus((f) => Math.max(0, f - 1)) : setFocus((f) => Math.min(FIELD_COUNT - 1, f + 1))
+            key.upArrow || (key.tab && key.shift) ? setFocus((f) => Math.max(0, f - 1)) : setFocus((f) => Math.min(fields.length - 1, f + 1))
         : undefined,
       change: options
         ? (input, key) => {
             if (input === ' ' && typing) return false
-            if (focus === FIELD_NO_AI) {
+            if (field === 'noAi') {
               if (!noReviewer) setNoAi((v) => !v)
             }
-            else if (focus === FIELD_FRESH) setFresh((v) => !v)
-            else if (focus === FIELD_BATCH) {
+            else if (field === 'fresh') setFresh((v) => !v)
+            else if (field === 'batch') {
               setBatchSize((n) => step(batchSizeChoices(initialBatchSize(config)), n, key.leftArrow ? -1 : 1))
             }
           }
         : undefined,
       select:
-        options && focus !== FIELD_LOCALE
+        options && !typing
           ? () => {
-              if (focus === FIELD_START) {
+              if (field === 'start') {
                 const normalized = resolveLocale(locale)?.id ?? normalizeLocale(locale)
                 if (normalized.length > 0) {
                   setLocale(normalized)
@@ -153,7 +180,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
     },
   })
 
-  const marker = (field: number) => (focus === field ? '❯ ' : '  ')
+  const marker = (at: Field) => (field === at ? '❯ ' : '  ')
 
   return (
     <Box flexDirection="column">
@@ -192,9 +219,9 @@ export function Review({ cwd, onBack }: ReviewProps) {
       {stage === 'options' && (
         <>
           <Box>
-            <Text>{marker(FIELD_LOCALE)}Locale:          </Text>
-            {typing ? (
-              <TextInput value={locale} onChange={setLocale} onSubmit={() => setFocus(FIELD_BATCH)} />
+            <Text>{marker('locale')}Locale:          </Text>
+            {typing && field === 'locale' ? (
+              <TextInput value={locale} onChange={setLocale} onSubmit={() => setFocus(1)} />
             ) : (
               <Text>{locale}</Text>
             )}
@@ -206,10 +233,20 @@ export function Review({ cwd, onBack }: ReviewProps) {
           {locale.trim() === '' && !(config.reviewProvider === 'antigravity' && config.defaultLocale === undefined) && (
             <Text color="yellow">  No locale set: type the one you translate into, or choose it once in Setup.</Text>
           )}
+          {hasTemplates && (
+            <Box>
+              <Text>{marker('requester')}Requester:       </Text>
+              {field === 'requester' ? (
+                <TextInput value={requester} onChange={setRequester} onSubmit={() => setFocus((f) => f + 1)} />
+              ) : (
+                <Text dimColor={requester === ''}>{requester === '' ? 'optional, fills {username} in the reply' : requester}</Text>
+              )}
+            </Box>
+          )}
           {/* Dimmed under "skip AI checks", where there are no batches to size.
               It still steps, so the choice survives toggling the AI back on. */}
           <Text dimColor={noAi}>
-            {marker(FIELD_BATCH)}Batch size:      {batchSize} entries per AI call
+            {marker('batch')}Batch size:      {batchSize} entries per AI call
           </Text>
           {/* Where the size is chosen, because shrinking the batch is the
               obvious response to a timeout and the wrong one on this agent. */}
@@ -217,7 +254,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
             <Text color="yellow">{screenBatchAdvice(config, batchSize, locale)}</Text>
           )}
           <Text>
-            {marker(FIELD_NO_AI)}Skip AI checks:  {noAi ? 'yes (rules only, fast)' : 'no (rules, then AI review)'}
+            {marker('noAi')}Skip AI checks:  {noAi ? 'yes (rules only, fast)' : 'no (rules, then AI review)'}
           </Text>
           {noReviewer && (
             <Text dimColor>  No AI is set up as the review provider, so this runs the rules only. Setup changes it.</Text>
@@ -226,16 +263,21 @@ export function Review({ cwd, onBack }: ReviewProps) {
               problems file. This is the way to make it forget that and start
               from the first batch again. */}
           <Text>
-            {marker(FIELD_FRESH)}Start over:      {fresh ? 'yes (ignore saved progress)' : 'no (resume if interrupted)'}
+            {marker('fresh')}Start over:      {fresh ? 'yes (ignore saved progress)' : 'no (resume if interrupted)'}
           </Text>
-          <Text>{marker(FIELD_START)}Start review</Text>
+          <Text>{marker('start')}Start review</Text>
           <Hint>↑↓ move · ←→ change · enter select · esc back to menu</Hint>
         </>
       )}
 
       {(stage === 'running' || stage === 'done') && (
         <>
-          <ReviewProgress events={events} wporgUsername={config.wporgUsername} />
+          <ReviewProgress
+            events={events}
+            wporgUsername={config.wporgUsername}
+            templates={templates}
+            {...(requesterName === undefined ? {} : { requester: requesterName })}
+          />
           {/* Kept in view when failed batches make the screen taller than the
               body: these keys are how the run is stopped. */}
           {stage === 'running' && (

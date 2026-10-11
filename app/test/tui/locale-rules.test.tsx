@@ -414,6 +414,27 @@ describe('LocaleRules: guidance', () => {
     expect(loadLocaleRules('tr')?.guidance).toBe('Button labels are imperative.\nUse siz')
   })
 
+  it('edits saved guidance in the middle, not only at the end', async () => {
+    const file = localeRulesFile('tr')
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, 'guidance: Use siz.\n', 'utf8')
+    const view = mount()
+    await openLocale(view)
+    await select(view, /Guidance/)
+    await waitForText(view.lastFrame, /8 of 1500/)
+    for (let i = 0; i < 4; i++) {
+      view.stdin.write(keys.right)
+      await tick()
+    }
+    await typeInto(view, 'always ')
+    await waitForText(view.lastFrame, /15 of 1500/)
+    view.stdin.write(keys.esc)
+    await tick(ESC_DELAY)
+    view.stdin.write('s')
+    await waitForText(view.lastFrame, /Saved/)
+    expect(loadLocaleRules('tr')?.guidance).toBe('Use always siz.')
+  })
+
   it('warns past the cap', async () => {
     const view = mount()
     await openLocale(view)

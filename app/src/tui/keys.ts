@@ -128,6 +128,30 @@ export const KEYS = {
     move: { keys: '↑↓', does: 'move', match: vertical },
     toggle: { keys: 'space  enter', does: 'toggle', match: any(enter, space) },
   },
+  replyTemplates: {
+    move: { keys: '↑↓', does: 'choose a template', match: vertical },
+    create: { keys: 'n', does: 'new template from a starter', match: char('n') },
+    edit: { keys: 'e', does: 'edit the template', match: char('e') },
+    remove: { keys: 'd', does: 'delete the template', match: char('d') },
+    preview: { keys: 'v', does: 'preview with problems or clean', match: char('v') },
+  },
+  // Asked before a template is deleted. Its own group so y and n mean only
+  // this while the question is on screen.
+  // Inside the template editor, where every printable key is text. Only
+  // chords and esc are left to bind.
+  templateEditor: {
+    save: { keys: 'ctrl+s', does: 'save the template', match: (input, key) => key.ctrl && input === 's' },
+    close: { keys: 'esc', does: 'close the editor, asking first if anything changed', match: esc },
+  },
+  templateUnsaved: {
+    save: { keys: 'y', does: 'save the changes', match: char('y') },
+    discard: { keys: 'n', does: 'throw the changes away', match: char('n') },
+    keep: { keys: 'esc', does: 'back to editing', match: esc },
+  },
+  templateDelete: {
+    yes: { keys: 'y', does: 'delete it', match: char('y') },
+    no: { keys: 'n  esc', does: 'keep it', match: any(char('n'), esc) },
+  },
   usageStats: {
     toggle: { keys: 'space  enter', does: 'turn sharing on or off', match: any(enter, space) },
     reset: { keys: 'r', does: 'forget the install id', match: char('r') },
@@ -160,6 +184,10 @@ export const KEYS = {
   reviewResult: {
     open: { keys: 'o', does: 'open the problems file', match: char('o') },
     copy: { keys: 'c', does: 'copy the report', match: char('c') },
+    // Only live when the locale has a reply template: y for the whole reply,
+    // t to cycle through the locale's templates.
+    reply: { keys: 'y', does: 'copy the reply', match: char('y') },
+    template: { keys: 't', does: 'next reply template', match: char('t') },
   },
   fetchList: {
     add: { keys: 'enter', does: 'add a project; on an empty line, continue', match: enter },
@@ -223,11 +251,6 @@ export const KEYS = {
     previous: { keys: '↑  shift+tab', does: 'previous field', match: any(up, (_i, key) => key.tab && key.shift) },
     next: { keys: '↓  tab', does: 'next field', match: any(down, tab) },
   },
-  multiline: {
-    newline: { keys: 'enter', does: 'in the guidance: a new line', match: enter },
-    erase: { keys: 'backspace', does: 'in the guidance: delete', match: erase },
-    type: { keys: 'type', does: 'in the guidance: add text', match: printable },
-  },
   wizard: {
     skip: { keys: 'esc', does: 'skip this step', match: esc },
     move: { keys: '↑↓', does: 'move', match: vertical },
@@ -250,6 +273,9 @@ export const KEYS = {
     importFile: widget('enter', 'import'),
     sync: widget('enter', 'sync'),
     saveKey: widget('enter', 'save and go to the next key'),
+    templateName: widget('enter', 'create the template with that name'),
+    guidanceText: widget('type  ←→↑↓  enter  ctrl+x', 'in the guidance: edit the text, enter a new line, ctrl+x clear it all, ctrl+z undo'),
+    templateText: widget('type  ←→↑↓  enter  ctrl+x', 'edit the text: enter a new line, ctrl+x clear it all, ctrl+z undo, ctrl+y redo'),
     write: widget('enter', 'write the file'),
     submitForm: widget('enter', 'save the form'),
   },
@@ -318,12 +344,14 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   },
   review: {
     shown: [...FORM, ...RUN, KEYS.reviewResult.open, KEYS.reviewResult.copy],
-    more: [picker.sort, finished.close],
+    more: [KEYS.reviewResult.reply, KEYS.reviewResult.template, picker.sort, finished.close],
     stages: {
       pick: [picker.sort],
       options: FORM,
       running: RUN,
-      done: [KEYS.reviewResult.open, KEYS.reviewResult.copy, finished.close],
+      // The reply's keys after close: the footer has room for three, and the
+      // reply names its own keys on screen beside the text they act on.
+      done: [KEYS.reviewResult.open, KEYS.reviewResult.copy, finished.close, KEYS.reviewResult.reply, KEYS.reviewResult.template],
     },
   },
   fetch: {
@@ -372,9 +400,23 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
       KEYS.form.next,
       KEYS.form.previous,
       fields.submitForm,
-      KEYS.multiline.type,
-      KEYS.multiline.newline,
-      KEYS.multiline.erase,
+      fields.guidanceText,
+    ],
+  },
+  'reply-templates': {
+    shown: [KEYS.replyTemplates.edit, KEYS.replyTemplates.create, KEYS.replyTemplates.remove, KEYS.replyTemplates.preview],
+    more: [
+      KEYS.replyTemplates.move,
+      fields.templateName,
+      fields.templateText,
+      KEYS.templateEditor.save,
+      KEYS.templateEditor.close,
+      KEYS.templateUnsaved.save,
+      KEYS.templateUnsaved.discard,
+      KEYS.templateUnsaved.keep,
+      KEYS.templateDelete.yes,
+      KEYS.templateDelete.no,
+      KEYS.needsLocale.setup,
     ],
   },
   agents: { shown: [KEYS.agents.recheck] },

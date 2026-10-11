@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, type ReactNode } from 're
 import { useInput as useInkInput, type Key } from 'ink'
 import InkTextInput, { type Props as TextInputProps } from 'ink-text-input'
 import InkSelectInput from 'ink-select-input'
+import { TextArea as InkTextArea, type TextAreaHandle } from 'react-ink-textarea'
 
 // Every key listener in the TUI comes through here, so one switch can silence
 // a whole subtree.
@@ -111,4 +112,62 @@ type SelectProps<V> = Parameters<typeof InkSelectInput<V>>[0]
 export function SelectInput<V>(props: SelectProps<V>) {
   const open = useContext(GateContext)
   return <InkSelectInput<V> {...props} isFocused={(props.isFocused ?? true) && open} />
+}
+
+export interface TextAreaProps {
+  value: string
+  onChange: (value: string) => void
+  focus?: boolean
+  /** Rows shown before the text scrolls. */
+  viewportLines?: number
+  /** Told after ctrl+x has emptied the text, so the screen can say how to get it back. */
+  onClear?: () => void
+}
+
+/**
+ * A multi-line editor with a cursor that moves anywhere, for text a person
+ * shapes rather than appends to: a reply template.
+ *
+ * The widget submits on enter and wants ctrl+j or shift+enter for a new line.
+ * Nobody editing a paragraph expects enter to finish it, and shift+enter
+ * reaches the program as plain enter in most terminals, so enter is taken
+ * away from the widget and turned into a newline here. Finishing is the
+ * caller's: its own esc or save key, through useKeys, as everywhere else.
+ *
+ * ctrl+x empties the text, for replacing a starter or old wording with a
+ * paste. The widget's undo records only its own edits, so a clear cannot be
+ * undone with ctrl+z; nothing is written until the caller saves, and its esc
+ * offers to throw the change away, which is the way back.
+ *
+ * The widget's ctrl+k, delete to the end of the line, is switched off. The
+ * frame hears ctrl+k over any text field and opens the palette, so one press
+ * did both: the palette opened and half a line vanished underneath it.
+ */
+export function TextArea({ value, onChange, focus = true, viewportLines, onClear }: TextAreaProps) {
+  const open = useContext(GateContext)
+  const focused = focus && open
+  const area = useRef<TextAreaHandle>(null)
+  useTypingWhile(focused)
+  useInkInput(
+    (input, key) => {
+      if (key.return && !key.ctrl && !key.meta && !key.shift) area.current?.insert('\n')
+      if (key.ctrl && input === 'x') {
+        onChange('')
+        onClear?.()
+      }
+    },
+    { isActive: focused },
+  )
+  return (
+    <InkTextArea
+      ref={area}
+      focus={focused}
+      value={value}
+      onChange={onChange}
+      onSubmit={() => undefined}
+      keybindings={{ Enter: false, 'Ctrl+K': false }}
+      disableCursorBlink
+      {...(viewportLines === undefined ? {} : { viewportLines })}
+    />
+  )
 }

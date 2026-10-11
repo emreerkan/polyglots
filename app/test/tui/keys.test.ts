@@ -115,6 +115,7 @@ const FILES: Record<string, ScreenId[]> = {
   'screens/SyncGlossary.tsx': ['sync-glossary'],
   'screens/Stats.tsx': ['stats'],
   'screens/LocaleRules.tsx': ['locale-rules'],
+  'screens/ReplyTemplates.tsx': ['reply-templates'],
   'screens/Wizard.tsx': ['setup'],
   'screens/Fetch.tsx': ['fetch'],
   'screens/Review.tsx': ['review'],

@@ -108,7 +108,10 @@ Review and Translate work the same way, in four stages.
    finishes, so nothing already paid for is thrown away.
 4. **Done.** A summary. A review shows the message to send the contributor,
    which `c` copies, and `o` opens the repaired file in your `.po` editor.
-   `enter` goes back to the menu.
+   With a [reply template](reply-templates.md) for the locale it also shows
+   the whole reply: `y` copies it and `t` switches template. Without one, a
+   line points to **Configuration › Reply templates**. `enter` goes back to
+   the menu.
 
 A stopped run is never wasted. Start the same file again and only the entries
 that were not reached are sent; the rest come from the cache.
@@ -138,6 +141,7 @@ again once stopped.
 |---|---|---|
 | `g` | Sync WordPress.org glossary | Downloads your locale's glossary. Run it again when your team changes it. |
 | `r` | Locale rules | Edits your locale's rules: which built-in checks run, proper nouns, common mistakes, patterns, and guidance for the reviewer. `s` saves. |
+| `t` | Reply templates | Your locale's [reply templates](reply-templates.md): `e` edits one, `n` creates one from a starter, `d` deletes one, `v` previews it clean or with problems. |
 | `a` | Check AI agents | Shows whether each review agent is installed, signed in and set up for polyglots. `r` checks again. |
 | `m` | Local models | Finds model servers on this machine, such as Ollama or LM Studio, and chooses the drafting model. See [Local models](local-models.md). |
 | `k` | Configure API keys | Stores your DeepL and OpenAI keys. A key set in your environment wins over a saved one. |

@@ -3,8 +3,8 @@ import { join, relative } from 'node:path'
 import { useState } from 'react'
 import { Text } from 'ink'
 import { afterEach, describe, expect, it } from 'vitest'
-import { InputGate, TextInput, TypingProvider, useInput, useTyping } from '../../src/tui/input.js'
-import { render, tick, cleanup } from './helpers.js'
+import { InputGate, TextArea, TextInput, TypingProvider, useInput, useTyping } from '../../src/tui/input.js'
+import { render, tick, cleanup, keys } from './helpers.js'
 
 afterEach(() => cleanup())
 
@@ -29,7 +29,8 @@ describe('the input gate covers every listener', () => {
         return (
           /import\s*\{[^}]*\buseInput\b[^}]*\}\s*from\s*'ink'/.test(text) ||
           /from\s*'ink-text-input'/.test(text) ||
-          /from\s*'ink-select-input'/.test(text)
+          /from\s*'ink-select-input'/.test(text) ||
+          /from\s*'react-ink-textarea'/.test(text)
         )
       })
       .map((path) => relative(TUI_SRC, path))
@@ -124,6 +125,87 @@ describe('typing', () => {
         <TypingProbe />
       </TypingProvider>,
     )
+    await tick()
+    expect(lastFrame()).toContain('typing=true')
+  })
+})
+
+function Area({ initial = '' }: { initial?: string }) {
+  const [value, setValue] = useState(initial)
+  return (
+    <>
+      <TextArea value={value} onChange={setValue} />
+      <Text>[{JSON.stringify(value)}]</Text>
+    </>
+  )
+}
+
+async function type(stdin: { write(data: string): void }, text: string) {
+  for (const ch of text) {
+    stdin.write(ch)
+    await tick()
+  }
+}
+
+describe('TextArea', () => {
+  it('starts a new line on enter rather than submitting', async () => {
+    const { stdin, lastFrame } = render(<Area />)
+    await tick()
+    await type(stdin, 'ab')
+    stdin.write(keys.enter)
+    await tick()
+    await type(stdin, 'c')
+    expect(lastFrame()).toContain('["ab\\nc"]')
+  })
+
+  it('opens with the cursor at the start and edits in the middle of the text', async () => {
+    const { stdin, lastFrame } = render(<Area initial="Hello world" />)
+    await tick()
+    for (let i = 0; i < 6; i++) {
+      stdin.write(keys.right)
+      await tick()
+    }
+    await type(stdin, 'big ')
+    expect(lastFrame()).toContain('["Hello big world"]')
+  })
+
+  it('clears the whole text on ctrl+x', async () => {
+    const { stdin, lastFrame } = render(<Area initial={'First line\nSecond line'} />)
+    await tick()
+    stdin.write('\x18')
+    await tick()
+    expect(lastFrame()).toContain('[""]')
+  })
+
+  it('leaves ctrl+k to the palette rather than deleting to the end of the line', async () => {
+    const { stdin, lastFrame } = render(<Area initial="Keep all of this" />)
+    await tick()
+    stdin.write('\x0b')
+    await tick()
+    expect(lastFrame()).toContain('["Keep all of this"]')
+  })
+
+  it('takes no keys under a closed gate', async () => {
+    const { stdin, lastFrame } = render(
+      <InputGate open={false}>
+        <Area />
+      </InputGate>,
+    )
+    await tick()
+    await type(stdin, 'x')
+    expect(lastFrame()).toContain('[""]')
+  })
+
+  it('reports itself as a focused text field', async () => {
+    const tree = () => (
+      <TypingProvider>
+        <Area />
+        <TypingProbe />
+      </TypingProvider>
+    )
+    const { lastFrame, rerender } = render(tree())
+    await tick()
+    rerender(tree())
     await tick()
     expect(lastFrame()).toContain('typing=true')
   })

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { realpathSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { Writable } from 'node:stream'
 import { text } from 'node:stream/consumers'
@@ -11,6 +11,8 @@ import { fetchProjects, resolveProjects } from './commands/fetch.js'
 import { runFetch, type FetchFlags } from './cli/fetch.js'
 import { warnAboutLocalModel, warnAboutLocalReview, warnUniversalOnly } from './cli/run-notices.js'
 import { copyRules, describeRules, editRules, openInEditor, type OpenEditor } from './cli/rules.js'
+import { describeTemplates, editTemplate, renderReply, resolveReplyTemplate } from './cli/templates.js'
+import { DEFAULT_TEMPLATE, deleteTemplate, listTemplates, normaliseRequester, templateFile, templatesDir } from './reply/templates.js'
 import { loadLocaleRules, localeRulesFile } from './rules/load.js'
 import { syncGlossary } from './commands/glossary-sync.js'
 import { reviewFile } from './commands/review.js'
@@ -278,6 +280,8 @@ interface ReviewFlags {
   ai?: boolean
   batchSize?: string
   fresh?: boolean
+  requester?: string
+  template?: string
 }
 
 async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags): Promise<number> {
@@ -868,6 +872,55 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
       cli.out(localeRulesFile(requireLocale(raw, cli.config(), { argument: 'polyglots rules path' })))
     })
 
+  // Reply templates take the locale first and as a required argument, unlike
+  // rules: with an optional name after it, an optional locale would make
+  // "template edit approved" ambiguous between a locale and a name.
+  const template = program.command('template').description('Reply templates: the whole comment posted back on a PTE request')
+  template
+    .command('edit <locale> [name]')
+    .description(`Open a reply template in $VISUAL or $EDITOR, creating it from a starter if needed (default name: ${DEFAULT_TEMPLATE})`)
+    .action(async (raw: string, name: string | undefined) => {
+      for (const line of await editTemplate(parseLocaleArg(raw), name ?? DEFAULT_TEMPLATE, cli.openEditor, cli.ui.out)) cli.out(line)
+    })
+  template
+    .command('list [locale]')
+    .description('List the reply templates of one locale, or of every locale')
+    .action((raw: string | undefined) => {
+      for (const line of describeTemplates(raw === undefined ? undefined : parseLocaleArg(raw), cli.ui.out)) cli.out(line)
+    })
+  template
+    .command('path <locale> [name]')
+    .description('Print where a locale\'s reply templates live, or where one of them does')
+    .action((raw: string, name: string | undefined) => {
+      const locale = parseLocaleArg(raw)
+      cli.out(name === undefined ? templatesDir(locale) : templateFile(locale, name))
+    })
+  template
+    .command('delete <locale> <name>')
+    .description('Delete a reply template (asks first; --yes skips the question)')
+    .option('--yes', 'Delete without asking (required when stdin or stderr is not a terminal)')
+    .action(async (raw: string, name: string, flags: { yes?: boolean }) => {
+      const locale = parseLocaleArg(raw)
+      // Checked before asking, so nobody confirms the deletion of nothing.
+      if (!listTemplates(locale).includes(name)) {
+        templateFile(locale, name)
+        throw new UsageError(`No reply template "${name}" for ${locale}. See them with: polyglots template list ${locale}`)
+      }
+      if (flags.yes !== true) {
+        // The question goes to stderr, so with either end redirected nobody
+        // would see it; the same rule as translate --all.
+        const interactive = cli.streams.stdin.isTTY === true && cli.streams.stderr.isTTY === true
+        if (!interactive) throw new UsageError('template delete needs --yes when stdin or stderr is not a terminal')
+        if (!(await confirm(cli.streams, `Delete the ${name} reply template for ${locale}? [y/N] `))) {
+          cli.err(warnLine(cli.ui.err, 'Kept.'))
+          setExitCode(EXIT_ERROR)
+          return
+        }
+      }
+      deleteTemplate(locale, name)
+      cli.out(okLine(cli.ui.out, `Deleted the ${name} reply template for ${locale}.`))
+    })
+
   const tm = program.command('tm').description('Translation memory')
   tm.command('import <files...>')
     .description('Import TMX or .po exports into the local translation memory (additive)')
@@ -930,6 +983,8 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .option('--no-ai', 'Run the deterministic checks only, skipping AI adjudication')
     .option('--batch-size <n>', `Entries per AI batch (default: ${shown.batchSize})`)
     .option('--fresh', 'Ignore the cached verdicts for this file and review it again')
+    .option('--requester <username>', 'The requester\'s wp.org username, for {username} in the reply template')
+    .option('--template <name>', `Reply template to fill after the review (default: ${DEFAULT_TEMPLATE})`)
     .addHelpText('after', ENVIRONMENT_HELP)
     .action(async (raw: string, flags: ReviewFlags) => {
       const [target] = expandFileArgs([raw])
@@ -941,6 +996,12 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
       // Before anything else: a review must not run on rules the person
       // believes are in force when the file that says so cannot be read.
       loadLocaleRules(locale)
+      // Settled before the run for the same reason: a --template that names
+      // nothing is refused before any batch is paid for.
+      const replyTemplate = resolveReplyTemplate(locale, flags.template)
+      if (replyTemplate === undefined && flags.requester !== undefined) {
+        cli.err(hintLine(cli.ui.err, `No reply template for ${locale}, so --requester is not used. Create one with: polyglots template edit ${locale}`))
+      }
       warnUniversalOnly(cli, locale)
       const batchSize = resolveBatchSize(config, flags.batchSize)
       const advice = batchAdvice(config.reviewProvider, batchSize)
@@ -995,8 +1056,23 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
       // the translation. Printed rather than copied: a CLI run may be in a pipe
       // or a script, where reaching for the clipboard would be a side effect
       // nobody asked for.
-      const requesterMessage = buildReport(summary, cli.config().wporgUsername) || undefined
-      for (const line of reviewSummary(cli.ui.out, summary, requesterMessage, noReviewer ? { noReviewer: true } : {})) cli.out(line)
+      const wporgUsername = cli.config().wporgUsername
+      const requesterMessage = buildReport(summary, wporgUsername) || undefined
+      // The reply holds the requester message, so it is printed under it
+      // rather than instead of it: a reviewer who posts only the sentence, as
+      // before templates, still finds it where it always was.
+      const replyText =
+        replyTemplate === undefined
+          ? undefined
+          : renderReply(
+              { locale, name: replyTemplate, summary, wporgUsername, requester: normaliseRequester(flags.requester) },
+              (f) => readFileSync(f, 'utf8'),
+            )
+      const summaryOpts = {
+        ...(noReviewer ? { noReviewer: true } : {}),
+        ...(replyText === undefined || replyTemplate === undefined ? {} : { reply: { name: replyTemplate, text: replyText } }),
+      }
+      for (const line of reviewSummary(cli.ui.out, summary, requesterMessage, summaryOpts)) cli.out(line)
     })
 
   program

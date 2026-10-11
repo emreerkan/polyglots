@@ -5,6 +5,7 @@ import type { StatsSummary } from '../commands/stats.js'
 import { box, displayWidth, padTo, sparkline, table } from '../ui/layout.js'
 import { hintLine, nextLine } from '../ui/messages.js'
 import type { Painter } from '../ui/paint.js'
+import { replyCaution } from '../reply/templates.js'
 
 // Each command's closing block, as pure functions of a painter and a summary.
 // Kept out of cli.ts so they can be tested with colour forced on and off
@@ -41,6 +42,11 @@ export interface ReviewSummaryOptions {
   // reviewProvider is none: the run was rules-only by standing choice, so the
   // advice to re-run with AI would point at something the person opted out of.
   noReviewer?: boolean
+  // The filled reply template, printed under the requester message it
+  // contains. Only the label is painted: the text is HTML bound for an o2
+  // comment and goes out exactly as filled, never wrapped or coloured, so
+  // what the terminal shows is what a copy of it pastes.
+  reply?: { name: string; text: string }
 }
 
 export function reviewSummary(
@@ -71,6 +77,14 @@ export function reviewSummary(
   if (s.repaired > 0) rows.push(['repaired', String(s.repaired), p.paint('muted', `${s.written - s.repaired} left for you`)])
   const out = box(p, title, table(rows, { align: ['left', 'right', 'left'] }))
   if (requesterMessage) out.push('', p.paint('heading', 'Message for the requester:'), requesterMessage, '')
+  if (opts.reply) {
+    if (!requesterMessage) out.push('')
+    out.push(p.paint('heading', `Reply (${opts.reply.name} template):`))
+    // Above the text rather than in it: the reply is copied as printed.
+    const caution = replyCaution(s)
+    if (caution) out.push(p.paint('warn', caution))
+    out.push(opts.reply.text, '')
+  }
   // A stopped run that found something says both: the file holds what was
   // found so far, and the rest still needs a run. Only a run that reached the
   // end may call the rest approvable, since a stopped one has entries nothing

@@ -433,7 +433,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
           <Text color={(value.guidance?.length ?? 0) > GUIDANCE_LIMIT ? 'red' : undefined} dimColor={(value.guidance?.length ?? 0) <= GUIDANCE_LIMIT}>
             {`${value.guidance?.length ?? 0} of ${GUIDANCE_LIMIT} characters${(value.guidance?.length ?? 0) > GUIDANCE_LIMIT ? ': too long to save' : ''}`}
           </Text>
-          <Hint>type to add · enter new line · backspace delete · esc back to the overview</Hint>
+          <Hint>enter new line · ctrl+x clear · ctrl+z undo · esc back to the overview</Hint>
         </>
       )}
 
