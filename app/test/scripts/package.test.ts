@@ -8,6 +8,7 @@ import { copyRootDocs } from '../../scripts/prepack.mjs'
 const app = fileURLToPath(new URL('../..', import.meta.url))
 const pkg = JSON.parse(await readFile(join(app, 'package.json'), 'utf8')) as {
   files?: string[]
+  bin?: Record<string, string>
   scripts: Record<string, string>
   repository?: { url: string; directory?: string }
   homepage?: string
@@ -17,6 +18,14 @@ const pkg = JSON.parse(await readFile(join(app, 'package.json'), 'utf8')) as {
 }
 
 describe('package.json', () => {
+  // Written the way npm stores it. With a leading ./ the 0.28.0 publish, on
+  // npm 11.19, warned that the bin "was invalid and removed" while it was
+  // only rewriting the path, which is the kind of warning that gets ignored
+  // until the day it is true.
+  it('names the CLI in bin without a leading ./', () => {
+    expect(pkg.bin).toEqual({ polyglots: 'dist/cli.js' })
+  })
+
   // Without it npm pack shipped src/, test/ and scripts/. README, LICENSE and
   // package.json itself are always included by npm and need no entry.
   it('publishes only the built code, the stats translations and the changelog', () => {

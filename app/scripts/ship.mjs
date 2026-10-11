@@ -98,13 +98,15 @@ async function watch(sha, workflow, what) {
 }
 
 async function waitForNpm() {
-  // The registry can take a little while to answer for a version it has just
-  // accepted, so a missing version right after the workflow is not yet a fault.
-  for (let i = 0; i < 24; i++) {
+  // The registry can take a while to answer for a version it has just
+  // accepted ("may take a few minutes to become available"), so a missing
+  // version right after the workflow is not yet a fault. Two minutes was not
+  // enough for 0.28.0; ten is generous, and a rerun resumes here anyway.
+  for (let i = 0; i < 60; i++) {
     if (succeeds('npm', ['view', `${pkg.name}@${version}`, 'version'])) return
-    await sleep(5000)
+    await sleep(10000)
   }
-  fail(`The publish workflow passed but npm does not list ${pkg.name}@${version} after two minutes.`)
+  fail(`The publish workflow passed but npm does not list ${pkg.name}@${version} after ten minutes. Run npm run ship again once it does.`)
 }
 
 const DESCRIBE = {
