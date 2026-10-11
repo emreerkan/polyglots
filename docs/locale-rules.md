@@ -16,6 +16,9 @@ turn on, written down.
 | Turkish | Maintained by the tr_TR locale team | `title-case`, `apostrophe`, `ampersand`, `number-format`, and Turkish proper nouns |
 | Swedish | Defaults, waiting for the sv_SE team to confirm | `title-case` |
 
+The Turkish rules file also carries two grammar checks as example patterns,
+off until you uncomment them: [Suffixes and plurals](suffixes-and-plurals.md).
+
 A locale with no pack runs the universal checks only, and every review says
 so, so an absent finding is never mistaken for a passed check. A rules file
 fills the gap.

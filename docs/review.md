@@ -58,10 +58,20 @@ and the note names the rule and what it found there, such as a glossary term
 the fix dropped. The message to the requester does not count it.
 
 Those run for every language. Some checks only make sense for some languages,
-and run only where a locale's rules turn them on: `title-case`, `apostrophe`,
-`ampersand` and `number-format`. Turkish has all four. See
-[Locale rules](locale-rules.md) to turn them on for yours, and to add your
-team's own common mistakes.
+and run only where a locale's rules turn them on:
+
+| Rule | Catches |
+|---|---|
+| `title-case` | English Title Case copied into a language that capitalises only the first word |
+| `apostrophe` | a suffix on a proper noun without the apostrophe (`WordPressi`) |
+| `ampersand` | an `&` kept where the language writes the conjunction as a word |
+| `number-format` | a percent sign set apart from its number (`% 25`) |
+
+Turkish has all four. See [Locale rules](locale-rules.md) to turn them on for
+yours, and to add your team's own common mistakes and patterns. The Turkish
+rules file ships two grammar patterns to turn on, a suffix glued to a
+placeholder (`%s'de`) and a plural noun after a count (`%d dosyalar`):
+[Suffixes and plurals](suffixes-and-plurals.md).
 
 ## The output
 

@@ -33,6 +33,12 @@ patterns: []
 #    replace: '…'
 #    level: fix
 #    note: Use the ellipsis character
+#  - find: '(?<![\p{L}\p{M}\p{N}])(?:%(?:\d+\$)?[-+0#]?\d*(?:\.\d+)?[sdfu]|\{[\w-]+\})[''’]\p{L}+'
+#    level: hint
+#    note: A suffix on a placeholder cannot agree with every value; rephrase so it lands on a word, as in "%s adlı eklentide"
+#  - find: '%(?:\d+\$)?[du](?:</[a-z]+>)?\s+(?!(?:dolar|lari|taler|popüler|modüler|seküler|moleküler|selüler|vasküler|regüler|tübüler|angüler|oküler|kapiler|skaler|polar|bipolar|solar|kiler|keler|çalar|galeri|ileri)\p{L}{0,4}(?![\p{L}\p{M}]))\p{L}+(?:lar(?:ı(?:mız|nız)?|ım|ın)?(?:n?a|ya|n?[dt]an?|n?ın|n?ı|y?la|dır|ca|[dt]aki)?|ler(?:i(?:miz|niz)?|im|in)?(?:n?e|ye|n?[dt]en?|n?in|n?i|y?le|dir|ce|[dt]eki)?)(?![\p{L}\p{M}])'
+#    level: hint
+#    note: Turkish keeps the noun singular after a number, as in "%d dosya"
 
 # Guidance added to the AI review prompts, at most 1500 characters.
 # guidance: |

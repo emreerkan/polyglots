@@ -88,6 +88,26 @@ export const tr: LocalePack = {
   capitalization: CAPITALIZATION,
   examples: {
     mistakes: ['  - wrong: önizleme', '    right: ön izleme', '    note: TDK writes it as two words'],
-    patterns: ["  - find: '\\.\\.\\.'", "    replace: '…'", '    level: fix', '    note: Use the ellipsis character'],
+    patterns: [
+      "  - find: '\\.\\.\\.'",
+      "    replace: '…'",
+      '    level: fix',
+      '    note: Use the ellipsis character',
+      // A suffix glued to a placeholder, %s'de or {name}'i, has to agree in
+      // vowel harmony with a value the translator never sees. Only an
+      // apostrophe straight after the placeholder counts, so '%s' in quotes
+      // and href='%s' stay quiet, and a placeholder glued to the end of a word
+      // (%1$sbu SSS%2$s'ye, a link closing after SSS) is left alone.
+      String.raw`  - find: '(?<![\p{L}\p{M}\p{N}])(?:%(?:\d+\$)?[-+0#]?\d*(?:\.\d+)?[sdfu]|\{[\w-]+\})[''’]\p{L}+'`,
+      '    level: hint',
+      '    note: A suffix on a placeholder cannot agree with every value; rephrase so it lands on a word, as in "%s adlı eklentide"',
+      // A plural noun straight after a count: Turkish keeps it singular, 3
+      // dosya. -lar takes back-vowel endings and -ler front ones, which is
+      // what keeps Cloudflare and olarak out; the lookahead lists words that
+      // only end like a plural (dolar, popüler, galeri).
+      String.raw`  - find: '%(?:\d+\$)?[du](?:</[a-z]+>)?\s+(?!(?:dolar|lari|taler|popüler|modüler|seküler|moleküler|selüler|vasküler|regüler|tübüler|angüler|oküler|kapiler|skaler|polar|bipolar|solar|kiler|keler|çalar|galeri|ileri)\p{L}{0,4}(?![\p{L}\p{M}]))\p{L}+(?:lar(?:ı(?:mız|nız)?|ım|ın)?(?:n?a|ya|n?[dt]an?|n?ın|n?ı|y?la|dır|ca|[dt]aki)?|ler(?:i(?:miz|niz)?|im|in)?(?:n?e|ye|n?[dt]en?|n?in|n?i|y?le|dir|ce|[dt]eki)?)(?![\p{L}\p{M}])'`,
+      '    level: hint',
+      '    note: Turkish keeps the noun singular after a number, as in "%d dosya"',
+    ],
   },
 }
