@@ -111,7 +111,11 @@ are in it, each with a note. Everything else in the submission is approvable.
   as written. It contains an HTML link; pass it on unchanged.
 - A **reply** follows it when the locale has a reply template: the whole
   comment for the contributor, headed with the template's name. Pass it on
-  unchanged too, and leave a `{username}` in it for the person to fill.
+  unchanged too. If the person told you the requester's WordPress.org
+  username, pass `--requester <username>` to `review`; otherwise leave the
+  `{username}` in the reply for the person to fill. A line above the reply
+  saying entries are flagged means the verdict needs the person's check
+  before it is posted: say so.
 
 `translate` writes into the file it was given. Its summary counts the entries
 taken from translation memory, drafted, and marked fuzzy for a person to
@@ -126,8 +130,8 @@ When you are done, tell the person:
 - the requester message, if there was one, and the reply, if there was one;
 - anything that stopped the run early, with the exit code;
 - that nothing was uploaded to translate.wordpress.org, and that no setting,
-  key, memory or rules file
-  was changed (or exactly what was, if they asked for it).
+  key, memory, rules file or reply template was changed (or exactly what
+  was, if they asked for it).
 
 ## More
 

@@ -14,14 +14,17 @@ Entries say what changed. For why and how, read the commit.
 
 - A model fix is checked with the rules once accepted; what it brought in that the submission did not have is noted beside it as `fix-suspect`, and is not counted in the requester message.
 - Reply templates per locale, created, edited and deleted in Configuration › Reply templates or with `polyglots template edit|list|delete|path`, filled after a review with the requester (`--requester`), a choice on whether the review found anything and the requester message; printed by `review` (`--template`) and shown in the app, where `y` copies and `t` switches it.
+- Every pull request and push to main is tested on GitHub: typecheck, tests on Node 24 and 26, the built CLI and the website build. Dependabot proposes grouped weekly dependency updates.
 
 ### Changed
 
 - The guidance editor in Locale rules moves the cursor anywhere in the text, clears it with ctrl+x and undoes with ctrl+z; it used to only add at the end. ctrl+k there now only opens the palette.
+- Dependencies updated, among them dotenv 18, openai 7.27, react 19.3, zod 4.6 and vitest 5.0.3.
 
 ### Fixed
 
 - The translation memory check ignores a trailing `।`, `۔`, `。`, Tibetan shad or other script full stop, and a space before it, as it did for `.`.
+- The test suite passes off a Mac: it no longer assumes the Apple silicon default local model, or file times fine enough to order files written in a row.
 
 ## [0.27.0] - 2026-10-09
 

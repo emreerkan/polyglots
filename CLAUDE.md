@@ -57,7 +57,9 @@ There is no `npm run lint`. Typecheck covers tests too (`tsconfig.test.json`).
 **The stats page ships a bundled client.** `src/stats/page/**` is compiled by
 esbuild into a checked-in bundle, and a test fails when the bundle is stale. After
 editing anything there, run `npm run stats-client`. `build` and `prepare` do it
-too, but tests run from source and will not.
+too, but tests run from source and will not. The stale-bundle test cannot fail after
+`npm ci` or `npm install`, since `prepare` regenerates the bundle first; CI's
+`git diff --exit-code` step after install is the real check.
 
 **The website's demos run the real CLI.** `website/scripts/snapshot.ts` calls
 `main()` with every `CliDeps` member either faked in `scripts/demos.ts` or

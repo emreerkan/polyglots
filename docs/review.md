@@ -92,7 +92,10 @@ polyglots config set wporgUsername your-name
 To post a whole reply rather than the sentence alone, with a greeting, the PTE
 verdict and your team's links around it, write a
 [reply template](reply-templates.md). The review then prints the filled reply
-under the message.
+under the message. `--requester <username>` fills in who it is addressed to,
+and `--template declined` picks a template other than `approved`. When entries
+are left for you to judge, a line above the reply says how many, so you can
+check the verdict before you post it.
 
 ## Rules only
 
