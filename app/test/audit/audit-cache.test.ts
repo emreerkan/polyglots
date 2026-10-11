@@ -288,3 +288,37 @@ describe('a verdict formed in one file is not served for another', () => {
     expect(adjudicate).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * The check on an accepted fix runs where a verdict becomes a result, not where
+ * the model is asked, so it adds nothing to the prompt and nothing to the key.
+ * A verdict served from the cache passes through the same place and gets the
+ * same check, which is what lets this ship without pruning a single verdict.
+ */
+describe('the check on a model fix, from the cache', () => {
+  const widget: GlossaryEntry[] = [{ sourceTerm: 'widget', translation: 'bileşen', locale: 'tr' }]
+  const dropsTheTerm: Adjudicator = async (batch) =>
+    batch.map((c) => ({
+      id: c.id,
+      problem: true,
+      categories: ['register' as const],
+      reason: 'use the formal imperative',
+      fix: ['Widget ayarlarını güncelleyin'],
+    }))
+
+  it('reports what the fix brought in on a cached verdict as on a fresh one', async () => {
+    const store = memoryCache()
+    const entries = [entry('Update the widget settings', 'Bileşen ayarlarını güncelle')]
+    const [fresh] = await auditEntries({ ...base, glossary: widget, entries, store, adjudicate: dropsTheTerm })
+    expect(fresh?.findings.map((f) => f.rule)).toContain('fix-suspect')
+
+    const adjudicate = vi.fn(async () => {
+      throw new Error('the cache should have answered')
+    })
+    const [cached] = await auditEntries({ ...base, glossary: widget, entries, store, adjudicate })
+    expect(adjudicate).not.toHaveBeenCalled()
+    expect(cached).toEqual(fresh)
+    expect(cached?.text).toEqual(['Widget ayarlarını güncelleyin'])
+    expect(cached?.repairedBy).toBe('model')
+  })
+})

@@ -620,6 +620,16 @@ msgctxt "rule:fix-rejected:desc"
 msgid "The model proposed a fix that failed the mechanical checks, so it was not applied."
 msgstr ""
 
+#. The name of a check ("fix-suspect") in the legend of "What gets flagged". Sentence case.
+msgctxt "rule:fix-suspect"
+msgid "AI fix needs a look"
+msgstr ""
+
+#. One line explaining the check "fix-suspect", shown in a tooltip.
+msgctxt "rule:fix-suspect:desc"
+msgid "The model’s fix was applied, but the checks found something in it the submitted text did not have."
+msgstr ""
+
 #. The name of a check ("unreviewed") in the legend of "What gets flagged". Sentence case.
 msgctxt "rule:unreviewed"
 msgid "Could not be reviewed"

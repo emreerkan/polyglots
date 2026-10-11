@@ -494,7 +494,19 @@ function toVerdict(candidate: AuditCandidate, result: AuditResult, ctx: RuleCont
   if (!problem || !result.fix) return base
 
   const verdict = judgeFix({ entry: candidateToEntry(candidate), fix: result.fix, nplurals, ctx })
-  if ('accepted' in verdict) return { ...base, text: verdict.accepted, repairedBy: 'model' }
+  // What the fix brought in is checked here, where a verdict becomes a result,
+  // and not where the model is asked. That keeps it out of the prompt and so out
+  // of the cache key, and a verdict served from the cache comes through this
+  // same line and is checked the same way: no cached verdict had to be pruned
+  // for the check to apply to it.
+  if ('accepted' in verdict) {
+    return {
+      ...base,
+      ...(verdict.suspect ? { findings: [...findings, verdict.suspect] } : {}),
+      text: verdict.accepted,
+      repairedBy: 'model',
+    }
+  }
   // Say so rather than dropping it. Silence here looks like the model declined,
   // which is a different thing and hides a real signal about the prompt.
   return { ...base, findings: [...findings, { rule: 'fix-rejected', severity: 'suspect', message: verdict.rejected }] }

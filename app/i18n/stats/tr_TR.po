@@ -550,6 +550,14 @@ msgctxt "rule:fix-rejected:desc"
 msgid "The model proposed a fix that failed the mechanical checks, so it was not applied."
 msgstr "Modelin önerdiği düzeltme mekanik denetimlerden geçemedi, bu yüzden uygulanmadı."
 
+msgctxt "rule:fix-suspect"
+msgid "AI fix needs a look"
+msgstr "YZ düzeltmesine bakılmalı"
+
+msgctxt "rule:fix-suspect:desc"
+msgid "The model’s fix was applied, but the checks found something in it the submitted text did not have."
+msgstr "Modelin düzeltmesi uygulandı, ancak denetimler düzeltmede gönderilen metinde olmayan bir sorun buldu."
+
 msgctxt "rule:unreviewed"
 msgid "Could not be reviewed"
 msgstr "İncelenemedi"

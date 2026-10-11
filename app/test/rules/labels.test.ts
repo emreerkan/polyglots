@@ -32,10 +32,18 @@ describe('finding labels', () => {
     expect(unlabelled).toEqual([])
   })
 
+  // Written through a constant rather than a literal, so the scan above cannot
+  // see it.
+  it('name the finding an accepted model fix carries', async () => {
+    const { FIX_SUSPECT_RULE } = await import('../../src/audit/repair.js')
+    expect(findingLabel(FIX_SUSPECT_RULE)).toBeDefined()
+  })
+
   it('say whether a key is a mechanical check or the model’s judgement', () => {
     expect(findingLabel('ampersand')?.source).toBe('rule')
     expect(findingLabel('ai:register')?.source).toBe('ai')
     expect(findingLabel('fix-rejected')?.source).toBe('ai')
+    expect(findingLabel('fix-suspect')?.source).toBe('ai')
     expect(findingLabel('unreviewed')?.source).toBe('process')
   })
 

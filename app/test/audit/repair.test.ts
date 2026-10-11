@@ -152,3 +152,84 @@ describe('repairMechanically and escaping', () => {
     expect(repairMechanically(entry('a "b"', ['c "d"']))).toBeUndefined()
   })
 })
+
+/**
+ * A fix judgeFix accepts can still be wrong in a softer way: the rules only
+ * reject on an error. What it got wrong is reported beside the fix, as one
+ * `fix-suspect` finding naming only what the submitted text did not already
+ * have, so the reviewer sees what the model broke on the way to what it fixed.
+ * The three cases are the ones notes/ideas.md was written from.
+ */
+describe('judgeFix and what an accepted fix brought in', () => {
+  const glossary: GlossaryEntry[] = [
+    { locale: 'tr', sourceTerm: 'widget', translation: 'bileşen', partOfSpeech: 'noun' },
+    { locale: 'tr', sourceTerm: 'sidebar', translation: 'kenar çubuğu', partOfSpeech: 'noun' },
+  ]
+  const judge = (e: AuditEntry, fix: string[]) =>
+    judgeFix({ entry: e, fix, nplurals: 2, ctx: buildRuleContext({ locale: 'tr', glossary, nplurals: 2, entries: [e] }) })
+
+  it('keeps a fix that dropped a glossary term, and says which term', () => {
+    const verdict = judge(entry('Update the widget settings', ['Bileşen ayarlarını güncelle']), ['Widget ayarlarını güncelleyin'])
+    expect(verdict).toMatchObject({ accepted: ['Widget ayarlarını güncelleyin'] })
+    const suspect = 'accepted' in verdict ? verdict.suspect : undefined
+    expect(suspect).toMatchObject({ rule: 'fix-suspect', severity: 'suspect' })
+    expect(suspect?.message).toMatch(/glossary/)
+    expect(suspect?.message).toContain('"widget" -> "bileşen"')
+  })
+
+  it('keeps a fix that brought in a title-case calque, and names the words', () => {
+    const verdict = judge(entry('Add New Product', ['Yeni ürün ekle']), ['Yeni Ürün Ekleyin'])
+    const suspect = 'accepted' in verdict ? verdict.suspect : undefined
+    expect(suspect?.rule).toBe('fix-suspect')
+    expect(suspect?.message).toMatch(/title-case/)
+    expect(suspect?.message).toContain('Ürün')
+    expect(suspect?.message).toContain('Ekleyin')
+  })
+
+  it('keeps a fix that lost the apostrophe on a proper noun, and names the word', () => {
+    const verdict = judge(entry('Sync with WordPress', ['WordPress ile eşitle']), ['WordPressle eşitle'])
+    const suspect = 'accepted' in verdict ? verdict.suspect : undefined
+    expect(suspect?.rule).toBe('fix-suspect')
+    expect(suspect?.message).toMatch(/apostrophe/)
+    expect(suspect?.message).toContain('WordPressle')
+  })
+
+  // The glossary message lists every missed term, so comparing whole messages
+  // would read a fix that kept one term missing and dropped another as all new.
+  it('names only the glossary term the fix dropped, not one missing in both', () => {
+    const verdict = judge(entry('Update the widget in the sidebar', ['Yan menüdeki bileşeni güncelle']), [
+      "Yan menüdeki widget'ı güncelleyin",
+    ])
+    const suspect = 'accepted' in verdict ? verdict.suspect : undefined
+    expect(suspect?.message).toContain('"widget"')
+    expect(suspect?.message).not.toContain('"sidebar"')
+  })
+
+  // The title-case message changes wording when the whole string mirrors the
+  // source, so the words are compared rather than the sentence around them.
+  it('names only the capital the fix added, when the submission already had one', () => {
+    const verdict = judge(entry('Add New Product', ['Yeni Ürün ekle']), ['Yeni Ürün Ekleyin'])
+    const suspect = 'accepted' in verdict ? verdict.suspect : undefined
+    expect(suspect?.message).toContain('Ekleyin')
+    expect(suspect?.message).not.toContain('Ürün')
+  })
+
+  // inconsistent reads the whole file, not the entry: it fires on any non-empty
+  // text whose source the file translates more than one way. An entry with no
+  // submitted text is the one shape where it fires on the fix and not on the
+  // submission, so it is the only way to see the guard work. Without it, the
+  // file's own spread would be named as something the model brought in.
+  it('never names a rule that reads the whole file, such as inconsistent', () => {
+    const e = entry('Open the menu', [''])
+    const others = [entry('Open the menu', ['Menüyü aç']), entry('Open the menu', ['Menüyü göster'])]
+    const ctx = buildRuleContext({ locale: 'tr', glossary, nplurals: 2, entries: [e, ...others] })
+    expect(ctx.translationsByMsgid.get('Open the menu')?.size).toBe(2)
+    const verdict = judgeFix({ entry: e, fix: ['Menüyü açın'], nplurals: 2, ctx })
+    expect(verdict).toEqual({ accepted: ['Menüyü açın'] })
+  })
+
+  it('adds nothing when the fix brings in nothing the submission did not have', () => {
+    const verdict = judge(entry('Open the sidebar', ['Yan menüyü aç']), ['Yan menüyü açın'])
+    expect(verdict).toEqual({ accepted: ['Yan menüyü açın'] })
+  })
+})

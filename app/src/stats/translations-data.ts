@@ -142,6 +142,8 @@ export const STATS_TRANSLATIONS: readonly StatsLanguage[] = [
       "rule:ai:other:desc": "Model, diğer kategorilerin hiçbirine uymayan bir sorun işaretledi.",
       "rule:fix-rejected": "YZ düzeltmesi reddedildi",
       "rule:fix-rejected:desc": "Modelin önerdiği düzeltme mekanik denetimlerden geçemedi, bu yüzden uygulanmadı.",
+      "rule:fix-suspect": "YZ düzeltmesine bakılmalı",
+      "rule:fix-suspect:desc": "Modelin düzeltmesi uygulandı, ancak denetimler düzeltmede gönderilen metinde olmayan bir sorun buldu.",
       "rule:unreviewed": "İncelenemedi",
       "rule:unreviewed:desc": "Bu dizgenin otomatik incelemesi başarısız oldu; bir insanın bakması için ayrıldı."
     }

@@ -37,6 +37,7 @@ import type { RunControl } from '../run-control.js'
 import { loadConfig } from '../config.js'
 import { languageOf } from '../wporg/locales.js'
 import { tmKey } from '../audit/rules/index.js'
+import { FIX_SUSPECT_RULE } from '../audit/repair.js'
 import { allGlossary, findMemory, openDb } from '../storage/index.js'
 import type {
   AuditEntry,
@@ -156,7 +157,13 @@ function groupTally(verdicts: Verdict[]): Record<string, number> {
   const counts: Record<string, number> = {}
   for (const verdict of verdicts) {
     if (verdict.text === undefined) continue
-    const groups = new Set(verdict.findings.map((f) => groupFor(f.rule)))
+    // A fix-suspect is what the model's own fix broke, so it is no fault of the
+    // contributor's and the message posted back to them must not count it. Left
+    // in, it would land in `other`, which claims every rule the named groups do
+    // not, and add a fault to the public tally that nobody they wrote made.
+    const groups = new Set(
+      verdict.findings.filter((f) => f.rule !== FIX_SUSPECT_RULE).map((f) => groupFor(f.rule)),
+    )
     // A repaired entry with no findings is a mechanical fix nothing named. It
     // still happened, so it lands in `other` rather than leaving the groups
     // unable to account for every entry the message claims.

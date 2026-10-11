@@ -110,6 +110,17 @@ describe('buildUsagePayload', () => {
     expect(findings).toEqual({ 'locale-rule': 4, 'ai:meaning': 2 })
   })
 
+  // A fix-suspect runs for every locale, wherever the model's fix lands, so its
+  // count says nothing about which locale an install reviews. It travels under
+  // its own name beside fix-rejected, and not inside the underlying rule's count:
+  // that would add the model's slip to the contributors' tally of that check.
+  it('sends the checks on the model fix under their own names', () => {
+    run({ command: 'review', project: 'wp-plugins/akismet' }, { entries: 10, repaired: 3, byCategory: { 'fix-suspect': 2, 'fix-rejected': 1, glossary: 1 } })
+    db.close()
+    const { findings } = buildUsagePayload({ installId: ID, version: '1.2.3', jobsPath: path })
+    expect(findings).toEqual({ 'fix-suspect': 2, 'fix-rejected': 1, glossary: 1 })
+  })
+
   it('gives zeros when there is no job store, and creates none', async () => {
     db.close()
     await rm(path)

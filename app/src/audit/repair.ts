@@ -1,4 +1,4 @@
-import type { AuditEntry } from '../types.js'
+import type { AuditEntry, Finding } from '../types.js'
 import { matchSourceEscaping } from '../po/escapes.js'
 import { runRules, type RuleContext } from './rules/index.js'
 
@@ -52,7 +52,11 @@ export function repairMechanically(entry: AuditEntry): string[] | undefined {
   return changed ? repaired : undefined
 }
 
-export type FixVerdict = { accepted: string[] } | { rejected: string }
+// `suspect` is set when the accepted fix carries rule findings the submitted
+// text did not. The fix is kept all the same: the model may well be right about
+// the thing it was asked to fix, and what it broke on the way is for a person
+// to weigh, not grounds for throwing the fix away.
+export type FixVerdict = { accepted: string[]; suspect?: Finding } | { rejected: string }
 
 export interface JudgeFixArgs {
   entry: AuditEntry
@@ -61,6 +65,83 @@ export interface JudgeFixArgs {
   ctx: RuleContext
 }
 
+// The rule name the finding is written under. Not the underlying rule's own
+// name: a re-found `glossary` would be counted as the contributor's glossary
+// error, in the run tally and in the message posted back to them, when it was
+// the model that dropped the term.
+export const FIX_SUSPECT_RULE = 'fix-suspect'
+
+// Rules whose finding is about the file rather than the entry. `inconsistent`
+// counts how many ways the submitted file translates a source, a set the fix is
+// not part of, so whatever it says on the fix it says about the contributor's
+// file. It fires on any non-empty text, so on an entry with text it fires on
+// both and the diff drops it anyway. It does not when the entry as the model saw
+// it was empty, and it is named here so that case, or a rule that one day
+// compares the entry against that set, cannot report the file's spread as
+// something the model brought in.
+const WHOLE_FILE_RULES: ReadonlySet<string> = new Set(['inconsistent'])
+
+/**
+ * What a finding is about, as separate items, so two findings of one rule can
+ * be compared item by item.
+ *
+ * Comparing whole messages was the obvious way and the wrong one. The glossary
+ * message lists every term the text missed, so a fix that kept one term missing
+ * and dropped another would read as entirely new and name both. The title-case
+ * message changes its wording when the whole string mirrors the source, so a
+ * fix that added one capital to a submission that already had another would
+ * read as a different finding and name the old capital as the model's.
+ *
+ * Parsed from the message, because the message is all a finding carries. Each
+ * parse falls back to the whole message, which is the old comparison: a rule
+ * whose wording drifts from what is matched here degrades to being compared as
+ * a sentence, never to being dropped.
+ */
+function offendingItems(finding: Finding): string[] {
+  const { rule, message } = finding
+  const list = (body: string | undefined, separator: string): string[] =>
+    body === undefined || body === '' ? [message] : body.split(separator)
+  switch (rule) {
+    case 'glossary':
+      return list(/^glossary term not used: (.*)$/s.exec(message)?.[1], '; ')
+    case 'apostrophe':
+      return list(/^proper noun takes a suffix without an apostrophe: (.*)$/s.exec(message)?.[1], ', ')
+    case 'title-case':
+      return list((/^title case mirrors the English source \((.*?)\); /s.exec(message) ?? /^capitalizes (.*?) mid-string; /s.exec(message))?.[1], ', ')
+    default:
+      return [message]
+  }
+}
+
+/**
+ * The rule findings on an accepted fix that the submitted text did not have,
+ * as one `fix-suspect` finding naming each underlying rule and what it found.
+ * Undefined when the fix brought in nothing.
+ *
+ * Errors cannot appear here, since judgeFix has already rejected a fix with
+ * one; what is left are the suspects the rules raise and the model is trusted
+ * to weigh. It weighed them on the submitted text, never on its own.
+ */
+function broughtIn(before: Finding[], after: Finding[]): Finding | undefined {
+  const had = new Set(before.flatMap((f) => offendingItems(f).map((item) => `${f.rule}\0${item}`)))
+  const added = new Map<string, string[]>()
+  for (const finding of after) {
+    if (WHOLE_FILE_RULES.has(finding.rule)) continue
+    for (const item of offendingItems(finding)) {
+      if (had.has(`${finding.rule}\0${item}`)) continue
+      const items = added.get(finding.rule) ?? []
+      if (!items.includes(item)) items.push(item)
+      added.set(finding.rule, items)
+    }
+  }
+  if (added.size === 0) return undefined
+  const named = [...added].map(([rule, items]) => `${rule} (${items.join(', ')})`).join('; ')
+  return {
+    rule: FIX_SUSPECT_RULE,
+    severity: 'suspect',
+    message: `the model's fix was kept, but brought in what the submitted text did not have: ${named}`,
+  }
+}
 // A proposed fix is only worth taking if it is actually different, actually
 // shaped like a translation of this entry, and does not break something the
 // rules can prove. Soft findings are not grounds for rejection: the model just
@@ -80,9 +161,14 @@ export function judgeFix({ entry, fix: proposed, nplurals, ctx }: JudgeFixArgs):
     return { rejected: 'the proposed fix was unchanged from what was submitted' }
   }
 
-  const errors = runRules({ ...entry, msgstr: fix }, ctx).filter((f) => f.severity === 'error')
+  const after = runRules({ ...entry, msgstr: fix }, ctx)
+  const errors = after.filter((f) => f.severity === 'error')
   if (errors.length > 0) {
     return { rejected: `the proposed fix was rejected: ${errors.map((f) => f.message).join('; ')}` }
   }
-  return { accepted: fix }
+  // Against the rules on the entry as the model saw it, which is the submitted
+  // text after any mechanical repair: that repair is not the model's doing and
+  // neither is anything it left behind.
+  const suspect = broughtIn(runRules(entry, ctx), after)
+  return suspect ? { accepted: fix, suspect } : { accepted: fix }
 }

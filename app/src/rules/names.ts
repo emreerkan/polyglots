@@ -141,12 +141,24 @@ const AI_LABELS: Record<AuditCategory, Label> = {
 }
 
 // Keys the audit writes by hand. fix-rejected counts with the AI findings
-// because it is the model's proposal that failed; unreviewed is neither rule
-// nor model but the pipeline saying it could not look.
-const OTHER_LABELS: Record<'fix-rejected' | 'unreviewed', FindingLabel> = {
+// because it is the model's proposal that failed, and fix-suspect for the same
+// reason: the rules found it, but in the model's text, not the contributor's.
+// unreviewed is neither rule nor model but the pipeline saying it could not look.
+//
+// Being in this list is also what lets a key into the usage payload
+// (usage/payload.ts sends only FINDING_KEYS). That is meant for both fix keys:
+// they fire for every locale, wherever the model's fix lands, so their counts
+// name no locale, and they say how often the model's own repairs go wrong,
+// which is the number worth having from installs.
+const OTHER_LABELS: Record<'fix-rejected' | 'fix-suspect' | 'unreviewed', FindingLabel> = {
   'fix-rejected': {
     name: 'AI fix rejected',
     description: 'The model proposed a fix that failed the mechanical checks, so it was not applied.',
+    source: 'ai',
+  },
+  'fix-suspect': {
+    name: 'AI fix needs a look',
+    description: 'The model’s fix was applied, but the checks found something in it the submitted text did not have.',
     source: 'ai',
   },
   unreviewed: {

@@ -205,6 +205,62 @@ describe('reviewFile', () => {
     expect(summary.byGroup).toEqual({})
   })
 
+  /**
+   * The model's own fix is checked with the rules, and what it brought in is
+   * written beside it, where the reviewer reads the entry. It is the model's
+   * mistake, not the contributor's, so the requester message must not count it:
+   * an unknown rule lands in "other", which would blame the contributor.
+   */
+  describe('when an accepted fix brings in a finding the submission did not have', () => {
+    const SUBMISSION = `msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\\n"
+"Language: tr\\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\\n"
+
+msgid "Update the widget settings"
+msgstr "Bileşen ayarlarını güncelle"
+`
+    const register = vi.fn(async (batch: { id: number }[]) =>
+      batch.map((c) => ({
+        id: c.id,
+        problem: true,
+        categories: ['register'] as never[],
+        reason: 'use the formal imperative',
+        fix: ['Widget ayarlarını güncelleyin'],
+      })),
+    )
+
+    beforeEach(async () => {
+      await writeFile(file, SUBMISSION, 'utf8')
+      replaceGlossary(db, 'tr', [{ locale: 'tr', sourceTerm: 'widget', translation: 'bileşen', partOfSpeech: 'noun' }])
+    })
+
+    it('keeps the fix and writes what it broke into the entry comments', async () => {
+      const summary = await run({ adjudicate: register })
+      expect(summary.repaired).toBe(1)
+
+      const [fixed] = await loadPo(summary.problemsFile!).then((p) => p.auditEntries())
+      expect(fixed?.msgstr).toEqual(['Widget ayarlarını güncelleyin'])
+      const comments = fixed!.comments.join('\n')
+      expect(comments).toMatch(/fix/i)
+      expect(comments).toContain('"widget" -> "bileşen"')
+    })
+
+    it('leaves it out of the groups the requester message names', async () => {
+      const summary = await run({ adjudicate: register })
+      expect(summary.byGroup).toEqual({ meaning: 1 })
+    })
+
+    // byRule counts how often each finding fired over flagged entries. A fix
+    // only lands on an entry already flagged, so counting this adds no entry,
+    // and how often the model's fixes break something is worth knowing.
+    it('still counts it among the findings that fired', async () => {
+      const summary = await run({ adjudicate: register })
+      expect(summary.byRule['fix-suspect']).toBe(1)
+    })
+  })
+
   it('writes nothing at all when the submission is clean', async () => {
     await writeFile(file, PO.replace('msgstr "yorumlar"', 'msgstr "%s yorum"'), 'utf8')
     const summary = await run()

@@ -10,6 +10,10 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Added
+
+- A model fix is checked with the rules once accepted; what it brought in that the submission did not have is noted beside it as `fix-suspect`, and is not counted in the requester message.
+
 ## [0.27.0] - 2026-10-09
 
 ### Added

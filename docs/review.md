@@ -32,7 +32,8 @@ Entries with no translation are skipped and counted as "not submitted".
    each entry and writes a fix for the ones it rejects.
 4. **The fix is checked.** Every proposed fix is run through the rules again.
    One that introduces an error is rejected, and the rejection is written into
-   the file instead of the fix.
+   the file instead of the fix. One that passes is kept, and any softer finding
+   it has that the submitted text did not is noted beside it as `fix-suspect`.
 
 ## What the checks look for
 
@@ -50,6 +51,11 @@ Entries with no translation are skipped and counted as "not submitted".
 | `inconsistent` | one source translated several ways in the same file |
 | `tm-conflict` | a wording that differs from the one your memory approved |
 | `control` | a setting the code reads, such as `on` or `ltr`, that was translated |
+| `fix-suspect` | a finding in the model's own fix that the submitted text did not have |
+
+`fix-suspect` checks the model, not the contributor. The fix stays in the file,
+and the note names the rule and what it found there, such as a glossary term
+the fix dropped. The message to the requester does not count it.
 
 Those run for every language. Some checks only make sense for some languages,
 and run only where a locale's rules turn them on: `title-case`, `apostrophe`,
