@@ -10,6 +10,14 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Added
+
+- `config list-names` prints a locale's proper nouns numbered; `config remove-name` takes the numbers or the names.
+
+### Fixed
+
+- `config get properNouns` prints the names instead of `[object Object]`.
+
 ## [0.28.0] - 2026-10-11
 
 ### Added

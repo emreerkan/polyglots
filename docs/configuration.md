@@ -52,6 +52,14 @@ A name may be several words. Names that belong to the language rather than to
 your projects, such as month or weekday names, go in the
 [locale rules](locale-rules.md) instead.
 
+`polyglots config list-names` prints a locale's names with numbers.
+`polyglots config remove-name` takes those numbers, or the names themselves:
+
+```
+polyglots config list-names --locale tr
+polyglots config remove-name 2 --locale tr
+```
+
 ## API keys
 
 | Key | Used by |

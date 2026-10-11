@@ -60,9 +60,9 @@ polyglots config set defaultLocale de
 ```
 
 Any WordPress locale works: `de`, `de_DE`, `pt-br`, `nl_NL_formal`. `review`,
-`translate`, `fetch`, the `glossary` and `tm` commands and `config add-name`
-also take `--locale` for a single run; the `rules` commands take the locale as
-an argument. A command that needs a locale and has none stops and says so.
+`translate`, `fetch`, the `glossary` and `tm` commands and the `config`
+commands for proper nouns also take `--locale` for a single run; the `rules`
+commands take the locale as an argument. A command that needs a locale and has none stops and says so.
 
 `review` and `translate` can also go without one: a file exported from
 GlotPress names its language in its header, and when every file given names

@@ -430,11 +430,61 @@ describe('config add-name', () => {
     expect(h.stderr.text).toMatch(/claude, antigravity/)
   })
 
+  // properNouns used to print as [object Object] when asked for by name,
+  // though the full listing formatted it.
+  it('shows the names when asked for by name', async () => {
+    await harness().run(['config', 'add-name', 'Ankara'])
+    const read = harness()
+    await read.run(['config', 'get', 'properNouns'])
+    expect(read.stdout.text).toBe('tr: Ankara\n')
+  })
+
   it('points config set at add-name instead of taking a raw value', async () => {
     const h = harness()
     const code = await h.run(['config', 'set', 'properNouns', 'İzmir'])
     expect(code).toBe(2)
     expect(h.stderr.text).toContain('add-name')
+  })
+})
+
+describe('config list-names and remove-name', () => {
+  async function configJson() {
+    return JSON.parse(await readFile(join(home, 'config', 'config.json'), 'utf8'))
+  }
+  async function seed() {
+    const h = harness()
+    await h.run(['config', 'add-name', 'Kadıköy'])
+    await h.run(['config', 'add-name', 'Türk Dil Kurumu'])
+    await h.run(['config', 'add-name', 'Ankara'])
+    await h.run(['config', 'add-name', 'Riksdagen', '--locale', 'sv'])
+  }
+  const lines = (text: string) => stripVTControlCharacters(text).trim().split('\n').map((l) => l.trim().replace(/\s+/g, ' '))
+
+  it('numbers the locale names in the order they were added', async () => {
+    await seed()
+    const h = harness()
+    expect(await h.run(['config', 'list-names'])).toBe(0)
+    expect(lines(h.stdout.text)).toEqual(['Proper nouns for tr:', '1 Kadıköy', '2 Türk Dil Kurumu', '3 Ankara'])
+  })
+
+  it('removes by number or by name', async () => {
+    await seed()
+    expect(await harness().run(['config', 'remove-name', '1', 'Ankara'])).toBe(0)
+    expect((await configJson()).properNouns).toEqual({ tr: ['Türk Dil Kurumu'], sv: ['Riksdagen'] })
+  })
+
+  it('drops the locale once its last name goes', async () => {
+    await seed()
+    expect(await harness().run(['config', 'remove-name', 'Riksdagen', '--locale', 'sv'])).toBe(0)
+    expect((await configJson()).properNouns).toEqual({ tr: ['Kadıköy', 'Türk Dil Kurumu', 'Ankara'] })
+  })
+
+  it('refuses the whole call when one item matches nothing', async () => {
+    await seed()
+    const h = harness()
+    expect(await h.run(['config', 'remove-name', '2', 'İzmir'])).toBe(2)
+    expect(h.stderr.text).toContain('İzmir')
+    expect((await configJson()).properNouns.tr).toHaveLength(3)
   })
 })
 

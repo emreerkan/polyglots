@@ -542,6 +542,48 @@ function configAddName(cli: Cli, name: string, locale: Locale): number {
   return EXIT_OK
 }
 
+// The ufw shape: list-names prints numbers, remove-name takes them. Every
+// item is resolved against the list as it stood when the command started,
+// before anything is removed, so `remove-name 1 3` takes what was printed as 1
+// and 3; resolving one at a time would make 3 whatever slid into that place
+// after 1 left, which is ufw's own trap. An item may also be the name itself,
+// for a script that cannot trust a number. One item that matches nothing
+// refuses the whole call, so a typo never leaves the list half edited.
+function resolveRemovals(list: readonly string[], items: readonly string[], listCommand: string): Set<string> {
+  const picked = new Set<string>()
+  for (const item of items) {
+    const trimmed = item.trim()
+    const entry = /^\d+$/.test(trimmed) ? list[Number(trimmed) - 1] : list.find((e) => e === trimmed)
+    if (entry === undefined) {
+      const what = /^\d+$/.test(trimmed) ? `There is no number ${trimmed}` : `${JSON.stringify(trimmed)} is not listed`
+      throw new UsageError(`${what}; see: polyglots config ${listCommand}`)
+    }
+    picked.add(entry)
+  }
+  return picked
+}
+
+function configListNames(cli: Cli, locale: Locale): number {
+  const names = cli.config().properNouns[locale] ?? []
+  if (names.length === 0) {
+    cli.out(`No proper nouns for ${locale}. Add one with: polyglots config add-name <name>`)
+    return EXIT_OK
+  }
+  const width = String(names.length).length
+  cli.out(`Proper nouns for ${locale}:`)
+  for (const [i, name] of names.entries()) cli.out(`  ${String(i + 1).padStart(width)}  ${name}`)
+  return EXIT_OK
+}
+
+function configRemoveNames(cli: Cli, items: readonly string[], locale: Locale): number {
+  const { [locale]: current = [], ...others } = cli.config().properNouns
+  const gone = resolveRemovals(current, items, `list-names --locale ${locale}`)
+  const kept = current.filter((n) => !gone.has(n))
+  saveConfig({ properNouns: kept.length === 0 ? others : { ...others, [locale]: kept } })
+  for (const name of gone) cli.out(okLine(cli.ui.out, `Removed ${JSON.stringify(name)} from the ${locale} proper-noun list.`))
+  return EXIT_OK
+}
+
 function parseTmExportFormat(value: string | undefined): TmExportFormat | undefined {
   if (value === undefined) return undefined
   const format = value.trim().toLowerCase()
@@ -569,14 +611,16 @@ function configGet(cli: Cli, key: string | undefined): void {
     return
   }
   if (isConfigKey(key)) {
-    // The two server objects printed as a line rather than [object Object].
+    // The server objects and the per-locale maps printed as a line rather
+    // than [object Object].
     // An unset locale prints as an empty line rather than "undefined", so a
     // script testing for one reads it as absent.
     if (key === 'usageStats') {
       cli.out(config.usageStats === undefined ? '' : formatConfigValue(key, config.usageStats))
       return
     }
-    cli.out(key === 'ollama' || key === 'openaiCompatible' ? formatConfigValue(key, config[key]) : String(config[key] ?? ''))
+    const formatted = key === 'ollama' || key === 'openaiCompatible' || key === 'properNouns'
+    cli.out(formatted ? formatConfigValue(key, config[key]) : String(config[key] ?? ''))
     return
   }
   if (isSecretName(key)) {
@@ -1228,6 +1272,20 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .action((name: string, flags: { locale?: string }) => {
       const locale = requireLocale(flags.locale, cli.config())
       setExitCode(configAddName(cli, name, locale))
+    })
+  cfg
+    .command('list-names')
+    .description('List the proper nouns of a locale, numbered for remove-name')
+    .option('--locale <locale>', `Locale to list (${localeDefaultHelp(shown)})`)
+    .action((flags: { locale?: string }) => {
+      setExitCode(configListNames(cli, requireLocale(flags.locale, cli.config())))
+    })
+  cfg
+    .command('remove-name <items...>')
+    .description('Remove proper nouns by their list-names number or by the name itself')
+    .option('--locale <locale>', `Locale the names belong to (${localeDefaultHelp(shown)})`)
+    .action((items: string[], flags: { locale?: string }) => {
+      setExitCode(configRemoveNames(cli, items, requireLocale(flags.locale, cli.config())))
     })
   cfg
     .command('set-key <name> [value]')
