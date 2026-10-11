@@ -658,12 +658,26 @@ export function tmKey(msgid: string, msgctxt?: string): string {
 }
 
 /**
- * The question and exclamation marks among Unicode's sentence terminators, as of
- * Unicode 17. They change what a sentence says, so a question against a
- * statement is still a different wording.
+ * The full stops among Unicode 17's sentence terminators: every
+ * \p{Sentence_Terminal} except the question and exclamation marks, which change
+ * what a sentence says, so a question against a statement is still a different
+ * wording. Three of those are named as signs and only Unicode's notes say what
+ * they are: Meetei Mayek's AHANG KHUDAM (U+AAF1, "= question mark") and Pahawh
+ * Hmong's VOS THOM and VOS TSHAB CEEB (U+16B37, U+16B38), which "function as" a
+ * question and an exclamation mark. Syriac's SUPRALINEAR FULL STOP (U+0701) also
+ * marks questions in Biblical text, but it is named and mostly used as a stop,
+ * so it stays.
+ *
+ * Written out rather than computed as the property minus those marks, because
+ * V8 reads the property from the Unicode version Node ships. A question mark
+ * added in a later version would then be stripped as a full stop without anyone
+ * noticing. Listed, a newer Unicode changes nothing here: a full stop it adds
+ * is reported as a difference until it is added, which is how every script's
+ * stop was treated before this list existed, and visible, where the other way
+ * round was silent.
  */
-const ASKS_OR_EXCLAIMS =
-  /[!?\u061F\u07F9\u1367\u1944\u1945\u203C\u203D\u2047-\u2049\u2CFA\u2CFB\u2E2E\u2E53\u2E54\uA60F\uA6F7\uFE15\uFE16\uFE56\uFE57\uFF01\uFF1F\u{11143}]/u
+const FULL_STOPS =
+  /[\u002E\u0589\u061D\u061E\u06D4\u0700-\u0702\u0837\u0839\u083D\u083E\u0964\u0965\u104A\u104B\u1362\u1368\u166E\u1735\u1736\u17D4\u17D5\u1803\u1809\u1AA8-\u1AAB\u1B4E\u1B4F\u1B5A\u1B5B\u1B5E\u1B5F\u1B7D-\u1B7F\u1C3B\u1C3C\u1C7E\u1C7F\u2024\u2CF9\u2E3C\u3002\uA4FF\uA60E\uA6F3\uA876\uA877\uA8CE\uA8CF\uA92F\uA9C8\uA9C9\uAA5D-\uAA5F\uAAF0\uABEB\uFE12\uFE52\uFF0E\uFF61\u{10A56}\u{10A57}\u{10F55}-\u{10F59}\u{10F86}-\u{10F89}\u{11047}\u{11048}\u{110BE}-\u{110C1}\u{11141}\u{11142}\u{111C5}\u{111C6}\u{111CD}\u{111DE}\u{111DF}\u{11238}\u{11239}\u{1123B}\u{1123C}\u{112A9}\u{113D4}\u{113D5}\u{1144B}\u{1144C}\u{115C2}\u{115C3}\u{115C9}-\u{115D7}\u{11641}\u{11642}\u{1173C}-\u{1173E}\u{11944}\u{11946}\u{11A42}\u{11A43}\u{11A9B}\u{11A9C}\u{11C41}\u{11C42}\u{11EF7}\u{11EF8}\u{11F43}\u{11F44}\u{16A6E}\u{16A6F}\u{16AF5}\u{16B44}\u{16D6E}\u{16D6F}\u{16E98}\u{1BC9F}\u{1DA88}]/u
 
 /**
  * The full stop of any script, with the colon and the ellipsis, and any space
@@ -673,16 +687,14 @@ const ASKS_OR_EXCLAIMS =
  * (।) ends 1,759 of 5,941 approved Hindi core translations, ۔ 1,295 of 4,061
  * Urdu ones and 。 3,241 of 8,142 Japanese ones, and a submission that dropped
  * one, or wrote "." for it, was reported as a different approved translation
- * where the same difference in German was not. So any mark Unicode calls a
- * sentence terminator counts, as in ENDS_SENTENCE, except the ones above. The
- * space is part of it because some translators type one before the danda
- * ("हो गया ।" in 28 approved Hindi translations, 37 Nepali), and the fullwidth
- * colon is the colon of Chinese, where it ends 117 approved translations.
+ * where the same difference in German was not. The space is part of it because
+ * some translators type one before the danda ("हो गया ।" in 28 approved Hindi
+ * translations, 37 Nepali), and the fullwidth colon is the colon of Chinese,
+ * where it ends 117 approved translations. The Tibetan shads are named because
+ * Unicode does not count them as terminators, though the punctuation check
+ * already reads them as the end of a bo or dz sentence.
  */
-const TRAILING_STOP = new RegExp(
-  `(?:[\\s:\\uFF1A\\u2026]|(?!${ASKS_OR_EXCLAIMS.source})\\p{Sentence_Terminal})+$`,
-  'u',
-)
+const TRAILING_STOP = new RegExp(`(?:[\\s:\\uFF1A\\u2026\\u0F0D\\u0F0E]|${FULL_STOPS.source})+$`, 'u')
 
 // Case, spacing and a trailing full stop or colon are not a disagreement worth
 // a reviewer's time. On a real submission they were 138 of 474 differences, and
