@@ -41,24 +41,38 @@ The two context lengths are cleared with an empty value:
 Where the `title-case` check runs (in a language whose built-in pack turns it
 on, and in any locale whose [rules](locale-rules.md) do), a capital in the
 middle of a sentence is flagged. Places, people and institutions are the
-exceptions no built-in list can cover, so add them per locale:
+exceptions, so add them per locale:
 
 ```
 polyglots config add-name --locale tr "Kadıköy"
 polyglots config add-name --locale sv "Riksdagen"
 ```
 
-A name may be several words. Names that belong to the language rather than to
-your projects, such as month or weekday names, go in the
-[locale rules](locale-rules.md) instead.
+A name may be several words, and is then excused only as the whole name:
+`Türk Dil Kurumu` excuses the three words together, not `Dil` on its own. A
+single word also covers its suffixed forms, so `Kadıköy` covers `Kadıköy'de`.
 
-`polyglots config list-names` prints a locale's names with numbers.
-`polyglots config remove-name` takes those numbers, or the names themselves:
+The names go in the `properNouns.always` list of the locale's
+[rules file](locale-rules.md), the list the app shows as **Always
+capitalized** under Configuration › Locale rules › Proper nouns. The list
+starts with the language's built-in names, so the first name you add writes
+those out with it.
+
+`polyglots config list-names` prints the whole list with numbers, built-in
+names included. `polyglots config remove-name` takes those numbers, or the
+names themselves:
 
 ```
 polyglots config list-names --locale tr
 polyglots config remove-name 2 --locale tr
 ```
+
+All numbers in one command refer to the list as it was printed, and if one
+number or name matches nothing, nothing is removed.
+
+Names added by an earlier version were kept in `config.json`. The first
+command after the upgrade moves them into each locale's rules file and says
+so; the next review of those locales starts over once.
 
 ## API keys
 

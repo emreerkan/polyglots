@@ -264,9 +264,11 @@ export interface PolyglotsConfig {
   openaiCompatible: LocalServerSettings
   batchSize: number
   consistencyTtlDays: number
-  // Per-locale names the built-in lists cannot cover (places, people,
-  // institutions, historical events). Entries may be multi-word.
-  properNouns: Record<string, string[]>
+  // Where config add-name used to keep names, per locale. They now live in
+  // each locale's rules file; this is read only to move them there
+  // (src/rules/legacy-names.ts), and for a locale whose file could not take
+  // them, by review, so a name is never lost on the way.
+  properNouns?: Record<string, string[]>
   // Extra local model servers to list models from, beyond the loopback ports
   // that are always tried. Read only by discovery, never by a run or a hash.
   localModelServers: string[]

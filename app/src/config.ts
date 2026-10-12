@@ -23,7 +23,6 @@ export const DEFAULT_CONFIG: PolyglotsConfig = {
   ollama: { baseUrl: DEFAULT_QWEN_BASE_URL, model: DEFAULT_QWEN_MODEL },
   batchSize: 25,
   consistencyTtlDays: 30,
-  properNouns: {},
   localModelServers: [],
   localServerKind: 'ollama',
   openaiCompatible: { baseUrl: DEFAULT_OPENAI_COMPATIBLE_BASE_URL, model: '' },
@@ -87,7 +86,7 @@ const configSchema = z.object({
     .default({ baseUrl: DEFAULT_QWEN_BASE_URL, model: DEFAULT_QWEN_MODEL }),
   batchSize: z.number().int().positive(),
   consistencyTtlDays: z.number().int().nonnegative(),
-  properNouns: z.record(z.string(), z.array(z.string())),
+  properNouns: z.record(z.string(), z.array(z.string())).optional(),
   // Defaulted rather than required, so a config written before discovery
   // existed still parses.
   localModelServers: z
@@ -168,7 +167,7 @@ export function loadConfig(): PolyglotsConfig {
  * Removes a key from config.json, for a setting whose absence means
  * something: no defaultLocale lets each file's Language header decide.
  */
-export function unsetConfig(key: 'defaultLocale'): PolyglotsConfig {
+export function unsetConfig(key: 'defaultLocale' | 'properNouns'): PolyglotsConfig {
   const { [key]: _gone, ...rest } = readConfigFile()
   const merged = validate({ ...DEFAULT_CONFIG, ...rest })
   writePrivate(configFile(), JSON.stringify(rest, null, 2) + '\n')

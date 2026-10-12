@@ -15,9 +15,9 @@ Entries say what changed. For why and how, read the commit.
 - `config list-names` prints a locale's proper nouns numbered; `config remove-name` takes the numbers or the names.
 - The Turkish rules template carries two example patterns to turn on: a suffix glued to a placeholder (`%s'de`) and a plural noun after a count (`%d dosyalar`).
 
-### Fixed
+### Changed
 
-- `config get properNouns` prints the names instead of `[object Object]`.
+- Proper nouns are one list per locale: `config add-name` writes the rules file's `properNouns.always`, the Always capitalized list in Locale rules, where a name of several words now works too. Names in `config.json` move there on the first command, and those locales re-review once.
 
 ## [0.28.0] - 2026-10-11
 

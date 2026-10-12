@@ -81,12 +81,18 @@ const DEFAULT_BRANDS = [
 export function buildRuleContext(opts: BuildRuleContextOptions): RuleContext {
   const customPatterns = loadLocaleRules(opts.locale)?.patterns
   const brands = new Set(DEFAULT_BRANDS.map((b) => lower(b, opts.locale)))
-  const namePhrases = (opts.properNouns ?? [])
+  const localeNouns = properNounsFor(opts.locale)
+  // The rules file's list holds single words and names of several words in
+  // one list, because that is how a person thinks of them. A single word keeps
+  // the stem match below, so Türkiye covers Türkiye'de; a longer name is matched
+  // as a phrase, so Türk Dil Kurumu is excused without excusing Dil wherever it
+  // stands. opts.properNouns is the same kind of list from callers that pass one.
+  const isPhrase = (name: string) => words(name).length > 1
+  const namePhrases = [...(opts.properNouns ?? []), ...localeNouns.always.filter(isPhrase)]
     .map((name) => words(name).map((w) => lower(w, opts.locale)))
     .filter((phrase) => phrase.length > 0)
-  const localeNouns = properNounsFor(opts.locale)
   const properNouns: ProperNouns = {
-    always: localeNouns.always.map((n) => lower(n, opts.locale)),
+    always: localeNouns.always.filter((n) => !isPhrase(n)).map((n) => lower(n, opts.locale)),
     dateOnly: localeNouns.dateOnly.map((n) => lower(n, opts.locale)),
   }
   const translationsByMsgid = new Map<string, Set<string>>()

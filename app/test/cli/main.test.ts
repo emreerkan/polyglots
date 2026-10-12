@@ -6,6 +6,7 @@ import { stripVTControlCharacters } from 'node:util'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { fileURLToPath } from 'node:url'
+import { parse as parseYaml } from 'yaml'
 import { main, type CliDeps } from '../../src/cli.js'
 import { displayWidth } from '../../src/ui/layout.js'
 import type { TranslateOptions, TranslateSummary } from '../../src/commands/translate.js'
@@ -368,48 +369,43 @@ describe('glossary sync', () => {
   })
 })
 
-describe('config add-name', () => {
-  async function configJson() {
-    return JSON.parse(await readFile(join(home, 'config', 'config.json'), 'utf8'))
-  }
+// Proper nouns live in the locale rules file, the list the Locale rules screen
+// edits as Always capitalized. The commands write it through the same editor,
+// so the person's comments and the other sections come back as they were.
+async function rulesNouns(code: string): Promise<string[] | undefined> {
+  const text = await readFile(join(home, 'config', 'locales', `${code}.yaml`), 'utf8')
+  return (parseYaml(text) as { properNouns?: { always?: string[] } } | null)?.properNouns?.always
+}
 
-  it('adds a name under the default locale', async () => {
+describe('config add-name', () => {
+  // A list in the file replaces the built-in one, so the first name added
+  // writes the built-in names out with it rather than dropping Türkiye.
+  it('adds a name to the locale rules file, after the built-in names', async () => {
     const h = harness()
-    const code = await h.run(['config', 'add-name', 'Türk Dil Kurumu'])
-    expect(code).toBe(0)
-    expect((await configJson()).properNouns).toEqual({ tr: ['Türk Dil Kurumu'] })
+    expect(await h.run(['config', 'add-name', 'Türk Dil Kurumu'])).toBe(0)
+    const always = await rulesNouns('tr_TR')
+    expect(always).toContain('Türkiye')
+    expect(always!.at(-1)).toBe('Türk Dil Kurumu')
     expect(h.stdout.text).toContain('Türk Dil Kurumu')
   })
 
   it('does not duplicate a name already present', async () => {
+    await harness().run(['config', 'add-name', 'İzmir'])
     const h = harness()
-    await h.run(['config', 'add-name', 'İzmir'])
-    const code = await h.run(['config', 'add-name', 'İzmir'])
-    expect(code).toBe(0)
-    expect((await configJson()).properNouns.tr).toEqual(['İzmir'])
+    expect(await h.run(['config', 'add-name', 'İzmir'])).toBe(0)
+    expect((await rulesNouns('tr_TR'))!.filter((n) => n === 'İzmir')).toHaveLength(1)
   })
 
-  it('honours --locale and keeps other locales intact', async () => {
-    const h = harness()
-    await h.run(['config', 'add-name', 'İzmir'])
-    const code = await h.run(['config', 'add-name', 'Berlin', '--locale', 'de'])
-    expect(code).toBe(0)
-    expect((await configJson()).properNouns).toEqual({ tr: ['İzmir'], de: ['Berlin'] })
+  it('honours --locale and leaves the other locale alone', async () => {
+    await harness().run(['config', 'add-name', 'Berlin', '--locale', 'de'])
+    expect(await rulesNouns('de_DE')).toEqual(['Berlin'])
+    await expect(readFile(join(home, 'config', 'locales', 'tr_TR.yaml'), 'utf8')).rejects.toThrow()
   })
 
   it('rejects an empty name', async () => {
     const h = harness()
     const code = await h.run(['config', 'add-name', '   '])
     expect(code).toBe(2)
-  })
-
-  it('lists configured names in config get', async () => {
-    const h = harness()
-    await h.run(['config', 'add-name', 'Türk Dil Kurumu'])
-    await h.run(['config', 'get'])
-    expect(h.stdout.text).toContain('properNouns')
-    expect(h.stdout.text).toContain('tr: Türk Dil Kurumu')
-    expect(h.stdout.text).not.toContain('[object Object]')
   })
 
   it('switches the review provider from the CLI', async () => {
@@ -430,13 +426,10 @@ describe('config add-name', () => {
     expect(h.stderr.text).toMatch(/claude, antigravity/)
   })
 
-  // properNouns used to print as [object Object] when asked for by name,
-  // though the full listing formatted it.
-  it('shows the names when asked for by name', async () => {
-    await harness().run(['config', 'add-name', 'Ankara'])
-    const read = harness()
-    await read.run(['config', 'get', 'properNouns'])
-    expect(read.stdout.text).toBe('tr: Ankara\n')
+  it('points config get at list-names, since the names left config.json', async () => {
+    const h = harness()
+    expect(await h.run(['config', 'get', 'properNouns'])).toBe(2)
+    expect(h.stderr.text).toContain('list-names')
   })
 
   it('points config set at add-name instead of taking a raw value', async () => {
@@ -448,43 +441,82 @@ describe('config add-name', () => {
 })
 
 describe('config list-names and remove-name', () => {
-  async function configJson() {
-    return JSON.parse(await readFile(join(home, 'config', 'config.json'), 'utf8'))
-  }
   async function seed() {
-    const h = harness()
-    await h.run(['config', 'add-name', 'Kadıköy'])
-    await h.run(['config', 'add-name', 'Türk Dil Kurumu'])
-    await h.run(['config', 'add-name', 'Ankara'])
-    await h.run(['config', 'add-name', 'Riksdagen', '--locale', 'sv'])
+    for (const name of ['Berlin', 'Deutsche Bahn', 'München']) await harness().run(['config', 'add-name', name, '--locale', 'de'])
   }
   const lines = (text: string) => stripVTControlCharacters(text).trim().split('\n').map((l) => l.trim().replace(/\s+/g, ' '))
 
   it('numbers the locale names in the order they were added', async () => {
     await seed()
     const h = harness()
+    expect(await h.run(['config', 'list-names', '--locale', 'de'])).toBe(0)
+    expect(lines(h.stdout.text)).toEqual(['Proper nouns for de:', '1 Berlin', '2 Deutsche Bahn', '3 München'])
+  })
+
+  it('lists the built-in names of a locale that has a pack, as the one list they now are', async () => {
+    const h = harness()
     expect(await h.run(['config', 'list-names'])).toBe(0)
-    expect(lines(h.stdout.text)).toEqual(['Proper nouns for tr:', '1 Kadıköy', '2 Türk Dil Kurumu', '3 Ankara'])
+    expect(lines(h.stdout.text)).toContain('1 Türk')
   })
 
   it('removes by number or by name', async () => {
     await seed()
-    expect(await harness().run(['config', 'remove-name', '1', 'Ankara'])).toBe(0)
-    expect((await configJson()).properNouns).toEqual({ tr: ['Türk Dil Kurumu'], sv: ['Riksdagen'] })
+    expect(await harness().run(['config', 'remove-name', '1', 'München', '--locale', 'de'])).toBe(0)
+    expect(await rulesNouns('de_DE')).toEqual(['Deutsche Bahn'])
   })
 
-  it('drops the locale once its last name goes', async () => {
-    await seed()
-    expect(await harness().run(['config', 'remove-name', 'Riksdagen', '--locale', 'sv'])).toBe(0)
-    expect((await configJson()).properNouns).toEqual({ tr: ['Kadıköy', 'Türk Dil Kurumu', 'Ankara'] })
+  it('removes a built-in name by writing the list without it', async () => {
+    expect(await harness().run(['config', 'remove-name', 'Türkiye'])).toBe(0)
+    const always = await rulesNouns('tr_TR')
+    expect(always).not.toContain('Türkiye')
+    expect(always).toContain('Türkçe')
   })
 
   it('refuses the whole call when one item matches nothing', async () => {
     await seed()
     const h = harness()
-    expect(await h.run(['config', 'remove-name', '2', 'İzmir'])).toBe(2)
-    expect(h.stderr.text).toContain('İzmir')
-    expect((await configJson()).properNouns.tr).toHaveLength(3)
+    expect(await h.run(['config', 'remove-name', '2', 'Hamburg', '--locale', 'de'])).toBe(2)
+    expect(h.stderr.text).toContain('Hamburg')
+    expect(await rulesNouns('de_DE')).toHaveLength(3)
+  })
+})
+
+// Names added before 0.29 sit in config.json. They move into each locale's
+// rules file once, on the first command, and config.json loses the key. A
+// rules file that cannot take them keeps them in config.json, where review
+// still reads them, so nothing is lost on the way.
+describe('moving proper nouns out of config.json', () => {
+  async function legacy(properNouns: Record<string, string[]>) {
+    await writeFile(join(home, 'config', 'config.json'), JSON.stringify({ defaultLocale: 'tr', properNouns }))
+  }
+  const configJson = async () => JSON.parse(await readFile(join(home, 'config', 'config.json'), 'utf8'))
+
+  it('moves each locale into its rules file and says so once', async () => {
+    await legacy({ tr: ['Kadıköy'], de: ['Berlin'] })
+    const h = harness()
+    expect(await h.run(['config', 'list-names', '--locale', 'de'])).toBe(0)
+    expect(h.stdout.text).toContain('Berlin')
+    expect(await rulesNouns('de_DE')).toEqual(['Berlin'])
+    const tr = await rulesNouns('tr_TR')
+    expect(tr).toContain('Türkiye')
+    expect(tr!.at(-1)).toBe('Kadıköy')
+    expect(await configJson()).not.toHaveProperty('properNouns')
+    expect(h.stderr.text).toContain('tr_TR.yaml')
+
+    const again = harness()
+    await again.run(['config', 'list-names'])
+    expect(again.stderr.text).toBe('')
+  })
+
+  it('keeps a locale in config.json when its rules file is broken, and moves the rest', async () => {
+    await legacy({ tr: ['Kadıköy'], de: ['Berlin'] })
+    await mkdir(join(home, 'config', 'locales'), { recursive: true })
+    await writeFile(join(home, 'config', 'locales', 'tr_TR.yaml'), 'rules: [not, a, map\n')
+    const h = harness()
+    expect(await h.run(['config', 'list-names', '--locale', 'de'])).toBe(0)
+    expect(await rulesNouns('de_DE')).toEqual(['Berlin'])
+    expect((await configJson()).properNouns).toEqual({ tr: ['Kadıköy'] })
+    expect(h.stderr.text).toContain('tr_TR.yaml')
   })
 })
 

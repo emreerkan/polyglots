@@ -70,6 +70,11 @@ Every section is optional.
 
 - **`rules`** turns built-in checks on or off by name. The names are in
   [Reviewing submissions](review.md#what-the-checks-look-for).
+- **`properNouns`** are names `title-case` leaves alone: `always` everywhere,
+  `dateOnly` only beside a number, as a month in a date. A list you write
+  replaces the built-in one. A name of several words is excused only as a
+  whole. `polyglots config add-name`, `list-names` and `remove-name` edit the
+  `always` list for you ([Configuration](configuration.md#names-the-checks-should-leave-alone)).
 - **`mistakes`** are wordings your team rejects. Each match is a hint the
   reviewer weighs with your note.
 - **`patterns`** match a literal `text` or a regular expression `find`. The

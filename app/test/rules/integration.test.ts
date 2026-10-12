@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { buildRuleContext, runRules } from '../../src/audit/rules/index.js'
 import { profileFor } from '../../src/audit/rules/profiles.js'
 import { properNounsFor } from '../../src/audit/rules/proper-nouns.js'
 import { buildAuditPrompt } from '../../src/audit/prompt.js'
@@ -110,6 +111,20 @@ describe('with a rules file', () => {
     const nouns = properNounsFor('tr')
     expect(nouns.always).toEqual(['Acme'])
     expect(nouns.dateOnly).toContain('Ocak')
+  })
+
+  // A name of several words is matched as a phrase, the way the names in
+  // config.json were before they moved here: Türk Dil Kurumu is excused, and
+  // Dil on its own still reads as a capital mid-sentence.
+  it('matches a name of several words as a phrase', async () => {
+    await writeRules('tr', 'properNouns:\n  always: ["Türk Dil Kurumu"]\n')
+    const findings = (msgid: string, msgstr: string) => {
+      const e = { key: msgid, msgid, msgstr: [msgstr], comments: [], references: [], fuzzy: false }
+      const ctx = buildRuleContext({ locale: 'tr', glossary: [], nplurals: 2, entries: [e] })
+      return runRules(e, ctx).map((f) => f.rule)
+    }
+    expect(findings('Approved by TDK', 'Türk Dil Kurumu tarafından onaylandı')).not.toContain('title-case')
+    expect(findings('Language settings', 'Ayarlar ve Dil seçimi')).toContain('title-case')
   })
 
   it('runs the custom rule whenever the file has mistakes or patterns', async () => {

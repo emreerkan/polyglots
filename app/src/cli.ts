@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync, realpathSync } from 'node:fs'
+import { basename } from 'node:path'
 import { createInterface } from 'node:readline'
 import { Writable } from 'node:stream'
 import { text } from 'node:stream/consumers'
@@ -14,6 +15,8 @@ import { copyRules, describeRules, editRules, openInEditor, type OpenEditor } fr
 import { describeTemplates, editTemplate, renderReply, resolveReplyTemplate } from './cli/templates.js'
 import { DEFAULT_TEMPLATE, deleteTemplate, listTemplates, normaliseRequester, templateFile, templatesDir } from './reply/templates.js'
 import { loadLocaleRules, localeRulesFile } from './rules/load.js'
+import { openRulesDraft, saveRulesDraft, type RulesDraft } from './rules/edit.js'
+import { moveLegacyProperNouns } from './rules/legacy-names.js'
 import { syncGlossary } from './commands/glossary-sync.js'
 import { reviewFile } from './commands/review.js'
 import { splitPo } from './commands/split.js'
@@ -468,8 +471,6 @@ function coerceConfigValue(key: keyof PolyglotsConfig, raw: string): PolyglotsCo
       }
       return name
     }
-    case 'properNouns':
-      throw new UsageError('properNouns is a per-locale list; add entries with: polyglots config add-name <name>')
     // Validated here as well as in the schema, so the person is told which
     // entry is wrong rather than an index into an array they typed as a list.
     case 'localModelServers':
@@ -521,24 +522,32 @@ function formatConfigValue(key: keyof PolyglotsConfig, value: PolyglotsConfig[ke
   if (key === 'defaultLocale' && value === undefined) return '(not set)'
   if (key === 'usageStats') return value === true ? 'on' : value === false ? 'off' : '(not asked; off)'
   if (key === 'updateCheck') return value === false ? 'off' : 'on'
-  if (key !== 'properNouns') return String(value)
-  const byLocale = value as Record<string, string[]>
-  const locales = Object.keys(byLocale).sort()
-  if (locales.length === 0) return '(none)'
-  return locales.map((locale) => `${locale}: ${byLocale[locale]!.join(', ')}`).join(' | ')
+  return String(value)
 }
 
-function configAddName(cli: Cli, name: string, locale: Locale): number {
+// The rules file's list, the one Locale rules shows as Always capitalized.
+// A file with no list runs the built-in names, so those are where an edit
+// starts: a list written to the file replaces the built-in one, and writing
+// only the new name would drop Türkiye and the rest.
+function nameDraft(locale: Locale): { draft: RulesDraft; names: string[] } {
+  const draft = openRulesDraft(locale)
+  return { draft, names: [...(draft.value.properNouns?.always ?? draft.builtIn.properNouns.always)] }
+}
+
+async function saveNames(draft: RulesDraft, names: string[]): Promise<void> {
+  await saveRulesDraft(draft, { ...draft.value, properNouns: { ...draft.value.properNouns, always: names } })
+}
+
+async function configAddName(cli: Cli, name: string, locale: Locale): Promise<number> {
   const trimmed = name.trim()
   if (!trimmed) throw new UsageError('name must not be empty')
-  const existing = cli.config().properNouns
-  const current = existing[locale] ?? []
-  if (current.some((n) => n === trimmed)) {
+  const { draft, names } = nameDraft(locale)
+  if (names.includes(trimmed)) {
     cli.out(`${JSON.stringify(trimmed)} is already listed for ${locale}.`)
     return EXIT_OK
   }
-  saveConfig({ properNouns: { ...existing, [locale]: [...current, trimmed] } })
-  cli.out(okLine(cli.ui.out, `Added ${JSON.stringify(trimmed)} to the ${locale} proper-noun list.`))
+  await saveNames(draft, [...names, trimmed])
+  cli.out(okLine(cli.ui.out, `Added ${JSON.stringify(trimmed)} to the ${locale} proper nouns in ${basename(draft.path)}.`))
   return EXIT_OK
 }
 
@@ -564,7 +573,7 @@ function resolveRemovals(list: readonly string[], items: readonly string[], list
 }
 
 function configListNames(cli: Cli, locale: Locale): number {
-  const names = cli.config().properNouns[locale] ?? []
+  const { names } = nameDraft(locale)
   if (names.length === 0) {
     cli.out(`No proper nouns for ${locale}. Add one with: polyglots config add-name <name>`)
     return EXIT_OK
@@ -575,12 +584,11 @@ function configListNames(cli: Cli, locale: Locale): number {
   return EXIT_OK
 }
 
-function configRemoveNames(cli: Cli, items: readonly string[], locale: Locale): number {
-  const { [locale]: current = [], ...others } = cli.config().properNouns
-  const gone = resolveRemovals(current, items, `list-names --locale ${locale}`)
-  const kept = current.filter((n) => !gone.has(n))
-  saveConfig({ properNouns: kept.length === 0 ? others : { ...others, [locale]: kept } })
-  for (const name of gone) cli.out(okLine(cli.ui.out, `Removed ${JSON.stringify(name)} from the ${locale} proper-noun list.`))
+async function configRemoveNames(cli: Cli, items: readonly string[], locale: Locale): Promise<number> {
+  const { draft, names } = nameDraft(locale)
+  const gone = resolveRemovals(names, items, `list-names --locale ${locale}`)
+  await saveNames(draft, names.filter((n) => !gone.has(n)))
+  for (const name of gone) cli.out(okLine(cli.ui.out, `Removed ${JSON.stringify(name)} from the ${locale} proper nouns in ${basename(draft.path)}.`))
   return EXIT_OK
 }
 
@@ -591,7 +599,12 @@ function parseTmExportFormat(value: string | undefined): TmExportFormat | undefi
   throw new UsageError(`Unknown format "${value}"; expected tmx or po`)
 }
 
+// The names left config.json for the locale rules file; a script still
+// asking for the key is told where they went rather than that it never existed.
+const NAMES_MOVED = 'proper nouns live in each locale rules file; see: polyglots config list-names, add-name, remove-name'
+
 function configGet(cli: Cli, key: string | undefined): void {
+  if (key === 'properNouns') throw new UsageError(NAMES_MOVED)
   const config = cli.config()
   const secrets = loadSecrets()
   if (key === undefined) {
@@ -619,7 +632,7 @@ function configGet(cli: Cli, key: string | undefined): void {
       cli.out(config.usageStats === undefined ? '' : formatConfigValue(key, config.usageStats))
       return
     }
-    const formatted = key === 'ollama' || key === 'openaiCompatible' || key === 'properNouns'
+    const formatted = key === 'ollama' || key === 'openaiCompatible'
     cli.out(formatted ? formatConfigValue(key, config[key]) : String(config[key] ?? ''))
     return
   }
@@ -631,6 +644,7 @@ function configGet(cli: Cli, key: string | undefined): void {
 }
 
 async function configSet(cli: Cli, key: string, raw: string): Promise<void> {
+  if (key === 'properNouns') throw new UsageError(NAMES_MOVED)
   if (isSecretName(key)) throw new UsageError(`"${key}" is a secret; use: polyglots config set-key ${key}`)
   if (isServerKey(key)) {
     const [group, field] = splitServerKey(key)
@@ -1269,9 +1283,9 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .command('add-name <name>')
     .description('Add a proper noun the title-case check should never flag (places, people, institutions)')
     .option('--locale <locale>', `Locale the name belongs to (${localeDefaultHelp(shown)})`)
-    .action((name: string, flags: { locale?: string }) => {
+    .action(async (name: string, flags: { locale?: string }) => {
       const locale = requireLocale(flags.locale, cli.config())
-      setExitCode(configAddName(cli, name, locale))
+      setExitCode(await configAddName(cli, name, locale))
     })
   cfg
     .command('list-names')
@@ -1284,8 +1298,8 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .command('remove-name <items...>')
     .description('Remove proper nouns by their list-names number or by the name itself')
     .option('--locale <locale>', `Locale the names belong to (${localeDefaultHelp(shown)})`)
-    .action((items: string[], flags: { locale?: string }) => {
-      setExitCode(configRemoveNames(cli, items, requireLocale(flags.locale, cli.config())))
+    .action(async (items: string[], flags: { locale?: string }) => {
+      setExitCode(await configRemoveNames(cli, items, requireLocale(flags.locale, cli.config())))
     })
   cfg
     .command('set-key <name> [value]')
@@ -1391,6 +1405,7 @@ export async function main(argv: string[], deps: CliDeps = {}): Promise<number> 
       // A usage send has no business failing a command.
     }
   }
+  await moveNamesOutOfConfig(cli)
   try {
     if (argv.length === 0) {
       await cli.runTui(update === undefined ? {} : { update: update.promise })
@@ -1405,6 +1420,24 @@ export async function main(argv: string[], deps: CliDeps = {}): Promise<number> 
     sayUpdate(cli, update)
     return code
   }
+}
+
+// Once, before any command reads a list: the names config add-name kept in
+// config.json move into each locale rules file (src/rules/legacy-names.ts).
+// Said on stderr, so a script reading stdout sees the command's own output.
+// Never fails the command: a locale that could not move keeps working from
+// config.json, and the next command tries again. A config.json that cannot be
+// read at all is passed over in silence: the commands that need it report it,
+// and --help, which does not, must keep working without a word about it.
+async function moveNamesOutOfConfig(cli: Cli): Promise<void> {
+  let result: Awaited<ReturnType<typeof moveLegacyProperNouns>>
+  try {
+    result = await moveLegacyProperNouns()
+  } catch {
+    return
+  }
+  for (const m of result.moved) cli.err(okLine(cli.ui.err, `Moved ${m.count} proper noun${m.count === 1 ? '' : 's'} for ${m.locale} from config.json to ${m.path}.`))
+  for (const k of result.kept) cli.err(warnLine(cli.ui.err, `Kept the ${k.locale} proper nouns in config.json: ${k.error}`))
 }
 
 function isEntryPoint(): boolean {

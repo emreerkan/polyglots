@@ -57,7 +57,9 @@ describe('loadConfig', () => {
       ollama: { baseUrl: 'http://localhost:11434', model: `${DEFAULT_QWEN_MODEL}` },
       batchSize: 25,
       consistencyTtlDays: 30,
-      properNouns: {},
+      // properNouns left the defaults when the names moved into the locale
+      // rules files; an old config.json that still has it parses, and the
+      // first command moves its names out.
       // Added deliberately with local model discovery: extra servers to list
       // models from. Empty, so nothing beyond the loopback defaults is ever
       // probed until the person names a server.

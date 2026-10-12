@@ -224,7 +224,7 @@ function addTally(into: Record<string, number>, from: Record<string, number>): R
 export function configuredProperNouns(locale: Locale): string[] {
   let all: Record<string, string[]>
   try {
-    all = loadConfig().properNouns
+    all = loadConfig().properNouns ?? {}
   } catch {
     return []
   }
