@@ -19,6 +19,11 @@ Entries say what changed. For why and how, read the commit.
 ### Changed
 
 - Proper nouns are one list per locale: `config add-name` writes the rules file's `properNouns.always`, the Always capitalized list in Locale rules, where a name of several words now works too. Names in `config.json` move there on the first command, and those locales re-review once.
+- After a review with a reply template, the reply is shown instead of the requester message, and `c` copies it; `y` is gone. The CLI prints the reply alone too.
+
+### Fixed
+
+- `{results}` in a reply template is filled with the requester message, as the template editor says; `{results_copy}` still works.
 
 ## [0.28.0] - 2026-10-11
 

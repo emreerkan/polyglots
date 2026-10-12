@@ -251,7 +251,6 @@ export function ReviewProgress({ events, wporgUsername = '', templates = [], req
   const state = reduceReviewProgress(events)
   const elapsed = useElapsed(state.inFlight, state.batchIndex)
   const [copied, setCopied] = useState<'yes' | 'no' | undefined>(undefined)
-  const [replyCopied, setReplyCopied] = useState<'yes' | 'no' | undefined>(undefined)
   const [templateIndex, setTemplateIndex] = useState(0)
   const [opened, setOpened] = useState(false)
   const report = state.summary === undefined ? undefined : buildReport(state.summary, wporgUsername)
@@ -269,6 +268,11 @@ export function ReviewProgress({ events, wporgUsername = '', templates = [], req
           flagged: state.summary.needsReview + state.summary.unreviewed,
           results: report ?? '',
         })
+  // One text or the other, never both. The reply carries the requester message
+  // inside it, so showing the two put the same sentence on screen twice under
+  // two copy keys, and the reviewer posts the reply. Without a template, or on
+  // a stopped run that gets no reply, the message is what there is to post.
+  const shown = reply ?? report
   // The repaired file, which is the thing worth opening: the submission itself is
   // unchanged on disk and reviewing it again would show none of this run's work.
   const repairedFile = state.summary?.problemsFile
@@ -279,15 +283,14 @@ export function ReviewProgress({ events, wporgUsername = '', templates = [], req
   useKeys({
     reviewResult: {
       open: repairedFile === undefined ? undefined : () => setOpened(openInDefaultApp(repairedFile)),
-      copy: report === undefined ? undefined : () => setCopied(copyToClipboard(report) ? 'yes' : 'no'),
-      reply: reply === undefined ? undefined : () => setReplyCopied(copyToClipboard(reply) ? 'yes' : 'no'),
+      copy: shown === undefined ? undefined : () => setCopied(copyToClipboard(shown) ? 'yes' : 'no'),
       // A copy confirmation belongs to the text it copied, so switching clears it.
       template:
         reply === undefined || templates.length < 2
           ? undefined
           : () => {
               setTemplateIndex((i) => (i + 1) % templates.length)
-              setReplyCopied(undefined)
+              setCopied(undefined)
             },
     },
   })
@@ -389,7 +392,7 @@ export function ReviewProgress({ events, wporgUsername = '', templates = [], req
             </Text>
           )}
           {breakdown.length > 0 && <Text>{breakdown.join(' · ')}</Text>}
-          {report && (
+          {reply === undefined && report && (
             <Box flexDirection="column" marginTop={1}>
               <Text dimColor>Message for the requester · c to copy</Text>
               <Text>{report}</Text>
@@ -402,15 +405,15 @@ export function ReviewProgress({ events, wporgUsername = '', templates = [], req
           {reply !== undefined && template !== undefined && (
             <Box flexDirection="column" marginTop={1}>
               <Text dimColor>
-                Reply · {template.name} template · y to copy{templates.length > 1 ? ' · t for the next template' : ''}
+                Reply · {template.name} template · c to copy{templates.length > 1 ? ' · t for the next template' : ''}
               </Text>
               {replyCaution(summary) !== undefined && <Text color="yellow">{replyCaution(summary)}</Text>}
               {/* Unstyled, and copied exactly as filled: Ink may wrap it to
                   the terminal on screen, but the clipboard gets the text with
                   its own line breaks and nothing else. */}
               <Text>{reply}</Text>
-              {replyCopied === 'yes' && <Text color="green">Reply copied to the clipboard.</Text>}
-              {replyCopied === 'no' && (
+              {copied === 'yes' && <Text color="green">Reply copied to the clipboard.</Text>}
+              {copied === 'no' && (
                 <Text color="yellow">Could not reach the clipboard; copy the reply above by hand.</Text>
               )}
             </Box>

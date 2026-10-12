@@ -109,8 +109,9 @@ are in it, each with a note. Everything else in the submission is approvable.
   approvable.
 - The **message for the requester** is meant to be posted to the contributor
   as written. It contains an HTML link; pass it on unchanged.
-- A **reply** follows it when the locale has a reply template: the whole
-  comment for the contributor, headed with the template's name. Pass it on
+- A **reply** takes its place when the locale has a reply template: the
+  whole comment for the contributor, with the message inside it, headed with
+  the template's name. Pass it on
   unchanged too. If the person told you the requester's WordPress.org
   username, pass `--requester <username>` to `review`; otherwise leave the
   `{username}` in the reply for the person to fill. A line above the reply

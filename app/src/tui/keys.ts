@@ -190,10 +190,10 @@ export const KEYS = {
   },
   reviewResult: {
     open: { keys: 'o', does: 'open the problems file', match: char('o') },
-    copy: { keys: 'c', does: 'copy the report', match: char('c') },
-    // Only live when the locale has a reply template: y for the whole reply,
-    // t to cycle through the locale's templates.
-    reply: { keys: 'y', does: 'copy the reply', match: char('y') },
+    // The reply when the locale has a template, the requester message when it
+    // has none: the screen shows one of the two, never both, so one key copies
+    // whichever is there. t cycles through the locale's templates.
+    copy: { keys: 'c', does: 'copy the reply or the report', match: char('c') },
     template: { keys: 't', does: 'next reply template', match: char('t') },
   },
   fetchList: {
@@ -351,15 +351,15 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   },
   review: {
     shown: [...FORM, ...RUN, KEYS.reviewResult.open, KEYS.reviewResult.copy],
-    more: [KEYS.reviewResult.reply, KEYS.reviewResult.template, KEYS.another.file, picker.sort, finished.close],
+    more: [KEYS.reviewResult.template, KEYS.another.file, picker.sort, finished.close],
     stages: {
       pick: [picker.sort],
       options: FORM,
       running: RUN,
       // The footer has room for three: open, another file, and the way back.
-      // Copy and the reply's keys give way, because each is named on screen
-      // beside the text it copies ("c to copy", "y to copy").
-      done: [KEYS.reviewResult.open, KEYS.another.file, finished.close, KEYS.reviewResult.copy, KEYS.reviewResult.reply, KEYS.reviewResult.template],
+      // Copy and the template key give way, because both are named on screen
+      // beside the text they act on ("c to copy", "t for the next template").
+      done: [KEYS.reviewResult.open, KEYS.another.file, finished.close, KEYS.reviewResult.copy, KEYS.reviewResult.template],
     },
   },
   fetch: {

@@ -48,7 +48,7 @@ links, so `<a href="…">our Slack</a>` works.
 | Placeholder | Becomes |
 |---|---|
 | `{username}` | The requester's wp.org username. Left as `{username}` when you did not give one, so you can fill it in. |
-| `{results_copy}` | The message for the requester, unchanged. Empty when the review repaired nothing; a line holding only this placeholder is then removed. |
+| `{results}` | The message for the requester, unchanged. Empty when the review repaired nothing; a line holding only this placeholder is then removed. `{results_copy}` works the same way. |
 | `{no problems text\|some problems text}` | The first text when the review repaired nothing and flagged nothing for you, the second otherwise. |
 
 The choice is braces with exactly one `|` inside. Any other text in braces,
@@ -71,8 +71,8 @@ it.
 
 ## After a review
 
-On the command line, a review prints the filled reply under the message for the
-requester, headed with the template it used. Give the requester's username, and
+On the command line, a review prints the filled reply instead of the message for
+the requester, headed with the template it used. Give the requester's username, and
 choose a template other than `approved`, with:
 
 ```
@@ -85,8 +85,8 @@ if there is no `approved`. A `--template` that does not exist stops the command
 before anything is reviewed.
 
 In the app, the review options have a **Requester** field when your locale has
-a template. The results screen shows the reply; `y` copies it and `t` switches
-to the locale's next template.
+a template. The results screen shows the reply instead of the message; `c`
+copies it and `t` switches to the locale's next template.
 
 When the review flagged entries for you to check, the reply takes the
 some-problems text even if nothing was repaired, since a flagged entry may
@@ -95,4 +95,4 @@ the command line, says how many entries are flagged: read the verdict sentence
 and change it if they all turned out fine.
 
 There is no reply for a locale with no templates, or for a run that stopped
-before it reached every entry.
+before it reached every entry. The message for the requester is shown then.

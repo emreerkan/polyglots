@@ -152,7 +152,12 @@ export function normaliseRequester(raw: string | undefined): string | undefined 
   return name === '' ? undefined : name
 }
 
-const RESULTS = '{results_copy}'
+// {results} is the name the template editor names, and the one the starters
+// write. {results_copy} is what this read at first, while the editor already
+// said {results}: a locale manager who followed the editor got the placeholder
+// pasted back verbatim. Both are read, so neither a file written from the old
+// starters nor one written from the editor's hint needs editing.
+const RESULTS = new Set(['results', 'results_copy'])
 
 /**
  * The template with its placeholders filled.
@@ -160,8 +165,9 @@ const RESULTS = '{results_copy}'
  * Three forms are read, and nothing else:
  *
  * - `{username}`, the requester.
- * - `{results_copy}`, the requester message exactly as buildReport wrote it,
- *   so its rounding and wording rules hold inside the reply too.
+ * - `{results}`, the requester message exactly as buildReport wrote it, so
+ *   its rounding and wording rules hold inside the reply too. `{results_copy}`
+ *   is read the same way.
  * - `{zero|some}`, braces holding exactly one bar: the first branch when the
  *   review repaired nothing and left nothing for the reviewer, the second
  *   otherwise. Repairing nothing is not finding nothing: a flagged entry the
@@ -192,7 +198,8 @@ export function fillTemplate(text: string, input: FillInput): string {
     const lines = source.split('\n')
     const kept: string[] = []
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i]!.trim() !== RESULTS) {
+      const line = lines[i]!.trim()
+      if (!(line.startsWith('{') && line.endsWith('}') && RESULTS.has(line.slice(1, -1)))) {
         kept.push(lines[i]!)
         continue
       }
@@ -204,7 +211,7 @@ export function fillTemplate(text: string, input: FillInput): string {
   }
   const filled = source.replace(/\{([^{}]*)\}/g, (whole, inner: string) => {
     if (inner === 'username') return input.username ? input.username : whole
-    if (inner === 'results_copy') return input.results
+    if (RESULTS.has(inner)) return input.results
     const branches = inner.split('|')
     if (branches.length === 2) return input.repaired === 0 && input.flagged === 0 ? branches[0]! : branches[1]!
     return whole
@@ -223,7 +230,7 @@ const TR_APPROVED = `Hello @{username},
 
 I have reviewed your translations. {There were no problems.|There were a few problems, and I fixed them.} I have granted you PTE rights. Please see below:
 
-{results_copy}
+{results}
 
 As the #tr_TR translation team, we follow certain guidelines for carrying out translations, making corrections, getting help, etc. We expect the same from our new contributors.
 
@@ -236,7 +243,7 @@ const TR_DECLINED = `Hello @{username},
 
 I have reviewed your translations. {There were no problems.|There were some problems, and I fixed them.} I am not granting you PTE rights yet: I would like to see more of your translations first.{| Please see below:}
 
-{results_copy}
+{results}
 
 As the #tr_TR translation team, we follow certain guidelines for carrying out translations, making corrections, getting help, etc. We expect the same from our new contributors.
 
@@ -249,7 +256,7 @@ const APPROVED = `Hello @{username},
 
 I have reviewed your translations. {There were no problems.|There were a few problems, and I fixed them.} I have granted you PTE rights.{| Please see below:}
 
-{results_copy}
+{results}
 
 Our translation team follows a set of guidelines for translating, making corrections and asking for help. Please read them, and get in touch with the team if anything is unclear.
 
@@ -260,7 +267,7 @@ const DECLINED = `Hello @{username},
 
 I have reviewed your translations. {There were no problems.|There were some problems, and I fixed them.} I am not granting you PTE rights yet: I would like to see more of your translations first.{| Please see below:}
 
-{results_copy}
+{results}
 
 Our translation team follows a set of guidelines for translating, making corrections and asking for help. Please read them, and get in touch with the team if anything is unclear.
 

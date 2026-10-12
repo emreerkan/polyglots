@@ -1116,9 +1116,9 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
       // nobody asked for.
       const wporgUsername = cli.config().wporgUsername
       const requesterMessage = buildReport(summary, wporgUsername) || undefined
-      // The reply holds the requester message, so it is printed under it
-      // rather than instead of it: a reviewer who posts only the sentence, as
-      // before templates, still finds it where it always was.
+      // The reply holds the requester message, so it is printed instead of it
+      // (reviewSummary). Without a template, or on a stopped run, the message
+      // is printed alone.
       const replyText =
         replyTemplate === undefined
           ? undefined

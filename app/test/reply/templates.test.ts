@@ -104,6 +104,18 @@ describe('fillTemplate', () => {
     expect(fillTemplate(text, { repaired: 0, flagged: 0, results: '' })).toBe('Hello,\n\nI reviewed it.\n\nCheers!')
   })
 
+  // {results} is the name the template editor shows. {results_copy} was the
+  // name the code read first, and files written from the old starters carry it.
+  it('fills {results}, and still reads {results_copy}', () => {
+    expect(fillTemplate('See:\n\n{results}', { repaired: 3, flagged: 0, results })).toBe(`See:\n\n${results}`)
+    expect(fillTemplate('See:\n\n{results_copy}', { repaired: 3, flagged: 0, results })).toBe(`See:\n\n${results}`)
+  })
+
+  it('drops a line holding only an empty {results}, and one blank line with it', () => {
+    const text = 'Hello,\n\nI reviewed it.\n\n{results}\n\nCheers!\n'
+    expect(fillTemplate(text, { repaired: 0, flagged: 0, results: '' })).toBe('Hello,\n\nI reviewed it.\n\nCheers!')
+  })
+
   it('keeps the HTML exactly as written, with no wrapping', () => {
     const long = `Please join our <a href="https://www.wp-tr.org/slack/">local slack</a> ${'and more words '.repeat(20)}`.trim()
     expect(fillTemplate(long, { repaired: 0, flagged: 0, results: '' })).toBe(long)
@@ -213,7 +225,7 @@ describe('starterTemplate', () => {
     const text = starterTemplate('tr', 'approved')
     expect(text).toContain('Hello @{username},')
     expect(text).toContain('{There were no problems.|There were a few problems, and I fixed them.}')
-    expect(text).toContain('{results_copy}')
+    expect(text).toContain('{results}')
     expect(text).toContain('#tr_TR translation team')
     expect(text).toContain('<a href="https://www.wp-tr.org/slack/">local slack</a>')
   })
@@ -222,7 +234,7 @@ describe('starterTemplate', () => {
     for (const name of ['approved', 'declined', 'custom']) {
       const text = starterTemplate('de', name)
       expect(text).toContain('{username}')
-      expect(text).toContain('{results_copy}')
+      expect(text).toContain('{results}')
       expect(text).toMatch(/\{[^{}|]+\|[^{}|]+\}/)
       expect(text).not.toContain('wp-tr.org')
     }

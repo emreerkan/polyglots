@@ -107,9 +107,9 @@ Review and Translate work the same way, in four stages.
    `r` resumes and `q` stops. Each takes effect once the batch in progress
    finishes, so nothing already paid for is thrown away.
 4. **Done.** A summary. A review shows the message to send the contributor,
-   which `c` copies, and `o` opens the repaired file in your `.po` editor.
-   With a [reply template](reply-templates.md) for the locale it also shows
-   the whole reply: `y` copies it and `t` switches template. Without one, a
+   or, with a [reply template](reply-templates.md) for the locale, the whole
+   reply in its place. `c` copies whichever is shown, `t` switches template,
+   and `o` opens the repaired file in your `.po` editor. Without a template, a
    line points to **Configuration › Reply templates**. `a` picks another file
    with the same settings, and `enter` goes back to the menu.
 

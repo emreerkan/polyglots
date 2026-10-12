@@ -80,6 +80,14 @@ describe('reviewSummary', () => {
     expect(lines[at + 1]).toBe('Thanks! 1 entry needs a look.')
   })
 
+  it('prints the reply instead of the requester message when a template was filled', () => {
+    const s = reviewed({ reviewed: 10, pending: 0, problems: 1, needsReview: 0, approvable: 9, repaired: 1 }, 'p.po')
+    const lines = reviewSummary(plainPainter, s, 'I fixed 1 entry.', { reply: { name: 'approved', text: 'Hello,\n\nI fixed 1 entry.' } })
+    expect(lines).not.toContain('Message for the requester:')
+    expect(lines).toContain('Reply (approved template):')
+    expect(lines.filter((l) => l.includes('I fixed 1 entry.'))).toHaveLength(1)
+  })
+
   it('paints the approvable count green only when there is something to approve', () => {
     const colour = createPainter({ isTTY: true }, {})
     const row = (approvable: number) =>

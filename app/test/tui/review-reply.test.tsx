@@ -60,7 +60,7 @@ const doneWith = (patch: Partial<ReviewSummary>): ReviewEvent[] => [
 ]
 
 const TEMPLATES = [
-  { name: 'approved', text: 'Hello @{username},\n\n{No problems.|I fixed a few.}\n\n{results_copy}\n\nCheers!\n' },
+  { name: 'approved', text: 'Hello @{username},\n\n{No problems.|I fixed a few.}\n\n{results}\n\nCheers!\n' },
   { name: 'declined', text: 'Not yet, @{username}.' },
 ]
 
@@ -85,7 +85,7 @@ describe('ReviewProgress reply', () => {
     expect(frame).toContain('Reply · approved template')
     expect(frame).toContain('Hello @ayse,')
     expect(frame).toContain('No problems.')
-    expect(frame).toContain('y to copy')
+    expect(frame).toContain('c to copy')
     expect(frame).toContain('t for the next template')
   })
 
@@ -103,12 +103,12 @@ describe('ReviewProgress reply', () => {
     expect(flat(lastFrame())).not.toContain('flagged for you')
   })
 
-  it('copies the exact reply text with y', async () => {
+  it('copies the exact reply text with c', async () => {
     const { lastFrame, stdin } = render(
       <ReviewProgress events={doneWith({ repaired: 4, byGroup: { glossary: 4 } })} templates={TEMPLATES} />,
     )
     await tick()
-    stdin.write('y')
+    stdin.write('c')
     await tick()
     const copied = vi.mocked(copyToClipboard).mock.calls.at(-1)?.[0]
     expect(copied).toBe(
@@ -127,7 +127,7 @@ describe('ReviewProgress reply', () => {
     await tick()
     expect(flat(lastFrame())).toContain('Reply · declined template')
     expect(flat(lastFrame())).toContain('Not yet, @ayse.')
-    stdin.write('y')
+    stdin.write('c')
     await tick()
     expect(vi.mocked(copyToClipboard).mock.calls.at(-1)?.[0]).toBe('Not yet, @ayse.')
     stdin.write('t')
@@ -140,6 +140,45 @@ describe('ReviewProgress reply', () => {
       <ReviewProgress events={doneWith({ repaired: 0, byGroup: {} })} templates={TEMPLATES.slice(0, 1)} />,
     )
     expect(flat(lastFrame())).not.toContain('next template')
+  })
+
+  // The reply holds the requester message, so showing both put the same
+  // sentence on screen twice under two copy keys.
+  it('shows the reply instead of the requester message when there is a template', () => {
+    const { lastFrame } = render(
+      <ReviewProgress events={doneWith({ repaired: 4, byGroup: { glossary: 4 } })} templates={TEMPLATES} />,
+    )
+    const frame = flat(lastFrame())
+    expect(frame).toContain('Reply · approved template')
+    expect(frame).not.toContain('Message for the requester')
+    expect(frame).not.toContain('y to copy')
+  })
+
+  it('does nothing on y, which no longer copies', async () => {
+    const { stdin } = render(
+      <ReviewProgress events={doneWith({ repaired: 4, byGroup: { glossary: 4 } })} templates={TEMPLATES} />,
+    )
+    await tick()
+    stdin.write('y')
+    await tick()
+    expect(copyToClipboard).not.toHaveBeenCalled()
+  })
+
+  it('shows the requester message with c to copy when there is no template', async () => {
+    const { lastFrame, stdin } = render(<ReviewProgress events={doneWith({ repaired: 4, byGroup: { glossary: 4 } })} />)
+    expect(flat(lastFrame())).toContain('Message for the requester · c to copy')
+    await tick()
+    stdin.write('c')
+    await tick()
+    expect(vi.mocked(copyToClipboard).mock.calls.at(-1)?.[0]).toMatch(/^I fixed 4 entries/)
+  })
+
+  // A stopped run gets no reply, so the message is all there is to copy.
+  it('shows the requester message for a run that stopped early, even with a template', () => {
+    const { lastFrame } = render(
+      <ReviewProgress events={doneWith({ repaired: 4, byGroup: { glossary: 4 }, pending: 20 })} templates={TEMPLATES} />,
+    )
+    expect(flat(lastFrame())).toContain('Message for the requester · c to copy')
   })
 
   it('shows no reply for a run that stopped early', () => {

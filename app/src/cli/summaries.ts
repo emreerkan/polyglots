@@ -42,7 +42,7 @@ export interface ReviewSummaryOptions {
   // reviewProvider is none: the run was rules-only by standing choice, so the
   // advice to re-run with AI would point at something the person opted out of.
   noReviewer?: boolean
-  // The filled reply template, printed under the requester message it
+  // The filled reply template, printed instead of the requester message it
   // contains. Only the label is painted: the text is HTML bound for an o2
   // comment and goes out exactly as filled, never wrapped or coloured, so
   // what the terminal shows is what a copy of it pastes.
@@ -76,15 +76,16 @@ export function reviewSummary(
   // a problem nor a needsReview entry, so flagged - repaired can go negative.
   if (s.repaired > 0) rows.push(['repaired', String(s.repaired), p.paint('muted', `${s.written - s.repaired} left for you`)])
   const out = box(p, title, table(rows, { align: ['left', 'right', 'left'] }))
-  if (requesterMessage) out.push('', p.paint('heading', 'Message for the requester:'), requesterMessage, '')
+  // The reply instead of the message, not under it: the reply already holds
+  // the message, and printing both put the same sentence on screen twice.
   if (opts.reply) {
-    if (!requesterMessage) out.push('')
+    out.push('')
     out.push(p.paint('heading', `Reply (${opts.reply.name} template):`))
     // Above the text rather than in it: the reply is copied as printed.
     const caution = replyCaution(s)
     if (caution) out.push(p.paint('warn', caution))
     out.push(opts.reply.text, '')
-  }
+  } else if (requesterMessage) out.push('', p.paint('heading', 'Message for the requester:'), requesterMessage, '')
   // A stopped run that found something says both: the file holds what was
   // found so far, and the rest still needs a run. Only a run that reached the
   // end may call the rest approvable, since a stopped one has entries nothing
