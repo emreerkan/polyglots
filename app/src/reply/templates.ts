@@ -219,6 +219,26 @@ export function fillTemplate(text: string, input: FillInput): string {
   return filled.replace(/\s+$/, '')
 }
 
+/**
+ * The reply for one line of a batch, from what its ending carries rather than
+ * from a whole summary, which the batch does not keep. The same three inputs
+ * fillTemplate reads for a single review, so the two never word a reply
+ * differently. One requester for the whole batch, or none: a batch has one
+ * options form, and a username typed there greets every file's contributor.
+ */
+export function fillBatchReply(
+  text: string,
+  end: { review: { repaired: number; flagged: number }; message?: string },
+  username: string | undefined,
+): string {
+  return fillTemplate(text, {
+    ...(username === undefined ? {} : { username }),
+    repaired: end.review.repaired,
+    flagged: end.review.flagged,
+    results: end.message ?? '',
+  })
+}
+
 // The tr_TR team's reply, as its locale manager wrote it. It is carried word
 // for word, so its "Please see below:" stays outside a choice even though a
 // clean run has nothing below to see. The starters written here instead put

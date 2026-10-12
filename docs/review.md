@@ -18,7 +18,9 @@ polyglots review *-de.po --parallel 3
 
 `--parallel` runs up to that many files at once, 1 to 8 (default 1). A batch
 prints one line per file as it starts and ends, then a table of how each one
-ended, the message for each file's contributor, and a tally. One file failing
+ended, the message for each file's contributor, and a tally. With a reply
+template, each file's reply is printed instead of its message. `--template`
+and `--requester` apply to every file. One file failing
 does not stop the others. `p` pauses, `r` resumes and `q` stops after the
 batches in flight, as for one file.
 

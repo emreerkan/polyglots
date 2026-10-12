@@ -138,7 +138,8 @@ the list says why when you try.
 
 `enter` with nothing marked opens the one file, as above. `enter` on a file
 with anything marked opens the batch options instead, which list the marked
-files first. They are Fetch's: the locale, how many files run at once
+files first. They are Fetch's: the locale, the **Requester** when your
+locale has a [reply template](reply-templates.md), how many files run at once
 (**Parallel**, 1 to 8), the batch size, whether to start over, and for a
 review whether to skip the AI, or for a translation the draft engine. A batch
 translation fills pending entries only. Leave the locale empty, shown as
@@ -147,9 +148,12 @@ names; a file whose header names none fails on its own and the rest carry on.
 `esc` goes back to the file list with the marks kept.
 
 The run and its summary are Fetch's too: a line per file while it runs, then
-how each one ended, the tally, and the message for each reviewed file's
-contributor. The command line does the same with
-`polyglots review a.po b.po --parallel 2`.
+how each one ended and the tally. Under them is one reviewed file's reply, or
+its message for the contributor when there is no template. `↑↓` moves to the
+next file's, `c` copies the one shown and `t` switches its template. A
+requester typed in the options fills every reply; left empty, each reply
+keeps `{username}` for you to fill in. `a` is not offered after a batch. The
+command line does the same with `polyglots review a.po b.po --parallel 2`.
 
 Fetch adds two stages at the front: type the projects, one per line, as
 slugs or translate.wordpress.org addresses (`enter` on an empty line, or

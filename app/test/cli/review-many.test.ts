@@ -181,6 +181,47 @@ describe('review with several files', () => {
     expect(r.stdout.match(/Message for the requester/g)?.length).toBe(2)
   })
 
+  describe('with a reply template', () => {
+    async function template(name: string, text: string) {
+      await mkdir(join(home, 'config', 'templates', 'tr_TR'), { recursive: true })
+      await writeFile(join(home, 'config', 'templates', 'tr_TR', `${name}.txt`), text)
+    }
+    const reviewed = async (opts: ReviewOptions) =>
+      opts.file === a ? reviewSummary(opts.file) : reviewSummary(opts.file, { problems: 0, repaired: 0, written: 0, problemsFile: undefined })
+
+    it('prints one reply per file instead of the requester messages, with --requester in every one', async () => {
+      await template('approved', 'Hello @{username},\n\n{No problems.|I fixed a few.}\n\n{results}\n')
+      const r = await run(['review', a, b, '--requester', 'ayse'], { reviewFile: reviewed })
+      expect(r.code).toBe(0)
+      expect(r.stdout).not.toContain('Message for the requester')
+      expect(r.stdout).toContain(`Reply (${a}, approved template):`)
+      expect(r.stdout).toContain(`Reply (${b}, approved template):`)
+      expect(r.stdout.match(/Hello @ayse,/g)?.length).toBe(2)
+      expect(r.stdout).toContain('No problems.')
+    })
+
+    it('fills every reply from --template', async () => {
+      await template('approved', 'Hello.\n')
+      await template('declined', 'Not yet, @{username}.\n')
+      const r = await run(['review', a, b, '--template', 'declined'], { reviewFile: reviewed })
+      expect(r.stdout.match(/Not yet, @\{username\}\./g)?.length).toBe(2)
+    })
+
+    it('refuses a --template that does not exist before running anything', async () => {
+      await template('approved', 'Hello.\n')
+      let ran = false
+      const r = await run(['review', a, b, '--template', 'nope'], {
+        reviewFile: async (opts) => {
+          ran = true
+          return reviewSummary(opts.file)
+        },
+      })
+      expect(r.code).not.toBe(0)
+      expect(ran).toBe(false)
+      expect(r.stderr).toContain('No reply template "nope"')
+    })
+  })
+
   it('exits 3 when the batch was stopped part way', async () => {
     const r = await run(['review', a, b], {
       reviewFile: async (opts) => reviewSummary(opts.file, { pending: 5 }),

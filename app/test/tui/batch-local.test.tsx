@@ -224,8 +224,10 @@ describe('the batch run', () => {
     expect(calls[0]!.db).toBeDefined()
     expect(calls[0]!.db).toBe(calls[1]!.db)
     expect(calls[0]!.control).toBe(calls[1]!.control)
-    // One message per file, each for its own contributor.
-    expect(view.lastFrame().match(/Message for the requester/g)?.length).toBe(2)
+    // One message per file, each for its own contributor, shown one at a time.
+    expect(flat(view.lastFrame())).toContain('Message 1 of 2 · a.po')
+    await press(view, keys.down)
+    expect(flat(view.lastFrame())).toContain('Message 2 of 2 · b.po')
   })
 
   it('runs each file in the locale its header names when none is typed', async () => {

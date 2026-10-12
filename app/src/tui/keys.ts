@@ -211,6 +211,14 @@ export const KEYS = {
     choose: { keys: '←↑↓→  space', does: 'waiting or untranslated strings', match: any(arrows, space) },
     check: { keys: 'enter', does: 'check the list', match: enter },
   },
+  // The end of a batch: one reply, or one requester message, per reviewed
+  // line, shown one at a time, since each goes to a different request thread
+  // and a copy must carry exactly one of them.
+  batchResult: {
+    move: { keys: '↑↓', does: 'another reply', match: vertical },
+    copy: { keys: 'c', does: 'copy the reply or message shown', match: char('c') },
+    template: { keys: 't', does: 'next reply template', match: char('t') },
+  },
   fetchResolved: {
     next: { keys: 'enter', does: 'continue to the options', match: enter },
   },
@@ -340,7 +348,10 @@ export interface ScreenKeys {
  */
 export type FooterStage = 'pick' | 'options' | 'running' | 'done' | 'summary'
 
-const { menu, runForm, run, finished, retry, picker, fields, marks } = KEYS
+const { menu, runForm, run, finished, retry, picker, fields, marks, batchResult } = KEYS
+// What a batch's summary binds, in footer order. Translate's batch never has a
+// reply to show, but it renders the same component, so its help lists them.
+const BATCH_DONE = [batchResult.move, batchResult.copy, finished.close, batchResult.template]
 const MENU = [menu.move, menu.open, menu.hotkey]
 const RUN = [run.pause, run.resume, run.stop]
 const FORM = [runForm.move, runForm.change, runForm.select]
@@ -354,7 +365,7 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   config: { shown: MENU },
   translate: {
     shown: [...FORM, ...RUN, KEYS.translateResult.open],
-    more: [marks.toggle, marks.all, KEYS.another.file, picker.sort, finished.close],
+    more: [marks.toggle, marks.all, KEYS.another.file, picker.sort, finished.close, batchResult.move, batchResult.copy, batchResult.template],
     stages: {
       pick: [marks.toggle, marks.all, picker.sort],
       options: FORM,
@@ -365,7 +376,7 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   },
   review: {
     shown: [...FORM, ...RUN, KEYS.reviewResult.open, KEYS.reviewResult.copy],
-    more: [marks.toggle, marks.all, KEYS.reviewResult.template, KEYS.another.file, picker.sort, finished.close],
+    more: [marks.toggle, marks.all, KEYS.reviewResult.template, KEYS.another.file, picker.sort, finished.close, batchResult.move, batchResult.copy, batchResult.template],
     stages: {
       pick: [marks.toggle, marks.all, picker.sort],
       options: FORM,
@@ -374,7 +385,7 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
       // Copy and the template key give way, because both are named on screen
       // beside the text they act on ("c to copy", "t for the next template").
       done: [KEYS.reviewResult.open, KEYS.another.file, finished.close, KEYS.reviewResult.copy, KEYS.reviewResult.template],
-      summary: [finished.close],
+      summary: BATCH_DONE,
     },
   },
   fetch: {
@@ -388,8 +399,11 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
       ...FORM,
       finished.close,
       KEYS.needsLocale.setup,
+      batchResult.move,
+      batchResult.copy,
+      batchResult.template,
     ],
-    stages: { options: FORM, running: RUN, done: [finished.close] },
+    stages: { options: FORM, running: RUN, done: BATCH_DONE },
   },
   stats: {
     shown: [KEYS.stats.open, KEYS.stats.write, KEYS.stats.stop],

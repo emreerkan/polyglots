@@ -1,5 +1,5 @@
 import { buildReport } from '../review/message.js'
-import type { ReviewSummary } from '../types.js'
+import type { Locale, ReviewSummary } from '../types.js'
 import type { FetchStatus } from '../wporg/projects.js'
 import type { ProjectOutcome } from './batch.js'
 import type { Resolution } from './fetch.js'
@@ -14,6 +14,17 @@ export interface ProjectEnd {
   detail: string
   // The requester message of a finished review, when it repaired anything.
   message?: string
+  // What a reply template needs from a finished review: the locale whose
+  // templates fill it, and the counts its {zero|some} choice reads. Absent on
+  // a stopped review, which gets no reply for the reason renderReply gives.
+  review?: ReviewedEnd
+}
+
+export interface ReviewedEnd {
+  locale: Locale
+  repaired: number
+  // needsReview plus unreviewed: what the run left for the reviewer.
+  flagged: number
 }
 
 export type Tally = Record<ProjectEnd['tally'], number>
@@ -51,7 +62,12 @@ export function endOfJob(outcome: ProjectOutcome<BatchSummary>, wporgUsername: s
     if (s.pending > 0) return { tally: 'stopped', detail: `${counts}, ${s.pending} not reviewed yet` }
     const message = buildReport(s, wporgUsername)
     const written = s.problemsFile ? `, wrote ${s.problemsFile}` : ''
-    return { tally: 'done', detail: `${counts}${written}`, ...(message ? { message } : {}) }
+    return {
+      tally: 'done',
+      detail: `${counts}${written}`,
+      ...(message ? { message } : {}),
+      review: { locale: s.locale, repaired: s.repaired, flagged: s.needsReview + s.unreviewed },
+    }
   }
   const counts = `${s.translated} translated, ${s.fuzzy} fuzzy, ${s.fromTm} from TM`
   return s.stopped ? { tally: 'stopped', detail: `${counts}, stopped: ${s.stopped}` } : { tally: 'done', detail: counts }

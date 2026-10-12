@@ -9,6 +9,7 @@ import { table } from '../ui/layout.js'
 import type { Painter } from '../ui/paint.js'
 import { UsageError, parsePositiveInt } from './args.js'
 import { watchKeys, type KeyStream } from './keys.js'
+import { replyCaution } from '../reply/templates.js'
 import { fetchTally, tallyCell } from './summaries.js'
 
 /** What a batch on the command line needs from the CLI: fetch's and review's. */
@@ -108,12 +109,29 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
  * tally, and the exit code that goes with it.
  *
  * One message per reviewed line, because each goes back to a different
- * contributor. Printed rather than copied, as for a single review.
+ * contributor. Printed rather than copied, as for a single review. With a
+ * reply template, the line's reply is printed instead of its message, which
+ * the reply already holds, as reviewSummary does for one file.
  */
-export function printBatchEnd(cli: Pick<BatchCli, 'ui' | 'out'>, rows: Array<{ input: string; end: ProjectEnd }>, verb: string): number {
+export function printBatchEnd(
+  cli: Pick<BatchCli, 'ui' | 'out'>,
+  rows: Array<{ input: string; end: ProjectEnd }>,
+  verb: string,
+  replyOf: (end: ProjectEnd) => { name: string; text: string } | undefined = () => undefined,
+): number {
   cli.out('')
   for (const line of table(rows.map((r) => [r.input, tallyCell(cli.ui.out, r.end.tally), r.end.detail]), { indent: 2 })) cli.out(line)
   for (const { input, end } of rows) {
+    const reply = replyOf(end)
+    if (reply) {
+      cli.out('')
+      cli.out(cli.ui.out.paint('heading', `Reply (${input}, ${reply.name} template):`))
+      // Above the text rather than in it: the reply is copied as printed.
+      const caution = end.review ? replyCaution({ needsReview: end.review.flagged, unreviewed: 0 }) : undefined
+      if (caution) cli.out(cli.ui.out.paint('warn', caution))
+      cli.out(reply.text)
+      continue
+    }
     if (!end.message) continue
     cli.out('')
     cli.out(`Message for the requester (${input}):`)

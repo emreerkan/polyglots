@@ -12,8 +12,9 @@ import { fetchProjects, resolveProjects } from './commands/fetch.js'
 import { runFetch, type FetchFlags } from './cli/fetch.js'
 import { warnAboutLocalModel, warnAboutLocalReview, warnUniversalOnly } from './cli/run-notices.js'
 import { copyRules, describeRules, editRules, openInEditor, type OpenEditor } from './cli/rules.js'
+import type { ProjectEnd } from './commands/fetch-report.js'
 import { describeTemplates, editTemplate, renderReply, resolveReplyTemplate } from './cli/templates.js'
-import { DEFAULT_TEMPLATE, deleteTemplate, listTemplates, normaliseRequester, templateFile, templatesDir } from './reply/templates.js'
+import { DEFAULT_TEMPLATE, deleteTemplate, fillBatchReply, listTemplates, normaliseRequester, templateFile, templatesDir } from './reply/templates.js'
 import { loadLocaleRules, localeRulesFile } from './rules/load.js'
 import { openRulesDraft, saveRulesDraft, type RulesDraft } from './rules/edit.js'
 import { moveLegacyProperNouns } from './rules/legacy-names.js'
@@ -438,6 +439,19 @@ async function runReviewMany(cli: Cli, files: string[], flags: ReviewFlags): Pro
     loadLocaleRules(locale)
     warnUniversalOnly(cli, locale)
   }
+  // The reply template for each locale in the batch, settled before the run
+  // as for one file, so a --template that names nothing is refused before any
+  // batch is paid for. One --template and one --requester for every file: the
+  // command has one set of flags, and a requester given greets each reply.
+  const replyTemplates = new Map<Locale, string>()
+  for (const locale of locales) {
+    const name = resolveReplyTemplate(locale, flags.template)
+    if (name !== undefined) replyTemplates.set(locale, name)
+  }
+  if (replyTemplates.size === 0 && flags.requester !== undefined) {
+    cli.err(hintLine(cli.ui.err, `No reply template for ${locales.join(', ')}, so --requester is not used. Create one with: polyglots template edit ${locales[0]!}`))
+  }
+  const requester = normaliseRequester(flags.requester)
   const batchSize = resolveBatchSize(config, flags.batchSize)
   const advice = batchAdvice(config.reviewProvider, batchSize)
   if (advice) cli.err(warnLine(cli.ui.err, advice))
@@ -477,7 +491,15 @@ async function runReviewMany(cli: Cli, files: string[], flags: ReviewFlags): Pro
     ...(flags.outDir ? { outDir: flags.outDir } : {}),
     noun: 'file',
   })
-  return printBatchEnd(batchCli, files.map((file, i) => ({ input: file, end: ends[i]! })), 'Reviewed')
+  // Read at the end of the run, as for one file, so an edit made while it ran
+  // is the one used.
+  const replyOf = (end: ProjectEnd) => {
+    const name = end.review === undefined ? undefined : replyTemplates.get(end.review.locale)
+    if (end.review === undefined || name === undefined) return undefined
+    const text = readFileSync(templateFile(end.review.locale, name), 'utf8')
+    return { name, text: fillBatchReply(text, { review: end.review, ...(end.message ? { message: end.message } : {}) }, requester) }
+  }
+  return printBatchEnd(batchCli, files.map((file, i) => ({ input: file, end: ends[i]! })), 'Reviewed', replyOf)
 }
 
 /**

@@ -94,5 +94,10 @@ still be one you fix by hand. A yellow line above the reply, in the app and on
 the command line, says how many entries are flagged: read the verdict sentence
 and change it if they all turned out fine.
 
+In a batch of several files, every file gets its own reply, filled with the
+one requester given for the batch, or with `{username}` left in when none was.
+The app shows one reply at a time: `↑↓` moves between them and `c` copies the
+one shown.
+
 There is no reply for a locale with no templates, or for a run that stopped
 before it reached every entry. The message for the requester is shown then.

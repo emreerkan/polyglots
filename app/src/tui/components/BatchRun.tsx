@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Box, Text } from 'ink'
 import { agentBinOverride } from '../../agent/providers.js'
 import { MAX_PARALLEL, runFileBatch, type BatchItem } from '../../commands/batch.js'
 import { tallyLine, tallyOf, type ProjectEnd } from '../../commands/fetch-report.js'
 import { resolveFileLocale } from '../../cli/locale.js'
+import { fillBatchReply, listTemplateLocales, listTemplates, loadTemplates, normaliseRequester, replyCaution, type Template } from '../../reply/templates.js'
 import { createRunControl, type RunControl } from '../../run-control.js'
 import { normalizeLocale } from '../../tmx/parse.js'
 import type { DraftEngineChoice, Locale } from '../../types.js'
 import { resolveLocale } from '../../wporg/locales.js'
 import { batchSizeChoices } from '../batch-size.js'
+import { copyToClipboard } from '../clipboard.js'
 import { useCommands, useConfig } from '../commands.js'
 import { useKeys } from '../hooks/useKeys.js'
 import { useTask } from '../hooks/useTask.js'
@@ -21,7 +23,7 @@ const ENGINES: DraftEngineChoice[] = ['deepl', 'openai', 'local']
 // The fields differ by action, so each list is spelled out rather than one list
 // with entries hidden: the cursor index then always names a field on screen.
 // The locale leads where there is one to type, as on the single-file forms.
-type Field = 'locale' | 'parallel' | 'batch' | 'fresh' | 'noAi' | 'engine' | 'start'
+type Field = 'locale' | 'requester' | 'parallel' | 'batch' | 'fresh' | 'noAi' | 'engine' | 'start'
 const REVIEW_FIELDS: Field[] = ['parallel', 'batch', 'fresh', 'noAi', 'start']
 const TRANSLATE_FIELDS: Field[] = ['parallel', 'batch', 'engine', 'fresh', 'start']
 
@@ -77,6 +79,24 @@ export interface BatchRunProps {
   onStage?: (stage: BatchStage) => void
 }
 
+// A template folder that cannot be read leaves the batch without replies
+// rather than failing a run already paid for.
+function safely<T>(read: () => T[]): T[] {
+  try {
+    return read()
+  } catch {
+    return []
+  }
+}
+
+// One thing to post back, for one line of the batch.
+interface Response {
+  input: string
+  end: ProjectEnd
+  // The line's locale's templates, approved first; empty means the message.
+  templates: Template[]
+}
+
 function next<T>(values: T[], current: T, step: number): T {
   const i = values.indexOf(current)
   return values[(i + step + values.length) % values.length] as T
@@ -96,7 +116,22 @@ export function BatchRun(props: BatchRunProps) {
   const { config } = useConfig()
   const review = action === 'review'
   const localeField = 'field' in props.locale
-  const fields: Field[] = [...(localeField ? (['locale'] as Field[]) : []), ...(review ? REVIEW_FIELDS : TRANSLATE_FIELDS)]
+  // The Requester field only when a reply could use it. With a fixed locale
+  // that is its own templates; a typed or per-file locale is not settled
+  // until the run, so any locale with a template is enough to offer it.
+  const fixedLocale = 'fixed' in props.locale ? props.locale.fixed : undefined
+  const offersRequester = useMemo(
+    () =>
+      review &&
+      (fixedLocale === undefined ? safely(listTemplateLocales).length > 0 : safely(() => listTemplates(fixedLocale)).length > 0),
+    [review, fixedLocale],
+  )
+  const fields: Field[] = [
+    ...(localeField ? (['locale'] as Field[]) : []),
+    ...(offersRequester ? (['requester'] as Field[]) : []),
+    ...(review ? REVIEW_FIELDS : TRANSLATE_FIELDS),
+  ]
+  const [requester, setRequester] = useState('')
   const [stage, setStage] = useState<'options' | 'running'>('options')
   const [focus, setFocus] = useState(0)
   const [typed, setTyped] = useState('field' in props.locale ? props.locale.field : '')
@@ -123,7 +158,7 @@ export function BatchRun(props: BatchRunProps) {
   }, [onStage, shown])
 
   const field = fields[focus]!
-  const typing = shown === 'options' && field === 'locale'
+  const typing = shown === 'options' && (field === 'locale' || field === 'requester')
   // Antigravity's lookup server never hears a locale read from a file
   // (resolveFileLocale says why), so with it reviewing an empty field cannot
   // start: the per-file reading is exactly what it cannot follow.
@@ -144,6 +179,45 @@ export function BatchRun(props: BatchRunProps) {
     // file's own, and resolveFileLocale would otherwise answer with config.
     const headerOnly = { ...config, defaultLocale: undefined }
     return async (file) => (await resolveFileLocale(undefined, headerOnly, [file])).locale
+  }
+
+  // The summary's replies, or messages without a template, one per finished
+  // review that has something to post, in the table's order. Templates are
+  // read when the batch ends, as for one file, so an edit made while it ran
+  // is the one used.
+  const finished = task.state.status === 'done' ? task.state.result : undefined
+  const responses = useMemo((): Response[] => {
+    if (finished === undefined) return []
+    const byLocale = new Map<string, Template[]>()
+    const templatesOf = (locale: Locale) => {
+      if (!byLocale.has(locale)) byLocale.set(locale, safely(() => loadTemplates(locale)))
+      return byLocale.get(locale)!
+    }
+    return finished.inputs.flatMap((input, i) => {
+      const end = finished.ends[i]!
+      const templates = end.review === undefined ? [] : templatesOf(end.review.locale)
+      return templates.length > 0 || end.message ? [{ input, end, templates }] : []
+    })
+  }, [finished])
+  const [selected, setSelected] = useState(0)
+  // Which template each line's reply uses, by input; the first when unset.
+  const [templateOf, setTemplateOf] = useState<Map<string, number>>(new Map())
+  const [copied, setCopied] = useState<'yes' | 'no' | undefined>(undefined)
+  const current = responses[Math.min(selected, responses.length - 1)]
+  const currentTemplate = current && current.templates.length > 0
+    ? current.templates[(templateOf.get(current.input) ?? 0) % current.templates.length]!
+    : undefined
+  const requesterName = normaliseRequester(requester)
+  const currentText =
+    current === undefined
+      ? undefined
+      : currentTemplate !== undefined && current.end.review !== undefined
+        ? fillBatchReply(currentTemplate.text, { review: current.end.review, ...(current.end.message ? { message: current.end.message } : {}) }, requesterName)
+        : current.end.message
+  // A copy confirmation belongs to the text it copied, so moving clears it.
+  const pick = (index: number) => {
+    setSelected(index)
+    setCopied(undefined)
   }
 
   const start = () => {
@@ -208,6 +282,20 @@ export function BatchRun(props: BatchRunProps) {
       q: options && !typing ? props.onLeave : shown === 'done' ? props.onBack : undefined,
     },
     finished: { close: shown === 'done' ? props.onBack : undefined },
+    batchResult: {
+      move:
+        shown === 'done' && responses.length > 1
+          ? (_input, key) => pick(key.upArrow ? Math.max(0, selected - 1) : Math.min(responses.length - 1, selected + 1))
+          : undefined,
+      copy: shown === 'done' && currentText !== undefined ? () => setCopied(copyToClipboard(currentText) ? 'yes' : 'no') : undefined,
+      template:
+        shown === 'done' && current !== undefined && current.templates.length > 1
+          ? () => {
+              setTemplateOf((prev) => new Map(prev).set(current.input, (prev.get(current.input) ?? 0) + 1))
+              setCopied(undefined)
+            }
+          : undefined,
+    },
     runForm: {
       move: options
         ? (_input, key) =>
@@ -256,6 +344,16 @@ export function BatchRun(props: BatchRunProps) {
               <Text color="yellow">  With Antigravity reviewing, type the locale: its lookup server never hears one read from a file.</Text>
             )}
           </>
+        )}
+        {offersRequester && (
+          <Box>
+            <Text>{marker('requester')}Requester:     </Text>
+            {field === 'requester' ? (
+              <TextInput value={requester} onChange={setRequester} onSubmit={() => setFocus((f) => f + 1)} />
+            ) : (
+              <Text dimColor={requester === ''}>{requester === '' ? 'optional, fills {username} in every reply' : requester}</Text>
+            )}
+          </Box>
         )}
         <Text>
           {marker('parallel')}Parallel:      {parallel} {parallel === 1 ? `${noun.one} at a time` : `${noun.many} at once`}
@@ -325,7 +423,7 @@ export function BatchRun(props: BatchRunProps) {
             const color = end.tally === 'failed' ? 'red' : end.tally === 'done' ? 'green' : undefined
             return (
               <Text key={input}>
-                {'  '}
+                {responses.length > 1 && current?.input === input ? '❯ ' : '  '}
                 {input.padEnd(width)}
                 {'  '}
                 <Text {...(color ? { color } : {})}>{end.tally}</Text> {end.detail}
@@ -333,13 +431,23 @@ export function BatchRun(props: BatchRunProps) {
             )
           })}
           <Text bold>{tallyLine(tallyOf(task.state.result.ends))}</Text>
-          {task.state.result.ends.map((end, i) =>
-            end.message ? (
-              <Box key={i} flexDirection="column" marginTop={1}>
-                <Text dimColor>Message for the requester ({task.state.status === 'done' ? task.state.result.inputs[i] : ''}):</Text>
-                <Text>{end.message}</Text>
-              </Box>
-            ) : null,
+          {current !== undefined && currentText !== undefined && (
+            <Box flexDirection="column" marginTop={1}>
+              <Text dimColor>
+                {currentTemplate ? 'Reply' : 'Message'} {Math.min(selected, responses.length - 1) + 1} of {responses.length} ·{' '}
+                {current.input}
+                {currentTemplate ? ` · ${currentTemplate.name} template` : ''} · c to copy
+                {responses.length > 1 ? ' · ↑↓ another reply' : ''}
+                {current.templates.length > 1 ? ' · t for the next template' : ''}
+              </Text>
+              {currentTemplate && current.end.review && replyCaution({ needsReview: current.end.review.flagged, unreviewed: 0 }) && (
+                <Text color="yellow">{replyCaution({ needsReview: current.end.review.flagged, unreviewed: 0 })}</Text>
+              )}
+              {/* Unstyled, and copied exactly as filled, as for one file. */}
+              <Text>{currentText}</Text>
+              {copied === 'yes' && <Text color="green">{currentTemplate ? 'Reply' : 'Message'} copied to the clipboard.</Text>}
+              {copied === 'no' && <Text color="yellow">Could not reach the clipboard; copy the text above by hand.</Text>}
+            </Box>
           )}
         </>
       )}
