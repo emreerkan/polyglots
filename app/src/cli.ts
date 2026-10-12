@@ -841,7 +841,7 @@ const ENVIRONMENT_HELP = [
   '  POLYGLOTS_AGENT_BIN   agent executable for the review pass, whichever provider is set (default: claude or agy on PATH)',
   '  POLYGLOTS_CLAUDE_BIN  the older name, applied to claude only',
   '  POLYGLOTS_HOME        root for config/ and data/ instead of the XDG directories',
-  '  POLYGLOTS_ASCII=1     plain ASCII glyphs instead of Unicode (also NO_COLOR, FORCE_COLOR)',
+  '  POLYGLOTS_ASCII=1     plain ASCII glyphs instead of Unicode; =0 keeps Unicode (also NO_COLOR, FORCE_COLOR)',
   '  DO_NOT_TRACK=1        never send usage statistics, whatever usageStats says',
   '  POLYGLOTS_USAGE_URL   where opted-in usage statistics go (default: https://ada.tools/polyglots/api/usage)',
   '  NO_UPDATE_NOTIFIER=1  never check npm for a newer version (also CI, or: config set updateCheck off)',

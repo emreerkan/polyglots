@@ -32,7 +32,28 @@ describe('asciiOnly', () => {
     [{ TERM: 'dumb' }, true],
     [{ POLYGLOTS_ASCII: '1', LANG: 'en_US.UTF-8' }, true],
   ])('%j → %s', (env, expected) => {
-    expect(asciiOnly(env)).toBe(expected)
+    expect(asciiOnly(env, 'linux')).toBe(expected)
+  })
+
+  // The Windows 10 console host draws arrows and box lines but not a check
+  // mark or the wordmark's quadrant blocks, and it sets no LANG to read.
+  it.each([
+    [{}, true],
+    [{ WT_SESSION: 'abc' }, false],
+    [{ TERM_PROGRAM: 'vscode' }, false],
+    [{ TERMINAL_EMULATOR: 'JetBrains-JediTerm' }, false],
+    [{ ConEmuTask: '{cmd::Cmder}' }, false],
+    [{ TERM: 'xterm-256color' }, false],
+    [{ TERM: 'alacritty' }, false],
+    [{ CI: 'true' }, false],
+    [{ POLYGLOTS_ASCII: '0' }, false],
+    [{ WT_SESSION: 'abc', POLYGLOTS_ASCII: '1' }, true],
+  ])('win32 %j → %s', (env, expected) => {
+    expect(asciiOnly(env, 'win32')).toBe(expected)
+  })
+
+  it('lets POLYGLOTS_ASCII=0 keep Unicode under LANG=C', () => {
+    expect(asciiOnly({ LANG: 'C', POLYGLOTS_ASCII: '0' }, 'linux')).toBe(false)
   })
 })
 

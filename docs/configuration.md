@@ -97,7 +97,7 @@ Reviewing needs no key: the agent uses its own sign-in.
 |---|---|
 | `POLYGLOTS_HOME` | Keep settings and data under this folder (`config/` and `data/`) instead of `~/.config` and `~/.local/share`. |
 | `POLYGLOTS_AGENT_BIN` | The agent executable to run, when it is not `claude` or `agy` on your `PATH`. |
-| `POLYGLOTS_ASCII=1` | Plain ASCII instead of Unicode symbols and box lines. Also chosen automatically when the locale is not UTF-8. |
+| `POLYGLOTS_ASCII=1` | Plain ASCII instead of Unicode symbols and box lines. Also chosen automatically when the locale is not UTF-8, and on Windows outside Windows Terminal, VS Code and a few other terminals. `POLYGLOTS_ASCII=0` keeps Unicode in every case. |
 | `NO_COLOR` | No colour in the output. |
 | `FORCE_COLOR` | Colour even when the output is not a terminal. |
 | `NO_UPDATE_NOTIFIER=1` | Never check npm for a newer version. The check is also skipped when `CI` is set, or when the output is not a terminal. |

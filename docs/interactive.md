@@ -196,3 +196,9 @@ Everything set here is the same configuration the commands read; see
 Where the terminal cannot draw Unicode (`LANG=C`, `TERM=dumb`, or
 `POLYGLOTS_ASCII=1`), the app uses plain ASCII: `+` for a tick, `>` for the
 pointer, and simple boxes.
+
+On Windows the app is plain ASCII unless it runs in Windows Terminal, VS
+Code's terminal, a JetBrains IDE or Cmder. The PowerShell and Command Prompt
+windows of Windows 10 show the Unicode symbols as empty boxes. Windows 11
+opens them in Windows Terminal, which draws them. If your console font has
+the symbols, `POLYGLOTS_ASCII=0` turns Unicode back on.
