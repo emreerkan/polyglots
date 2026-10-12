@@ -18,7 +18,9 @@ Documentation: https://ada.tools/polyglots/docs/
   judges the findings a rule cannot settle. The entries that need work are
   written to a `-problems.po` file, already repaired where the fix is
   mechanical, with a short message you can post back to the contributor, or
-  a whole reply filled in from your locale's template.
+  a whole reply filled in from your locale's template. Mark a folder of
+  submissions and review them in one run, with a reply ready for each
+  contributor.
 - **Translate.** Pending entries are filled from translation memory first,
   then drafted by DeepL, OpenAI or a local model, and reviewed by the agent
   before they are written.
