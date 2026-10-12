@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-10-12
+
 ### Fixed
 
 - Windows consoles other than Windows Terminal, VS Code, JetBrains and Cmder get ASCII symbols instead of empty boxes; `POLYGLOTS_ASCII=0` keeps Unicode.
