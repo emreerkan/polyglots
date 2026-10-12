@@ -2,6 +2,10 @@ import type Database from 'better-sqlite3'
 import { openJobsDb } from '../jobs/db.js'
 import { createRunControl, type RunControl } from '../run-control.js'
 import { openDb } from '../storage/index.js'
+import type { Locale, ReviewEvent, ReviewSummary, Secrets } from '../types.js'
+import { endOfJob, type BatchSummary, type ProjectEnd } from './fetch-report.js'
+import type { ReviewOptions } from './review.js'
+import type { TranslateEvent, TranslateOptions, TranslateSummary } from './translate.js'
 
 /**
  * The most jobs a batch runs at once.
@@ -105,4 +109,113 @@ export async function withSharedDbs<T>(
   } finally {
     db.close()
   }
+}
+
+/**
+ * One line of a batch: what the person recognises it by, and the file it runs.
+ *
+ * Fetch's lines are the slugs or URLs that were pasted, a local batch's are
+ * the paths that were marked. The two differ for fetch, where the file is a
+ * download nobody named, and the tables are read by the input.
+ */
+export interface BatchItem {
+  input: string
+  file: string
+}
+
+export type BatchItemEvent =
+  | { type: 'start'; item: BatchItem }
+  | { type: 'end'; item: BatchItem; outcome: ProjectOutcome<BatchSummary> }
+
+export interface FileBatchJobs {
+  reviewFile: (opts: ReviewOptions) => Promise<ReviewSummary>
+  translateFile: (opts: TranslateOptions) => Promise<TranslateSummary>
+}
+
+export interface FileBatchOptions {
+  review: boolean
+  /**
+   * The locale each file runs in. A function rather than a value because a
+   * batch of local files may mix languages: with no locale typed, each file
+   * is read for its own, as a single file is. Fetch has one for the list.
+   * A throw here fails that file alone, like any other failure in a batch.
+   */
+  localeOf: (file: string) => Locale | Promise<Locale>
+  parallel: number
+  batchSize: number
+  fresh?: boolean
+  // Review only.
+  noAi?: boolean
+  outDir?: string
+  // Translate only: always pending mode. A batch re-translating every entry
+  // of every file in place is not something to reach by a field on a form.
+  draftEngine: TranslateOptions['draftEngine']
+  secrets?: Secrets
+  bin?: string
+  control?: RunControl
+  wporgUsername: string
+  onProgress?: (file: string) => (e: ReviewEvent | TranslateEvent) => void
+  onEvent?: (e: BatchItemEvent) => void
+}
+
+/**
+ * Reviews or translates every item through runProjects and says how each one
+ * ended, in the order given.
+ *
+ * This is the part of a fetch that comes after the downloads, lifted out so a
+ * list of local files runs through exactly the same thing. A second runner for
+ * local files was the alternative and the one rejected: the pool, the shared
+ * handles, the one control for the whole batch and the wording of each ending
+ * would have had two copies to drift, and the menu and the command line
+ * already showed what that costs.
+ */
+export async function runFileBatch(items: BatchItem[], jobs: FileBatchJobs, opts: FileBatchOptions): Promise<ProjectEnd[]> {
+  if (items.length === 0) return []
+  const itemOf = new Map(items.map((item) => [item.file, item]))
+  const outcomes = await withSharedDbs(({ db, jobsDb }) =>
+    runProjects<BatchSummary>(
+      items.map((item) => item.file),
+      {
+        parallel: opts.parallel,
+        ...(opts.control === undefined ? {} : { control: opts.control }),
+        run: async (file, control) => {
+          const locale = await opts.localeOf(file)
+          const onProgress = opts.onProgress?.(file)
+          return opts.review
+            ? jobs.reviewFile({
+                control,
+                db,
+                jobsDb,
+                file,
+                locale,
+                batchSize: opts.batchSize,
+                ...(opts.bin === undefined ? {} : { bin: opts.bin }),
+                ...(opts.outDir === undefined ? {} : { outDir: opts.outDir }),
+                ...(opts.noAi ? { noAi: true } : {}),
+                ...(opts.fresh ? { fresh: true } : {}),
+                ...(onProgress === undefined ? {} : { onProgress }),
+              })
+            : jobs.translateFile({
+                control,
+                db,
+                jobsDb,
+                file,
+                locale,
+                mode: 'pending',
+                draftEngine: opts.draftEngine,
+                batchSize: opts.batchSize,
+                ...(opts.bin === undefined ? {} : { bin: opts.bin }),
+                ...(opts.fresh ? { fresh: true } : {}),
+                ...(opts.secrets === undefined ? {} : { secrets: opts.secrets }),
+                ...(onProgress === undefined ? {} : { onProgress }),
+              })
+        },
+        onEvent: (e) => {
+          if (e.type === 'project-start') opts.onEvent?.({ type: 'start', item: itemOf.get(e.file)! })
+          else opts.onEvent?.({ type: 'end', item: itemOf.get(e.outcome.file)!, outcome: e.outcome })
+        },
+      },
+    ),
+  )
+  return outcomes.map((outcome) => endOfJob(outcome, opts.wporgUsername))
 }

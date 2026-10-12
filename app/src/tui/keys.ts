@@ -174,6 +174,11 @@ export const KEYS = {
   picker: {
     sort: { keys: 's', does: 'change how the files are sorted', match: char('s') },
   },
+  // Marking files for one batch, in the review and translate pickers only.
+  marks: {
+    toggle: { keys: 'space', does: 'mark or unmark a file for one batch', match: space },
+    all: { keys: '*', does: 'mark every file in this folder, or unmark them', match: char('*') },
+  },
   // The options form on translate, review and fetch.
   runForm: {
     move: { keys: '↑↓  tab', does: 'move between fields', match: any(vertical, tab) },
@@ -329,10 +334,13 @@ export interface ScreenKeys {
   stages?: Partial<Record<FooterStage, KeyEntry[]>>
 }
 
-/** The stages a screen reports to the frame for its footer. */
-export type FooterStage = 'pick' | 'options' | 'running' | 'done'
+/**
+ * The stages a screen reports to the frame for its footer. `summary` is the
+ * end of a batch, which has no single result to open or copy.
+ */
+export type FooterStage = 'pick' | 'options' | 'running' | 'done' | 'summary'
 
-const { menu, runForm, run, finished, retry, picker, fields } = KEYS
+const { menu, runForm, run, finished, retry, picker, fields, marks } = KEYS
 const MENU = [menu.move, menu.open, menu.hotkey]
 const RUN = [run.pause, run.resume, run.stop]
 const FORM = [runForm.move, runForm.change, runForm.select]
@@ -346,20 +354,27 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   config: { shown: MENU },
   translate: {
     shown: [...FORM, ...RUN, KEYS.translateResult.open],
-    more: [KEYS.another.file, picker.sort, finished.close],
-    stages: { pick: [picker.sort], options: FORM, running: RUN, done: [KEYS.translateResult.open, KEYS.another.file, finished.close] },
+    more: [marks.toggle, marks.all, KEYS.another.file, picker.sort, finished.close],
+    stages: {
+      pick: [marks.toggle, marks.all, picker.sort],
+      options: FORM,
+      running: RUN,
+      done: [KEYS.translateResult.open, KEYS.another.file, finished.close],
+      summary: [finished.close],
+    },
   },
   review: {
     shown: [...FORM, ...RUN, KEYS.reviewResult.open, KEYS.reviewResult.copy],
-    more: [KEYS.reviewResult.template, KEYS.another.file, picker.sort, finished.close],
+    more: [marks.toggle, marks.all, KEYS.reviewResult.template, KEYS.another.file, picker.sort, finished.close],
     stages: {
-      pick: [picker.sort],
+      pick: [marks.toggle, marks.all, picker.sort],
       options: FORM,
       running: RUN,
       // The footer has room for three: open, another file, and the way back.
       // Copy and the template key give way, because both are named on screen
       // beside the text they act on ("c to copy", "t for the next template").
       done: [KEYS.reviewResult.open, KEYS.another.file, finished.close, KEYS.reviewResult.copy, KEYS.reviewResult.template],
+      summary: [finished.close],
     },
   },
   fetch: {

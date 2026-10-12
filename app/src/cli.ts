@@ -18,7 +18,7 @@ import { loadLocaleRules, localeRulesFile } from './rules/load.js'
 import { openRulesDraft, saveRulesDraft, type RulesDraft } from './rules/edit.js'
 import { moveLegacyProperNouns } from './rules/legacy-names.js'
 import { syncGlossary } from './commands/glossary-sync.js'
-import { reviewFile } from './commands/review.js'
+import { isReviewOutput, outputPath, reviewFile } from './commands/review.js'
 import { splitPo } from './commands/split.js'
 import { watchKeys } from './cli/keys.js'
 import { createRunControl, type RunState } from './run-control.js'
@@ -45,6 +45,7 @@ import {
 import { createProgressReporter, createReviewProgressReporter } from './cli/progress.js'
 import { loadPo } from './po/po-file.js'
 import { headerLocaleNotice, localeDefaultHelp, requireLocale, resolveFileLocale } from './cli/locale.js'
+import { parseParallel, printBatchEnd, runBatchJobs, type BatchCli } from './cli/batch.js'
 import { buildReport } from './review/message.js'
 import { agentBinOverride, batchAdvice, configuredModel } from './agent/providers.js'
 import { discoverAgents, type AgentStatus } from './agent/discover.js'
@@ -285,6 +286,7 @@ interface ReviewFlags {
   fresh?: boolean
   requester?: string
   template?: string
+  parallel?: string
 }
 
 async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags): Promise<number> {
@@ -384,6 +386,127 @@ async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags)
     }
   }
   return failed > 0 ? EXIT_ERROR : EXIT_OK
+}
+
+/**
+ * `review a.po b.po`: several local files through the batch fetch runs, so a
+ * folder of exports is one command and the menu's marked files have a
+ * command-line equivalent. One file keeps the single review's own output.
+ *
+ * Every locale is settled before anything runs, and a file nobody can place
+ * refuses the whole command. The other choice, failing that file in the
+ * table, would leave the person to find out after the rest had spent their
+ * calls; a refusal here costs nothing. With no locale given or configured,
+ * each file is read for its own, the way a single file is, so a folder
+ * holding two languages' exports is still one command.
+ */
+async function runReviewMany(cli: Cli, files: string[], flags: ReviewFlags): Promise<number> {
+  const parallel = parseParallel(flags.parallel)
+  const config = cli.config()
+  const antigravity = config.reviewProvider === 'antigravity' && flags.ai !== false
+  const localeOf = new Map<string, Locale>()
+  if (flags.locale !== undefined || config.defaultLocale !== undefined) {
+    const { locale } = await resolveFileLocale(flags.locale, config, files, { antigravity })
+    for (const file of files) localeOf.set(file, locale)
+  } else {
+    // Asked with no files first, so Antigravity's refusal reads as it does for
+    // one file rather than being pinned on whichever file came first.
+    if (antigravity) await resolveFileLocale(undefined, config, [], { antigravity })
+    for (const file of files) {
+      try {
+        localeOf.set(file, (await resolveFileLocale(undefined, config, [file])).locale)
+      } catch (err) {
+        if (err instanceof UsageError) throw new UsageError(`${file}: ${err.message}`)
+        throw err
+      }
+    }
+    const read = [...new Set(localeOf.values())]
+    cli.err(
+      hintLine(
+        cli.ui.err,
+        read.length === 1
+          ? headerLocaleNotice(read[0]!)
+          : `Locale per file, from each file's Language header (${read.join(', ')}). Pass --locale to choose one for every file.`,
+      ),
+    )
+  }
+  const locales = [...new Set(localeOf.values())]
+  // Before anything else, for every locale in the batch: a review must not
+  // run on rules the person believes are in force when the file that says so
+  // cannot be read.
+  for (const locale of locales) {
+    loadLocaleRules(locale)
+    warnUniversalOnly(cli, locale)
+  }
+  const batchSize = resolveBatchSize(config, flags.batchSize)
+  const advice = batchAdvice(config.reviewProvider, batchSize)
+  if (advice) cli.err(warnLine(cli.ui.err, advice))
+  if (config.reviewProvider === 'local' && flags.ai !== false) {
+    await warnAboutLocalReview(cli, resolveLocalTarget(config), batchSize, locales[0]!)
+  }
+  const noReviewer = config.reviewProvider === 'none'
+  if (noReviewer && flags.ai !== false) {
+    cli.err(hintLine(cli.ui.err, 'reviewProvider is none, so this review runs the rules only, with no AI.'))
+  }
+  const rulesOnly = flags.ai === false || noReviewer
+  refuseSharedOutputs(files, { ...(flags.outDir ? { outDir: flags.outDir } : {}), noAi: rulesOnly })
+  for (const line of header(cli.ui.err, 'review', `${files.length} files`, [
+    ['locale', locales.join(', ')],
+    ['review', rulesOnly ? 'rules only' : reviewerLabel(config, undefined)],
+    ['parallel', String(parallel)],
+  ])) cli.err(line)
+
+  const batchCli: BatchCli = {
+    stdin: cli.streams.stdin,
+    config: cli.config,
+    reviewFile: cli.reviewFile,
+    translate: cli.translate,
+    stopRunsOnSignal: cli.stopRunsOnSignal,
+    ui: cli.ui,
+    out: cli.out,
+    err: cli.err,
+  }
+  const ends = await runBatchJobs(batchCli, files.map((file) => ({ input: file, file })), {
+    review: true,
+    localeOf: (file) => localeOf.get(file)!,
+    parallel,
+    batchSize,
+    draftEngine: config.defaultDraftEngine,
+    ...(rulesOnly ? { noAi: true } : {}),
+    ...(flags.fresh ? { fresh: true } : {}),
+    ...(flags.outDir ? { outDir: flags.outDir } : {}),
+    noun: 'file',
+  })
+  return printBatchEnd(batchCli, files.map((file, i) => ({ input: file, end: ends[i]! })), 'Reviewed')
+}
+
+/**
+ * Refuses a batch in which two inputs would write the same output file.
+ * expandFileArgs already drops a path named twice, but two different paths
+ * can still meet: with --out-dir every output goes to one folder under its
+ * input's basename, so x/foo-tr.po and y/foo-tr.po both become
+ * out/foo-tr-repaired.po. Run anyway, the table would show both done and
+ * print both requester messages while only the last writer's file is on
+ * disk, which is worse than refusing, since nobody would know to look.
+ *
+ * Compared without case: on the default macOS and Windows file systems
+ * Foo-tr.po and foo-tr.po are one file. On a case-sensitive disk that
+ * refuses a batch that would have been safe, which costs a rename; missing
+ * the collision would cost a review.
+ */
+function refuseSharedOutputs(files: string[], opts: { outDir?: string; noAi: boolean }): void {
+  const seen = new Map<string, string>()
+  for (const file of files) {
+    const target = outputPath(file, opts)
+    const key = target.toLowerCase()
+    const first = seen.get(key)
+    if (first !== undefined) {
+      throw new UsageError(
+        `${first} and ${file} would both write ${target}. Review them in separate runs, or without --out-dir.`,
+      )
+    }
+    seen.set(key, file)
+  }
 }
 
 /**
@@ -1034,8 +1157,8 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     })
 
   program
-    .command('review <file>')
-    .description('Audit a submitted .po and write out only the entries that need work')
+    .command('review <files...>')
+    .description('Audit submitted .po files and write out only the entries that need work')
     .option('--locale <locale>', `Review locale (${localeDefaultHelp(shown, true)})`)
     .option('--out-dir <dir>', 'Where to write the problems file (default: beside the input)')
     .option('--no-ai', 'Run the deterministic checks only, skipping AI adjudication')
@@ -1043,9 +1166,40 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .option('--fresh', 'Ignore the cached verdicts for this file and review it again')
     .option('--requester <username>', 'The requester\'s wp.org username, for {username} in the reply template')
     .option('--template <name>', `Reply template to fill after the review (default: ${DEFAULT_TEMPLATE})`)
+    .option('--parallel <n>', 'With several files: files to review at once, 1 to 8 (default: 1)')
     .addHelpText('after', ENVIRONMENT_HELP)
-    .action(async (raw: string, flags: ReviewFlags) => {
-      const [target] = expandFileArgs([raw])
+    .action(async (patterns: string[], flags: ReviewFlags) => {
+      // expandFileArgs drops a file named twice, so two jobs never write one
+      // output at the same time.
+      let files = expandFileArgs(patterns)
+      // A glob is how a multi-file review is usually called, and in a folder
+      // reviewed once already it also matches the earlier outputs. Reviewing
+      // those spends calls on the review itself, prints a requester message
+      // for a file no contributor sent, and with --parallel can rewrite
+      // foo-tr-repaired.po while another job reads it. The pickers refuse to
+      // mark them for the same reason. One file named on its own is left
+      // alone: someone who points at a single file by name means it, and the
+      // single-file command stays exactly as it was.
+      if (files.length > 1) {
+        const outputs = files.filter(isReviewOutput)
+        if (outputs.length === files.length) {
+          throw new UsageError(
+            `Every file named is a review output (-repaired.po or -problems.po): ${outputs.join(', ')}. Name the submitted files instead.`,
+          )
+        }
+        if (outputs.length > 0) {
+          files = files.filter((file) => !isReviewOutput(file))
+          cli.err(hintLine(cli.ui.err, `Left out ${outputs.length === 1 ? 'a review output' : `${outputs.length} review outputs`}, which are not reviewed again: ${outputs.join(', ')}`))
+        }
+      }
+      if (files.length > 1) {
+        setExitCode(await runReviewMany(cli, files, flags))
+        return
+      }
+      // Checked on one file too, so a typo in the flag is not accepted
+      // silently and only found out on the day it is used with two.
+      parseParallel(flags.parallel)
+      const target = files[0]
       const config = cli.config()
       const { locale, fromHeader } = await resolveFileLocale(flags.locale, config, [target!], {
         antigravity: config.reviewProvider === 'antigravity' && flags.ai !== false,

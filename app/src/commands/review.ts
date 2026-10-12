@@ -72,12 +72,29 @@ export interface ReviewOptions extends Partial<Omit<AgentRunOptions, 'provider'>
   onProgress?: (event: ReviewEvent) => void
 }
 
-function outputPath(file: string, opts: { outDir?: string; noAi?: boolean }): string {
+// The name says whether a model was in the loop, because that decides whether
+// anything beyond mechanical whitespace could have been repaired.
+const OUTPUT_SUFFIXES = { rules: 'problems', ai: 'repaired' } as const
+
+// Exported so a batch can find, before anything runs, two inputs that would
+// write the same file: with --out-dir, two folders' foo-tr.po both land on
+// one foo-tr-repaired.po, and the last writer would silently win.
+export function outputPath(file: string, opts: { outDir?: string; noAi?: boolean }): string {
   const dir = opts.outDir ?? dirname(file)
-  // The name says whether a model was in the loop, because that decides whether
-  // anything beyond mechanical whitespace could have been repaired.
-  const suffix = opts.noAi ? 'problems' : 'repaired'
+  const suffix = opts.noAi ? OUTPUT_SUFFIXES.rules : OUTPUT_SUFFIXES.ai
   return join(dir, `${basename(file, extname(file))}-${suffix}.po`)
+}
+
+/**
+ * Whether a file is named as a review's output. Read from the name alone,
+ * the way outputPath writes it: the menu's pickers refuse to mark one for a
+ * batch, since reviewing a problems file is reviewing the review, and a
+ * batch marked with `*` across a folder of finished reviews would otherwise
+ * pick up every output beside its input.
+ */
+export function isReviewOutput(file: string): boolean {
+  const name = basename(file).toLowerCase()
+  return Object.values(OUTPUT_SUFFIXES).some((suffix) => name.endsWith(`-${suffix}.po`))
 }
 
 function readGlossary(locale: Locale, injected?: Database.Database) {

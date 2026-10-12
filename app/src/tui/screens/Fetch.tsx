@@ -1,27 +1,14 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Box, Text } from 'ink'
-import { agentBinOverride } from '../../agent/providers.js'
-import { initialBatchSize, providerLabel, screenBatchAdvice } from '../local.js'
-import { MAX_PARALLEL, runProjects, withSharedDbs } from '../../commands/batch.js'
+import { providerLabel } from '../local.js'
 import { defaultOutDir, type Ready, type Resolution } from '../../commands/fetch.js'
-import {
-  describeResolution,
-  endOfJob,
-  endOfResolution,
-  tallyLine,
-  tallyOf,
-  waitNotice,
-  type BatchSummary,
-  type ProjectEnd,
-} from '../../commands/fetch-report.js'
-import { createRunControl, type RunControl } from '../../run-control.js'
-import type { DraftEngineChoice, Locale } from '../../types.js'
+import { describeResolution, endOfResolution, waitNotice, type ProjectEnd } from '../../commands/fetch-report.js'
+import type { Locale } from '../../types.js'
 import { parseProjectLines, type FetchStatus } from '../../wporg/projects.js'
-import { batchSizeChoices } from '../batch-size.js'
 import { useCommands, useConfig } from '../commands.js'
+import { BatchRun, type BatchStage } from '../components/BatchRun.js'
 import { NeedsLocale } from '../components/NeedsLocale.js'
 import { DONE_HINT, Hint } from '../components/Hint.js'
-import { useTask } from '../hooks/useTask.js'
 import { useKeys } from '../hooks/useKeys.js'
 import { useTypingWhile } from '../input.js'
 import { useFooterStage } from '../footer-stage.js'
@@ -32,31 +19,10 @@ export interface FetchProps {
   onBack: () => void
 }
 
-type Stage = 'list' | 'get' | 'resolving' | 'resolved' | 'options' | 'running' | 'done'
-
-const ENGINES: DraftEngineChoice[] = ['deepl', 'openai', 'local']
-
-// The fields differ by action, so each list is spelled out rather than one list
-// with entries hidden: the cursor index then always names a field on screen.
-type Field = 'parallel' | 'batch' | 'fresh' | 'noAi' | 'engine' | 'start'
-const REVIEW_FIELDS: Field[] = ['parallel', 'batch', 'fresh', 'noAi', 'start']
-const TRANSLATE_FIELDS: Field[] = ['parallel', 'batch', 'engine', 'fresh', 'start']
-
-// A project's line while the batch runs.
-interface Live {
-  state: 'queued' | 'running' | 'finished'
-  batch?: string
-}
-
-interface Finished {
-  inputs: string[]
-  ends: ProjectEnd[]
-}
-
-function next<T>(values: T[], current: T, step: number): T {
-  const i = values.indexOf(current)
-  return values[(i + step + values.length) % values.length] as T
-}
+// After resolved, the batch's own stages (options, running, summary) belong
+// to BatchRun, which local files marked in the review and translate pickers
+// share.
+type Stage = 'list' | 'get' | 'resolving' | 'resolved' | 'batch'
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
@@ -94,30 +60,14 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
   const [status, setStatus] = useState<FetchStatus>('waiting')
   const [resolutions, setResolutions] = useState<Resolution[]>([])
   const [resolveError, setResolveError] = useState<string | undefined>(undefined)
-  // The latest backoff, shown under the checking and downloading lines.
+  // The latest backoff, shown under the checking line.
   const [waiting, setWaiting] = useState<string | undefined>(undefined)
-  const [focus, setFocus] = useState(0)
-  const [parallel, setParallel] = useState(1)
-  const [batchSize, setBatchSize] = useState(initialBatchSize(config))
-  const [fresh, setFresh] = useState(false)
-  // With No AI chosen, review is rules-only whatever this field says
-  // (reviewFile decides it), so the field is held on rather than offering a
-  // "no" it cannot honour.
-  const rulesOnly = config.reviewProvider === 'none'
-  const [noAiChoice, setNoAi] = useState(false)
-  const noAi = rulesOnly || noAiChoice
-  const [engine, setEngine] = useState<DraftEngineChoice>(config.defaultDraftEngine)
-  const [phase, setPhase] = useState<'downloading' | 'running'>('downloading')
-  const [live, setLive] = useState<Map<string, Live>>(new Map())
-  const [paused, setPaused] = useState<'running' | 'paused' | 'stopping'>('running')
-  const control = useRef<RunControl | undefined>(undefined)
-  const task = useTask<Finished>()
+  const [batchStage, setBatchStage] = useState<BatchStage>('options')
 
   const review = status === 'waiting'
-  const fields = review ? REVIEW_FIELDS : TRANSLATE_FIELDS
   const ready = resolutions.filter((r): r is Ready => r.state === 'ready')
-  const shown = stage === 'running' && task.state.status !== 'running' ? 'done' : stage
-  useFooterStage(shown === 'options' || shown === 'running' || shown === 'done' ? shown : undefined)
+  const shown = stage
+  useFooterStage(shown === 'batch' ? (batchStage === 'summary' ? 'done' : batchStage) : undefined)
 
   const resolve = (chosen: FetchStatus) => {
     setStage('resolving')
@@ -135,96 +85,28 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
       })
   }
 
-  const start = () => {
-    setStage('running')
-    setPhase('downloading')
-    const run = createRunControl()
-    control.current = run
-    run.subscribe(setPaused)
-    task.run(async () => {
-      const ends = new Map<string, ProjectEnd>()
-      for (const r of resolutions) {
-        const end = endOfResolution(r, status)
-        if (end) ends.set(r.input, end)
-      }
-      const fetched = await commands.fetchProjects(ready, {
-        locale,
-        status,
-        outDir: defaultOutDir(),
-        onWait: (ms) => setWaiting(waitNotice(ms)),
-      })
-      setWaiting(undefined)
-      const toRun = fetched.flatMap((f) => {
-        if (f.state === 'failed') {
-          ends.set(f.input, { tally: 'failed', detail: `download failed: ${f.reason}` })
-          return []
-        }
-        return [f]
-      })
-      const inputOf = new Map(toRun.map((f) => [f.file, f.input]))
-      setLive(new Map(toRun.map((f) => [f.input, { state: 'queued' }])))
-      setPhase('running')
-      const mark = (input: string, patch: Partial<Live>) =>
-        setLive((prev) => new Map(prev).set(input, { ...(prev.get(input) ?? { state: 'queued' }), ...patch }))
-      const onProgress = (file: string) => (e: { type: string; index?: number; of?: number }) => {
-        if (e.type === 'batch-start' && e.index !== undefined && e.of !== undefined) {
-          mark(inputOf.get(file)!, { batch: `batch ${e.index}/${e.of}` })
-        }
-      }
-
-      // Translate's review pass and a review both run the configured provider,
-      // so every project spawns the binary discovery checked, as the CLI's
-      // fetch does, rather than whatever is first on PATH.
-      const bin = agentBinOverride(config.reviewProvider, process.env)
-      if (toRun.length > 0) {
-        const outcomes = await withSharedDbs(({ db, jobsDb }) =>
-          runProjects<BatchSummary>(
-            toRun.map((f) => f.file),
-            {
-              parallel,
-              control: run,
-              run: (file, c) =>
-                review
-                  ? commands.reviewFile({
-                      control: c,
-                      db,
-                      jobsDb,
-                      file,
-                      locale,
-                      batchSize,
-                      ...(bin === undefined ? {} : { bin }),
-                      ...(noAi ? { noAi: true } : {}),
-                      ...(fresh ? { fresh: true } : {}),
-                      onProgress: onProgress(file),
-                    })
-                  : commands.translateFile({
-                      control: c,
-                      db,
-                      jobsDb,
-                      file,
-                      locale,
-                      mode: 'pending',
-                      draftEngine: engine,
-                      batchSize,
-                      ...(bin === undefined ? {} : { bin }),
-                      ...(fresh ? { fresh: true } : {}),
-                      onProgress: onProgress(file),
-                    }),
-              onEvent: (e) => {
-                if (e.type === 'project-start') mark(inputOf.get(e.file)!, { state: 'running' })
-                else mark(inputOf.get(e.outcome.file)!, { state: 'finished' })
-              },
-            },
-          ),
-        )
-        for (const o of outcomes) ends.set(inputOf.get(o.file)!, endOfJob(o, config.wporgUsername))
-      }
-      const inputs = resolutions.map((r) => r.input)
-      return {
-        inputs,
-        ends: inputs.map((i): ProjectEnd => ends.get(i) ?? { tally: 'failed', detail: 'never ran' }),
-      }
+  // The downloads are fetch's part of the batch; BatchRun runs what they
+  // leave on disk, the same way it runs files marked in a picker.
+  const prepare = async (onWait: (notice: string | undefined) => void) => {
+    const ends = new Map<string, ProjectEnd>()
+    for (const r of resolutions) {
+      const end = endOfResolution(r, status)
+      if (end) ends.set(r.input, end)
+    }
+    const fetched = await commands.fetchProjects(ready, {
+      locale,
+      status,
+      outDir: defaultOutDir(),
+      onWait: (ms) => onWait(waitNotice(ms)),
     })
+    const items = fetched.flatMap((f) => {
+      if (f.state === 'failed') {
+        ends.set(f.input, { tally: 'failed', detail: `download failed: ${f.reason}` })
+        return []
+      }
+      return [{ input: f.input, file: f.file }]
+    })
+    return { items, ends }
   }
 
   // A pasted list arrives as one chunk with its line breaks in it, so a chunk is
@@ -246,15 +128,11 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
     setStage('get')
   }
   const listing = shown === 'list'
-  const field = fields[focus]!
+  // The batch's stages bind their own keys, back included, in BatchRun.
+  const batch = shown === 'batch'
   useKeys({
-    run: {
-      pause: shown === 'running' ? () => control.current?.pause() : undefined,
-      resume: shown === 'running' ? () => control.current?.resume() : undefined,
-      stop: shown === 'running' ? () => control.current?.stop() : undefined,
-    },
     // Only escape leaves the list: q is a letter that slugs contain.
-    back: { esc: shown === 'running' ? undefined : onBack, q: shown === 'running' || listing ? undefined : onBack },
+    back: { esc: batch ? undefined : onBack, q: batch || listing ? undefined : onBack },
     fetchList: {
       add: listing
         ? () => {
@@ -281,7 +159,6 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
         : undefined,
       type: listing ? type : undefined,
     },
-    finished: { close: shown === 'done' ? onBack : undefined },
     fetchGet: {
       choose: shown === 'get' ? () => setStatus((s) => (s === 'waiting' ? 'untranslated' : 'waiting')) : undefined,
       check: shown === 'get' ? () => resolve(status) : undefined,
@@ -291,37 +168,13 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
         shown === 'resolved'
           ? () => {
               if (ready.length === 0) return onBack()
-              setFocus(0)
-              setStage('options')
+              setStage('batch')
             }
           : undefined,
-    },
-    runForm: {
-      move:
-        shown === 'options'
-          ? (_input, key) =>
-              key.upArrow || (key.tab && key.shift) ? setFocus((f) => Math.max(0, f - 1)) : setFocus((f) => Math.min(fields.length - 1, f + 1))
-          : undefined,
-      change:
-        shown === 'options'
-          ? (_input, key) => {
-              const step = key.leftArrow ? -1 : 1
-              // Parallel stops at its ends instead of wrapping: wrapping from eight to
-              // one on a held key would quietly turn a fast batch into a slow one.
-              if (field === 'parallel') setParallel((n) => Math.min(MAX_PARALLEL, Math.max(1, n + step)))
-              if (field === 'batch') setBatchSize((n) => next(batchSizeChoices(initialBatchSize(config)), n, step))
-              if (field === 'engine') setEngine((e) => next(ENGINES, e, step))
-              if (field === 'fresh') setFresh((v) => !v)
-              if (field === 'noAi' && !rulesOnly) setNoAi((v) => !v)
-            }
-          : undefined,
-      select: shown === 'options' ? () => (field === 'start' ? start() : setFocus((f) => f + 1)) : undefined,
     },
   })
 
-  const marker = (field: Field) => (fields[focus] === field ? '❯ ' : '  ')
   const width = Math.max(0, ...resolutions.map((r) => r.input.length))
-  const action = review ? 'Review' : 'Translate'
 
   return (
     <Box flexDirection="column">
@@ -353,9 +206,7 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
       )}
 
       {shown === 'resolving' && <Text>Checking {plural(lines.length, 'project', 'projects')}...</Text>}
-      {(shown === 'resolving' || (shown === 'running' && phase === 'downloading')) && waiting && (
-        <Text color="yellow">{waiting}</Text>
-      )}
+      {shown === 'resolving' && waiting && <Text color="yellow">{waiting}</Text>}
 
       {shown === 'resolved' && (
         <>
@@ -379,92 +230,20 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
         </>
       )}
 
-      {shown === 'options' && (
-        <>
-          <Text>
-            {marker('parallel')}Parallel:      {parallel} {parallel === 1 ? 'project at a time' : 'projects at once'}
-          </Text>
-          <Text>
-            {marker('batch')}Batch size:    {batchSize} entries per call
-          </Text>
-          {screenBatchAdvice(config, batchSize, locale) && (
-            <Text color="yellow">{screenBatchAdvice(config, batchSize, locale)}</Text>
-          )}
-          {!review && (
-            <Text>
-              {marker('engine')}Draft engine:  {engine}
-            </Text>
-          )}
-          <Text>
-            {marker('fresh')}Start over:    {fresh ? 'yes, ignore what is cached' : 'no, reuse what is cached'}
-          </Text>
-          {review && (
-            <Text>
-              {marker('noAi')}Skip AI:       {noAi ? (rulesOnly ? 'yes, rules only (No AI is chosen in setup)' : 'yes, rules only') : 'no'}
-            </Text>
-          )}
-          <Text>
-            {marker('start')}
-            {action} {plural(ready.length, 'project', 'projects')}
-          </Text>
-          <Text dimColor>   Saves to {defaultOutDir()}</Text>
-          <Hint>↑↓ move · ←→ change · enter select · esc back to menu</Hint>
-        </>
-      )}
-
-      {shown === 'running' && (
-        <>
-          {phase === 'downloading' ? (
-            <Text>Downloading {plural(ready.length, 'export', 'exports')}...</Text>
-          ) : (
-            [...live].map(([input, l]) => (
-              <Text key={input} {...(l.state === 'queued' ? { dimColor: true } : {})}>
-                {'  '}
-                {input.padEnd(width)}
-                {'  '}
-                {l.state === 'running' ? `running${l.batch ? ` · ${l.batch}` : ''}` : l.state === 'queued' ? 'queued' : 'finished'}
-              </Text>
-            ))
-          )}
-          {paused === 'paused' && <Text color="yellow">Paused. Running projects stop after their current batch.</Text>}
-          {paused === 'stopping' && (
-            <Text color="yellow">Stopping after the current batches. Queued projects will not start.</Text>
-          )}
-          <Hint>p pause · r resume · q stop and keep what is done</Hint>
-        </>
-      )}
-
-      {shown === 'done' && (
-        <>
-          {task.state.status === 'error' && <Text color="red">The batch failed: {task.state.message}</Text>}
-          {task.state.status === 'done' && (
-            <>
-              {task.state.result.inputs.map((input, i) => {
-                const end = task.state.status === 'done' ? task.state.result.ends[i]! : undefined
-                if (!end) return null
-                const color = end.tally === 'failed' ? 'red' : end.tally === 'done' ? 'green' : undefined
-                return (
-                  <Text key={input}>
-                    {'  '}
-                    {input.padEnd(width)}
-                    {'  '}
-                    <Text {...(color ? { color } : {})}>{end.tally}</Text> {end.detail}
-                  </Text>
-                )
-              })}
-              <Text bold>{tallyLine(tallyOf(task.state.result.ends))}</Text>
-              {task.state.result.ends.map((end, i) =>
-                end.message ? (
-                  <Box key={i} flexDirection="column" marginTop={1}>
-                    <Text dimColor>Message for the requester ({task.state.status === 'done' ? task.state.result.inputs[i] : ''}):</Text>
-                    <Text>{end.message}</Text>
-                  </Box>
-                ) : null,
-              )}
-            </>
-          )}
-          <Hint>{DONE_HINT}</Hint>
-        </>
+      {shown === 'batch' && (
+        <BatchRun
+          action={review ? 'review' : 'translate'}
+          noun={{ one: 'project', many: 'projects' }}
+          inputs={resolutions.map((r) => r.input)}
+          prepare={prepare}
+          preparing={`Downloading ${plural(ready.length, 'export', 'exports')}...`}
+          locale={{ fixed: locale }}
+          after={`Saves to ${defaultOutDir()}`}
+          onLeave={onBack}
+          leaveHint="esc back to menu"
+          onBack={onBack}
+          onStage={setBatchStage}
+        />
       )}
     </Box>
   )

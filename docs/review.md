@@ -8,6 +8,35 @@ still matter. Everything it leaves out is approvable as it stands.
 polyglots review wp-plugins-example-stable-de.po
 ```
 
+## Several files at once
+
+Name several files, or a glob, and they are reviewed as one batch:
+
+```
+polyglots review *-de.po --parallel 3
+```
+
+`--parallel` runs up to that many files at once, 1 to 8 (default 1). A batch
+prints one line per file as it starts and ends, then a table of how each one
+ended, the message for each file's contributor, and a tally. One file failing
+does not stop the others. `p` pauses, `r` resumes and `q` stops after the
+batches in flight, as for one file.
+
+With `--locale` or a configured locale, every file is reviewed in it. With
+neither, each file is reviewed in the locale its own `Language` header names,
+so one batch can mix languages. A file whose header names none, or names one
+that could be more than one locale, refuses the whole command before anything
+runs, and the message says which file.
+
+Earlier review outputs (`-repaired.po`, `-problems.po`) that a glob matches
+are left out, with a line naming them, so a folder reviewed once can be
+reviewed again with the same glob. If two files would write the same output,
+as two folders' `foo-de.po` would with `--out-dir`, the command refuses before
+anything runs and names both.
+
+With one file, the output is the single review's summary, as before. A review
+output named on its own is still reviewed.
+
 ## Getting the right file
 
 A `.po` file carries no review status. GlotPress only marks entries as fuzzy;

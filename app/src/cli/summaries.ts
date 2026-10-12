@@ -106,11 +106,13 @@ export function tallyCell(p: Painter, tally: string): string {
 }
 
 // Titled by the worst outcome, since that is the one needing action.
-export function fetchTally(p: Painter, t: Tally): string[] {
+// Titled by the verb of the command that ran the batch: a fetch, or a review
+// of several local files, which shares everything after the downloads.
+export function fetchTally(p: Painter, t: Tally, verb = 'Fetched'): string[] {
   const title =
-    t.failed > 0 ? `${p.paint('error', p.glyphs.fail)} Fetched with failures`
+    t.failed > 0 ? `${p.paint('error', p.glyphs.fail)} ${verb} with failures`
     : t.stopped > 0 ? `${p.paint('warn', p.glyphs.warn)} Stopped`
-    : `${p.paint('success', p.glyphs.ok)} Fetched`
+    : `${p.paint('success', p.glyphs.ok)} ${verb}`
   const rows = table(
     [['done', String(t.done)], ['failed', String(t.failed)], ['skipped', String(t.skipped)], ...(t.stopped > 0 ? [['stopped', String(t.stopped)]] : [])],
     { align: ['left', 'right'] },

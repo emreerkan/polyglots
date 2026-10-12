@@ -126,6 +126,31 @@ again for the new file. When a carried locale does not match the new file's
 A stopped run is never wasted. Start the same file again and only the entries
 that were not reached are sent; the rest come from the cache.
 
+### Several files in one batch
+
+In the file list, `space` marks the file under the cursor, with a bullet
+before its name, and `space` again unmarks it. `*` marks every file in the
+folder, and unmarks them when they are all marked already. Marks stay while
+you move between folders, so a batch can hold files from several; the count
+under the list is what is marked, whether or not those files are on screen. A
+review's own output (`-problems.po`, `-repaired.po`) cannot be marked, and
+the list says why when you try.
+
+`enter` with nothing marked opens the one file, as above. `enter` on a file
+with anything marked opens the batch options instead, which list the marked
+files first. They are Fetch's: the locale, how many files run at once
+(**Parallel**, 1 to 8), the batch size, whether to start over, and for a
+review whether to skip the AI, or for a translation the draft engine. A batch
+translation fills pending entries only. Leave the locale empty, shown as
+**per file**, and each file runs in the locale its own `Language` header
+names; a file whose header names none fails on its own and the rest carry on.
+`esc` goes back to the file list with the marks kept.
+
+The run and its summary are Fetch's too: a line per file while it runs, then
+how each one ended, the tally, and the message for each reviewed file's
+contributor. The command line does the same with
+`polyglots review a.po b.po --parallel 2`.
+
 Fetch adds two stages at the front: type the projects, one per line, as
 slugs or translate.wordpress.org addresses (`enter` on an empty line, or
 `ctrl+d`, when the list is done), then choose waiting or untranslated strings

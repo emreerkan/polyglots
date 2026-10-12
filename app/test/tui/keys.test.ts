@@ -275,6 +275,13 @@ describe('footer keys by stage', () => {
     expect(footer(screen, 'pick')).not.toContain('move between fields')
   })
 
+  // A batch of marked files ends in a table, with no one result to open or copy.
+  it.each(['review', 'translate'] as const)('%s lists marking in the picker, and no open key under a batch summary', (screen) => {
+    expect(footer(screen, 'pick')).toContain('mark or unmark a file for one batch')
+    expect(footer(screen, 'summary')).toContain('back to the menu once it is done')
+    expect(footer(screen, 'summary').join(' ')).not.toMatch(/open the/)
+  })
+
   it('lists the run keys while fetch runs', () => {
     expect(footer('fetch', 'running')).toContain('pause after the current batch')
     expect(footer('fetch', 'running')).not.toContain('continue')

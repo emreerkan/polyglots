@@ -9,7 +9,8 @@ import { initialBatchSize, providerLabel, screenBatchAdvice } from '../local.js'
 import { headerLocaleOf } from '../../cli/locale.js'
 import { useCommands, useConfig } from '../commands.js'
 import { poEntryCount } from '../../po/count.js'
-import { FilePicker } from '../components/FilePicker.js'
+import { BatchRun, type BatchStage } from '../components/BatchRun.js'
+import { MarkedFiles, MarkingPicker, markedItems } from '../components/MarkingPicker.js'
 import { BACK_HINT, Hint, RUN_DONE_HINT } from '../components/Hint.js'
 import { ReviewProgress } from '../components/ReviewProgress.js'
 import { appendEvent } from '../components/RecentEntries.js'
@@ -28,7 +29,8 @@ export interface ReviewProps {
   onBack: () => void
 }
 
-type Phase = 'pick' | 'options' | 'running'
+// batch: several marked files, whose options, run and summary are BatchRun's.
+type Phase = 'pick' | 'options' | 'running' | 'batch'
 
 const PO_EXTENSIONS = ['.po']
 // The form's fields in order. Requester is only there when the locale has a
@@ -112,12 +114,19 @@ export function Review({ cwd, onBack }: ReviewProps) {
   const control = useRef<RunControl | undefined>(undefined)
   const task = useTask<ReviewSummary>()
 
+  // Files marked for one batch. Held here rather than in the picker so they
+  // survive the picker's folder changes and a trip to the batch options and
+  // back.
+  const [marked, setMarked] = useState<ReadonlySet<string>>(new Set())
+  const [batchStage, setBatchStage] = useState<BatchStage>('options')
+  const batchItems = markedItems(cwd, marked)
+
   const finished = phase === 'running' && task.state.status !== 'running'
   const stage = finished ? 'done' : phase
   const typing = stage === 'options' && (field === 'locale' || field === 'requester')
   const templates = useMemo(() => (finished ? loadTemplatesSafely(locale) : []), [finished, locale])
   const requesterName = normaliseRequester(requester)
-  useFooterStage(stage)
+  useFooterStage(stage === 'batch' ? batchStage : stage)
 
   const start = (chosenLocale: string) => {
     setEvents([])
@@ -182,7 +191,8 @@ export function Review({ cwd, onBack }: ReviewProps) {
       resume: running ? () => control.current?.resume() : undefined,
       stop: running ? () => control.current?.stop() : undefined,
     },
-    back: { esc: running ? undefined : onBack, q: running || typing ? undefined : onBack },
+    // The batch's stages bind their own keys, back included, in BatchRun.
+    back: { esc: running || stage === 'batch' ? undefined : onBack, q: running || typing || stage === 'batch' ? undefined : onBack },
     finished: { close: stage === 'done' ? onBack : undefined },
     another: { file: stage === 'done' ? anotherFile : undefined },
     runForm: {
@@ -221,7 +231,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
 
   return (
     <Box flexDirection="column">
-      <Text bold>Review {stage === 'pick' ? 'a submitted .po file' : basename(file)}</Text>
+      <Text bold>Review {stage === 'pick' ? 'a submitted .po file' : stage === 'batch' ? `${marked.size} files` : basename(file)}</Text>
       {configError && <Text color="yellow">Config error, using defaults: {configError}</Text>}
       {/* Named on every screen that runs or reports a job, so which
           subscription is being spent is never a guess. Not switchable here:
@@ -231,10 +241,14 @@ export function Review({ cwd, onBack }: ReviewProps) {
 
       {stage === 'pick' && (
         <>
-          <FilePicker
+          <MarkingPicker
             dir={pickDir}
             extensions={PO_EXTENSIONS}
             annotate={poEntryCount}
+            marked={marked}
+            onMarked={setMarked}
+            verb="review"
+            onBatch={() => setPhase('batch')}
             onPick={(path) => {
               setFile(path)
               if (headerAllowed) {
@@ -251,6 +265,25 @@ export function Review({ cwd, onBack }: ReviewProps) {
           />
           <Hint>{BACK_HINT}</Hint>
         </>
+      )}
+
+      {stage === 'batch' && (
+        <BatchRun
+          action="review"
+          noun={{ one: 'file', many: 'files' }}
+          inputs={batchItems.map((i) => i.input)}
+          prepare={async () => ({ items: batchItems, ends: new Map() })}
+          // Empty with no locale configured, which runs each file in the
+          // locale its own header names; see BatchRun.
+          locale={{ field: config.defaultLocale ?? '' }}
+          before={<MarkedFiles items={batchItems} />}
+          // Back to the files rather than the menu: the marks are what an
+          // escape from here most likely wants to change, and they are kept.
+          onLeave={() => setPhase('pick')}
+          leaveHint="esc back to the files"
+          onBack={onBack}
+          onStage={setBatchStage}
+        />
       )}
 
       {stage === 'options' && (

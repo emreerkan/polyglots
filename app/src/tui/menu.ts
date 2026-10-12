@@ -168,7 +168,7 @@ export const HOME: MenuNode[] = [
     description: 'Rules plus your review agent',
     icon: '[✓]',
     asciiIcon: '[+]',
-    help: 'Checks a submitted catalogue with the locale rules and the review agent, repairs what it can and writes the problems to a file.',
+    help: 'Checks a submitted catalogue with the locale rules and the review agent, repairs what it can and writes the problems to a file. Mark several files with space to review them as one batch.',
   },
   {
     id: 'translate',
@@ -177,7 +177,7 @@ export const HOME: MenuNode[] = [
     description: 'Draft with memory, glossary and MT',
     icon: 'a→b',
     asciiIcon: 'a>b',
-    help: 'Fills untranslated entries from the translation memory first, then machine drafts, and marks the drafts fuzzy for a human to check.',
+    help: 'Fills untranslated entries from the translation memory first, then machine drafts, and marks the drafts fuzzy for a human to check. Mark several files with space to translate them as one batch.',
   },
   {
     id: 'fetch',

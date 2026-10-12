@@ -14,6 +14,7 @@ Entries say what changed. For why and how, read the commit.
 
 - `config list-names` prints a locale's proper nouns numbered; `config remove-name` takes the numbers or the names.
 - `a` on a finished or stopped review or translation picks another file from the same folder, with the last run's settings filled in.
+- Mark several files with `space` or `*` in the app's Review and Translate pickers and run them as one batch with Fetch's options, progress and summary; `review` takes several files and `--parallel` on the command line.
 - The Turkish rules template carries two example patterns to turn on: a suffix glued to a placeholder (`%s'de`) and a plural noun after a count (`%d dosyalar`).
 
 ### Changed

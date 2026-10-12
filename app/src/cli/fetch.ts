@@ -1,31 +1,16 @@
 import { text } from 'node:stream/consumers'
 import { localReviewBatchSize } from '../review/local.js'
-import { agentBinOverride, batchAdvice } from '../agent/providers.js'
-import { runProjects, withSharedDbs, MAX_PARALLEL } from '../commands/batch.js'
+import { batchAdvice } from '../agent/providers.js'
 import { defaultOutDir, type fetchProjects, type resolveProjects, type Fetched, type Resolution } from '../commands/fetch.js'
-import {
-  describeResolution,
-  endOfJob,
-  endOfResolution,
-  tallyOf,
-  waitNotice,
-  type BatchSummary,
-  type ProjectEnd,
-} from '../commands/fetch-report.js'
-import type { reviewFile } from '../commands/review.js'
-import type { translateFile } from '../commands/translate.js'
+import { describeResolution, endOfResolution, waitNotice, type ProjectEnd } from '../commands/fetch-report.js'
 import { loadSecrets } from '../config.js'
 import { loadLocaleRules } from '../rules/load.js'
-import { createRunControl, type RunControl, type RunState } from '../run-control.js'
-import type { PolyglotsConfig } from '../types.js'
 import { parseProjectLines, type FetchStatus } from '../wporg/projects.js'
-import { UsageError, parseDraftEngine, parseLocaleArg, parsePositiveInt, secretForEngine } from './args.js'
-import { watchKeys, type KeyStream } from './keys.js'
+import { UsageError, parseDraftEngine, parsePositiveInt, secretForEngine } from './args.js'
+import { parseParallel, printBatchEnd, runBatchJobs, type BatchCli } from './batch.js'
 import { requireLocale } from './locale.js'
-import type { Painter } from '../ui/paint.js'
 import { warnLine } from '../ui/messages.js'
 import { table } from '../ui/layout.js'
-import { fetchTally, tallyCell } from './summaries.js'
 import type { checkLocalModel } from '../draft/discover.js'
 import { localModelId, resolveLocalTarget } from '../draft/local-chat.js'
 import { warnAboutLocalModel, warnAboutLocalReview, warnUniversalOnly } from './run-notices.js'
@@ -42,24 +27,11 @@ export interface FetchFlags {
   locale?: string
 }
 
-export interface FetchCli {
-  stdin: NodeJS.ReadableStream & KeyStream
-  config: () => PolyglotsConfig
+export interface FetchCli extends BatchCli {
   resolveProjects: typeof resolveProjects
   fetchProjects: typeof fetchProjects
-  reviewFile: typeof reviewFile
-  translate: typeof translateFile
-  // Records the batch's runs as stopped if a signal ends it; see stopOnSignal.
-  stopRunsOnSignal: () => () => void
   checkLocalModel: typeof checkLocalModel
-  ui: { out: Painter; err: Painter }
-  out(line: string): void
-  err(line: string): void
 }
-
-const EXIT_OK = 0
-const EXIT_ERROR = 1
-const EXIT_STOPPED = 3
 
 function parseFetchStatus(raw: string | undefined): FetchStatus {
   if (raw === 'waiting' || raw === 'untranslated') return raw
@@ -83,18 +55,12 @@ function parseFetchStatus(raw: string | undefined): FetchStatus {
  * process for no gain, and better-sqlite3 is synchronous, so jobs sharing a
  * handle cannot interleave a write.
  *
- * Progress is one line per project on stderr rather than the per-batch bar a
- * single run draws. Several jobs redrawing one bar line at once would garble
- * it, and with one slot the start and end lines read as a queue.
+ * After the downloads it is the same batch a review of several local files
+ * runs: runBatchJobs, then printBatchEnd.
  */
 export async function runFetch(cli: FetchCli, names: string[], flags: FetchFlags): Promise<number> {
   const status = parseFetchStatus(flags.get)
-  const parallel = flags.parallel === undefined ? 1 : parsePositiveInt('--parallel', flags.parallel)
-  if (parallel > MAX_PARALLEL) {
-    throw new UsageError(
-      `--parallel is at most ${MAX_PARALLEL}; past that the provider's rate limit sets the pace, not the job count`,
-    )
-  }
+  const parallel = parseParallel(flags.parallel)
   const config = cli.config()
   const locale = requireLocale(flags.locale, config)
   loadLocaleRules(locale)
@@ -166,115 +132,23 @@ export async function runFetch(cli: FetchCli, names: string[], flags: FetchFlags
       if (f.state === 'failed') ends.set(f.input, { tally: 'failed', detail: `download failed: ${f.reason}` })
       else toRun.push(f)
     }
-    if (toRun.length > 0) await runJobs(cli, toRun, ends, { review, locale, batchSize, parallel, draftEngine, secrets, flags })
+    if (toRun.length > 0) {
+      const results = await runBatchJobs(cli, toRun, {
+        review,
+        localeOf: () => locale,
+        batchSize,
+        parallel,
+        draftEngine,
+        secrets,
+        ...(flags.ai === false ? { noAi: true } : {}),
+        ...(flags.fresh ? { fresh: true } : {}),
+        kept: new Set(toRun.filter((f) => f.state === 'kept').map((f) => f.file)),
+        noun: 'project',
+      })
+      toRun.forEach((f, i) => ends.set(f.input, results[i]!))
+    }
   }
 
-  cli.out('')
   const final = resolutions.map((r): ProjectEnd => ends.get(r.input) ?? { tally: 'failed', detail: 'never ran' })
-  const rows = resolutions.map((r, i) => [r.input, tallyCell(cli.ui.out, final[i]!.tally), final[i]!.detail])
-  for (const line of table(rows, { indent: 2 })) cli.out(line)
-  const tally = tallyOf(final)
-
-  // One message per reviewed project, because each goes back to a different
-  // contributor. Printed rather than copied, as for a single review.
-  for (const r of resolutions) {
-    const message = ends.get(r.input)?.message
-    if (!message) continue
-    cli.out('')
-    cli.out(`Message for the requester (${r.input}):`)
-    cli.out(message)
-  }
-
-  cli.out('')
-  for (const line of fetchTally(cli.ui.out, tally)) cli.out(line)
-  if (tally.failed > 0) return EXIT_ERROR
-  return tally.stopped > 0 ? EXIT_STOPPED : EXIT_OK
-}
-
-async function runJobs(
-  cli: FetchCli,
-  toRun: Array<Extract<Fetched, { file: string }>>,
-  ends: Map<string, ProjectEnd>,
-  opts: {
-    review: boolean
-    locale: string
-    batchSize: number
-    parallel: number
-    draftEngine: ReturnType<typeof parseDraftEngine>
-    secrets: ReturnType<typeof loadSecrets>
-    flags: FetchFlags
-  },
-): Promise<void> {
-  const control: RunControl = createRunControl()
-  const unwatchKeys = watchKeys(cli.stdin, control, {
-    onInterrupt: () => {
-      unwatchKeys()
-      process.kill(process.pid, 'SIGINT')
-    },
-  })
-  const unwatchSignals = cli.stopRunsOnSignal()
-  const unsubscribe = control.subscribe((state: RunState) => {
-    if (state === 'paused') cli.err('Pausing every running project after its current batch. Press p to resume.')
-    if (state === 'running') cli.err('Resumed.')
-    if (state === 'stopping') cli.err('Stopping after the current batches. Projects not started yet will not start.')
-  })
-  // Translate's review pass and a review both run the configured provider, so
-  // the override is resolved for that one, the same way the CLI does it.
-  const bin = agentBinOverride(cli.config().reviewProvider, process.env)
-  const inputOf = new Map(toRun.map((f) => [f.file, f.input]))
-  const kept = new Set(toRun.filter((f) => f.state === 'kept').map((f) => f.file))
-  let finished = 0
-
-  try {
-    const outcomes = await withSharedDbs(({ db, jobsDb }) =>
-      runProjects<BatchSummary>(
-        toRun.map((f) => f.file),
-        {
-          parallel: opts.parallel,
-          control,
-          run: (file, control) =>
-            opts.review
-              ? cli.reviewFile({
-                  control,
-                  db,
-                  jobsDb,
-                  file,
-                  locale: opts.locale,
-                  batchSize: opts.batchSize,
-                  ...(opts.flags.ai === false ? { noAi: true } : {}),
-                  ...(opts.flags.fresh ? { fresh: true } : {}),
-                  bin,
-                })
-              : cli.translate({
-                  control,
-                  db,
-                  jobsDb,
-                  file,
-                  locale: opts.locale,
-                  mode: 'pending',
-                  draftEngine: opts.draftEngine,
-                  batchSize: opts.batchSize,
-                  ...(opts.flags.fresh ? { fresh: true } : {}),
-                  secrets: opts.secrets,
-                  bin,
-                }),
-          onEvent: (e) => {
-            if (e.type === 'project-start') {
-              const note = kept.has(e.file) ? ' (existing file kept)' : ''
-              cli.err(`Started ${inputOf.get(e.file)}${note}`)
-            } else {
-              finished += 1
-              cli.err(`[${finished}/${toRun.length}] ${inputOf.get(e.outcome.file)}: ${tallyCell(cli.ui.err, e.outcome.state)}`)
-            }
-          },
-        },
-      ),
-    )
-    const username = cli.config().wporgUsername
-    for (const outcome of outcomes) ends.set(inputOf.get(outcome.file)!, endOfJob(outcome, username))
-  } finally {
-    unwatchSignals()
-    unsubscribe()
-    unwatchKeys()
-  }
+  return printBatchEnd(cli, resolutions.map((r, i) => ({ input: r.input, end: final[i]! })), 'Fetched')
 }

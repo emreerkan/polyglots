@@ -10,7 +10,8 @@ import { resolveLocalTarget, type LocalTarget } from '../../draft/local-chat.js'
 import { headerLocaleOf } from '../../cli/locale.js'
 import { useCommands, useConfig } from '../commands.js'
 import { poEntryCount } from '../../po/count.js'
-import { FilePicker } from '../components/FilePicker.js'
+import { BatchRun, type BatchStage } from '../components/BatchRun.js'
+import { MarkedFiles, MarkingPicker, markedItems } from '../components/MarkingPicker.js'
 import { BACK_HINT, Hint, RUN_DONE_HINT } from '../components/Hint.js'
 import { Progress } from '../components/Progress.js'
 import { appendEvent } from '../components/RecentEntries.js'
@@ -29,7 +30,8 @@ export interface TranslateProps {
   onBack: () => void
 }
 
-type Phase = 'pick' | 'options' | 'running'
+// batch: several marked files, whose options, run and summary are BatchRun's.
+type Phase = 'pick' | 'options' | 'running' | 'batch'
 type Mode = 'pending' | 'all'
 type Engine = DraftEngineChoice
 
@@ -118,10 +120,17 @@ export function Translate({ cwd, onBack }: TranslateProps) {
     }
   }, [engine])
 
+  // Files marked for one batch. Held here rather than in the picker so they
+  // survive the picker's folder changes and a trip to the batch options and
+  // back.
+  const [marked, setMarked] = useState<ReadonlySet<string>>(new Set())
+  const [batchStage, setBatchStage] = useState<BatchStage>('options')
+  const batchItems = markedItems(cwd, marked)
+
   const finished = phase === 'running' && task.state.status !== 'running'
   const stage = finished ? 'done' : phase
   const typing = stage === 'options' && focus === FIELD_LOCALE
-  useFooterStage(stage)
+  useFooterStage(stage === 'batch' ? batchStage : stage)
 
   // Takes the locale rather than reading state, because the keypress that
   // starts a run normalises it in the same handler and would not see it yet.
@@ -186,7 +195,8 @@ export function Translate({ cwd, onBack }: TranslateProps) {
       resume: running ? () => control.current?.resume() : undefined,
       stop: running ? () => control.current?.stop() : undefined,
     },
-    back: { esc: running ? undefined : onBack, q: running || typing ? undefined : onBack },
+    // The batch's stages bind their own keys, back included, in BatchRun.
+    back: { esc: running || stage === 'batch' ? undefined : onBack, q: running || typing || stage === 'batch' ? undefined : onBack },
     finished: { close: stage === 'done' ? onBack : undefined },
     another: { file: stage === 'done' ? anotherFile : undefined },
     runForm: {
@@ -228,7 +238,7 @@ export function Translate({ cwd, onBack }: TranslateProps) {
 
   return (
     <Box flexDirection="column">
-      <Text bold>Translate {stage === 'pick' ? 'a .po file' : name}</Text>
+      <Text bold>Translate {stage === 'pick' ? 'a .po file' : stage === 'batch' ? `${marked.size} files` : name}</Text>
       {configError && <Text color="yellow">Config error, using defaults: {configError}</Text>}
       {/* Named on every screen that runs or reports a job, so which
           subscription is being spent is never a guess. Not switchable here:
@@ -238,10 +248,14 @@ export function Translate({ cwd, onBack }: TranslateProps) {
 
       {stage === 'pick' && (
         <>
-          <FilePicker
+          <MarkingPicker
             dir={pickDir}
             extensions={PO_EXTENSIONS}
             annotate={poEntryCount}
+            marked={marked}
+            onMarked={setMarked}
+            verb="translate"
+            onBatch={() => setPhase('batch')}
             onPick={(path) => {
               setFile(path)
               if (headerAllowed) {
@@ -258,6 +272,25 @@ export function Translate({ cwd, onBack }: TranslateProps) {
           />
           <Hint>{BACK_HINT}</Hint>
         </>
+      )}
+
+      {stage === 'batch' && (
+        <BatchRun
+          action="translate"
+          noun={{ one: 'file', many: 'files' }}
+          inputs={batchItems.map((i) => i.input)}
+          prepare={async () => ({ items: batchItems, ends: new Map() })}
+          // Empty with no locale configured, which runs each file in the
+          // locale its own header names; see BatchRun.
+          locale={{ field: config.defaultLocale ?? '' }}
+          before={<MarkedFiles items={batchItems} />}
+          // Back to the files rather than the menu: the marks are what an
+          // escape from here most likely wants to change, and they are kept.
+          onLeave={() => setPhase('pick')}
+          leaveHint="esc back to the files"
+          onBack={onBack}
+          onStage={setBatchStage}
+        />
       )}
 
       {stage === 'options' && (

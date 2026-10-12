@@ -1,9 +1,10 @@
 import { readdirSync, statSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Box, Text } from 'ink'
 import { useKeys } from '../hooks/useKeys.js'
 import { SelectInput } from '../input.js'
+import { useGlyphs } from '../theme.js'
 import { ScrollTarget } from './Viewport.js'
 
 /**
@@ -59,6 +60,23 @@ export interface FilePickerProps {
    * chooses where you already are, which is usually the answer.
    */
   chooseDir?: boolean
+  /**
+   * Files marked for a batch, drawn with a bullet before the name. The
+   * picker only draws them: which keys mark a file, and what a mark means,
+   * belong to MarkingPicker, so the pickers that never mark anything keep
+   * their keys and their rows exactly as they were.
+   */
+  marked?: ReadonlySet<string>
+  /**
+   * Told the file row under the cursor (undefined on a folder) and the files
+   * the folder lists, whenever either changes, for a screen that marks them.
+   */
+  onView?: (view: PickerView) => void
+}
+
+export interface PickerView {
+  cursor: string | undefined
+  files: string[]
 }
 
 // `choose` is the row that picks the folder being browsed, in chooseDir mode.
@@ -177,7 +195,8 @@ function list(
   return { items, error }
 }
 
-export function FilePicker({ dir, extensions, onPick, limit = 15, annotate, chooseDir }: FilePickerProps) {
+export function FilePicker({ dir, extensions, onPick, limit = 15, annotate, chooseDir, marked, onView }: FilePickerProps) {
+  const glyphs = useGlyphs()
   const [cwd, setCwd] = useState(dir)
   const [sort, setSort] = useState<SortMode>(DEFAULT_SORT)
   const listing = useMemo(
@@ -186,30 +205,57 @@ export function FilePicker({ dir, extensions, onPick, limit = 15, annotate, choo
   )
   const hasFiles = chooseDir || listing.items.some((i) => i.value.kind === 'file')
 
+  // The row under SelectInput's cursor, which it keeps to itself and reports
+  // only on a move. Its cursor goes back to the top whenever the listing
+  // changes, which here is only ever a new folder or a new order, so this is
+  // cleared at the same two places and falls back to the first row.
+  const [highlighted, setHighlighted] = useState<string | undefined>(undefined)
+  const cursorEntry = listing.items.find((i) => i.value.path === highlighted)?.value ?? listing.items[0]?.value
+  const cursor = cursorEntry?.kind === 'file' ? cursorEntry.path : undefined
+  const files = useMemo(() => listing.items.filter((i) => i.value.kind === 'file').map((i) => i.value.path), [listing])
+  useEffect(() => {
+    onView?.({ cursor, files })
+  }, [onView, cursor, files])
+
   // SelectInput binds the arrows, j, k and return; s is free. It resets its
   // cursor to the top whenever the item values change, which is what a re-sort
   // wants, because the row that was under the cursor has moved and holding the
   // index would put the cursor on an unrelated file.
-  useKeys({ picker: { sort: () => setSort(nextSort) } })
+  useKeys({
+    picker: {
+      sort: () => {
+        setSort(nextSort)
+        setHighlighted(undefined)
+      },
+    },
+  })
 
   // ink-select-input hands its item component only the label, so the kind is
   // looked up by label; a directory's label carries a trailing slash, so a file
   // and a folder of the same name never collide.
   const ItemView = useMemo(() => {
     const kinds = new Map(listing.items.map((i) => [i.label, i.value.kind]))
+    const paths = new Map(listing.items.map((i) => [i.label, i.value.path]))
     return function Item({ isSelected, label }: { isSelected?: boolean; label: string }) {
       const selected = isSelected === true
+      const kind = kinds.get(label)
+      // Every file row is indented by the bullet's width once anything is
+      // marked, so a mark does not shift its row against the others. Not
+      // before: with nothing marked the picker reads exactly as it always has.
+      const marking = marked !== undefined && marked.size > 0 && kind === 'file'
+      const mark = !marking ? '' : marked.has(paths.get(label)!) ? `${glyphs.bullet} ` : '  '
       // Followed by the body: the picker is taller than the body on a short
       // terminal, and its cursor would otherwise walk off the bottom.
       return (
         <ScrollTarget active={selected}>
-          <Text color={itemColor(kinds.get(label), selected)} bold={selected}>
+          <Text color={itemColor(kind, selected)} bold={selected}>
+            {mark}
             {label}
           </Text>
         </ScrollTarget>
       )
     }
-  }, [listing])
+  }, [listing, marked, glyphs])
 
   return (
     <Box flexDirection="column">
@@ -226,7 +272,12 @@ export function FilePicker({ dir, extensions, onPick, limit = 15, annotate, choo
         items={listing.items}
         itemComponent={ItemView}
         limit={limit}
-        onSelect={(item) => (item.value.kind === 'dir' ? setCwd(item.value.path) : onPick(item.value.path))}
+        onHighlight={(item) => setHighlighted(item.value.path)}
+        onSelect={(item) => {
+          if (item.value.kind !== 'dir') return onPick(item.value.path)
+          setCwd(item.value.path)
+          setHighlighted(undefined)
+        }}
       />
     </Box>
   )

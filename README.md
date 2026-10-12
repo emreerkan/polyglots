@@ -87,6 +87,9 @@ polyglots review plugin-de.po
 polyglots translate theme-de.po
 ```
 
+Both take several files at once; `review a.po b.po --parallel 2` reviews them
+as one batch.
+
 There is no default locale. `review` and `translate` also accept `--locale`,
 or read the file's `Language` header when nothing else names one.
 
