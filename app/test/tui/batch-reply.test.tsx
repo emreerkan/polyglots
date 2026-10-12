@@ -103,6 +103,17 @@ describe('batch options with a reply template', () => {
     expect(flat(view.lastFrame())).toMatch(/Requester:\s+optional, fills \{username\} in every reply/)
   })
 
+  // Both fields are text inputs, and a typed key once went into both.
+  it('types into the Requester field alone, leaving the locale as it was', async () => {
+    await template('approved', APPROVED)
+    const view = mount()
+    await toOptions(view)
+    await press(view, keys.down, 'a', 'y', 's', 'e')
+    const frame = flat(view.lastFrame())
+    expect(frame).toMatch(/Requester:\s+ayse/)
+    expect(frame).toMatch(/Locale:\s+tr\s+❯ Requester/)
+  })
+
   it('offers no Requester field without a template', async () => {
     const view = mount()
     await toOptions(view)

@@ -10,6 +10,10 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Fixed
+
+- Typing in a batch review's Requester field no longer types into the Locale field too.
+
 ## [0.29.1] - 2026-10-12
 
 ### Fixed

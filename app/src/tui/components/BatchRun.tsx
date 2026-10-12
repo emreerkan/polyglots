@@ -333,7 +333,7 @@ export function BatchRun(props: BatchRunProps) {
           <>
             <Box>
               <Text>{marker('locale')}Locale:        </Text>
-              {typing ? (
+              {field === 'locale' ? (
                 <TextInput value={typed} onChange={setTyped} placeholder="per file" onSubmit={() => setFocus((f) => f + 1)} />
               ) : (
                 <Text>{perFile ? 'per file' : typed}</Text>
