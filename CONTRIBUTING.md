@@ -36,7 +36,14 @@ npm test
 npm run typecheck
 ```
 
-Node.js 24 or newer. Tests build their own temporary homes; they never touch
+Node.js 24 or newer, and a C++ compiler with `make`. `npm ci` compiles
+better-sqlite3 from source, because the lockfile does not record that the
+package ships ready-made binaries. On macOS that is the Xcode command line
+tools (`xcode-select --install`), on Debian and Ubuntu `build-essential`, on
+Windows the "Desktop development with C++" workload of Visual Studio Build
+Tools. A user's `npm install -g polyglots` needs none of this.
+
+Tests build their own temporary homes; they never touch
 `~/.config/polyglots` or `~/.local/share/polyglots`.
 
 `npm run dev -- <command>` runs the CLI from source. `npm run build` compiles

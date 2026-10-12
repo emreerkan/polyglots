@@ -35,8 +35,9 @@ jobs:
       matrix:
         # engines says >=24 with no upper bound, so whoever runs npm install -g
         # on the newest release gets it. 24 is the floor the package promises;
-        # 26 is the newest line. better-sqlite3 ships N-API prebuilds inside
-        # the package, so neither needs a compiler.
+        # 26 is the newest line. npm ci compiles better-sqlite3 here, from the
+        # lockfile, which does not record its gypfile: false; the runner has a
+        # compiler. What a user's install does is the install job's to prove.
         node: ['24', '26']
     defaults:
       run:
@@ -70,6 +71,53 @@ jobs:
       # running from source through Vitest, never prove.
       - name: Built CLI runs
         run: node dist/cli.js --help > /dev/null
+
+  install:
+    # What a user gets from npm install -g polyglots, on a machine with no
+    # compiler: the packed tarball installed globally in a bare Node image,
+    # with its dependencies resolved from the registry as a user's are, not
+    # from the lockfile. better-sqlite3 ships a ready-made binary for each of
+    # these, and a global install uses it; npm ci in the app job compiles
+    # instead, so it cannot tell. A dependency that needs a compiler, or a
+    # better-sqlite3 release without a binary for one of these, fails here
+    # before a release rather than on a user's first install.
+    #
+    # The images are tags, not digests, on purpose: the newest Node 24 and 26
+    # are what a user installs onto.
+    name: install (${{ matrix.arch }}, ${{ matrix.image }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-26.04, ubuntu-26.04-arm]
+        image: ['node:24-slim', 'node:24-alpine', 'node:26-slim']
+        include:
+          - runner: ubuntu-26.04
+            arch: x64
+          - runner: ubuntu-26.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # npm ci builds dist/, which the tarball carries.
+      - run: npm ci
+        working-directory: app
+      - name: Pack
+        working-directory: app
+        run: |
+          mkdir -p "$RUNNER_TEMP/pkg"
+          npm pack --pack-destination "$RUNNER_TEMP/pkg"
+
+      - name: Install globally with no compiler
+        run: docker run --rm -v "$RUNNER_TEMP/pkg:/pkg:ro" -v "$PWD/.github/install-check.sh:/check.sh:ro" '${{ matrix.image }}' sh /check.sh
 
   website:
     # npm run release runs the demo snapshot, and deploy.sh runs the full site
