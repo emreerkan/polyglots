@@ -31,7 +31,8 @@ jobs:
 
   publish:
     needs: ci
-    runs-on: ubuntu-latest
+    # The release that ci.yml names, for the reason given there.
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:
       contents: write # the GitHub Release

@@ -23,7 +23,12 @@ concurrency:
 jobs:
   app:
     name: app (Node ${{ matrix.node }})
-    runs-on: ubuntu-latest
+    # A named release rather than ubuntu-latest, which moves to 26.04 over
+    # several weeks from 2026-10-19 (actions/runner-images#14748). During that
+    # rollout the same commit could run on either image, and a failure would
+    # depend on which one it got. Moving deliberately means one run says
+    # whether 26.04 works. Every job here names the same release.
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -70,7 +75,7 @@ jobs:
     # npm run release runs the demo snapshot, and deploy.sh runs the full site
     # build. Both import app/src directly, so a change to the CLI's output or
     # to CliDeps can break them without touching website/.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
