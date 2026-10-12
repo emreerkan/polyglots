@@ -1,4 +1,4 @@
-import { basename } from 'node:path'
+import { basename, dirname } from 'node:path'
 import { useMemo, useRef, useState } from 'react'
 import { Box, Text } from 'ink'
 import { normalizeLocale } from '../../tmx/parse.js'
@@ -10,7 +10,7 @@ import { headerLocaleOf } from '../../cli/locale.js'
 import { useCommands, useConfig } from '../commands.js'
 import { poEntryCount } from '../../po/count.js'
 import { FilePicker } from '../components/FilePicker.js'
-import { BACK_HINT, DONE_HINT, Hint } from '../components/Hint.js'
+import { BACK_HINT, Hint, RUN_DONE_HINT } from '../components/Hint.js'
 import { ReviewProgress } from '../components/ReviewProgress.js'
 import { appendEvent } from '../components/RecentEntries.js'
 import { ScrollTarget } from '../components/Viewport.js'
@@ -62,6 +62,10 @@ function step(values: number[], current: number, by: number): number {
   return values[(i + by + values.length) % values.length] ?? current
 }
 
+// The form the run is started with, so the field and the header are compared
+// as the run would see them: pt_BR typed and pt-br read are the same locale.
+const resolvedLocale = (typed: string): string => resolveLocale(typed)?.id ?? normalizeLocale(typed)
+
 export function Review({ cwd, onBack }: ReviewProps) {
   const commands = useCommands()
   const { config, error: configError } = useConfig()
@@ -72,6 +76,19 @@ export function Review({ cwd, onBack }: ReviewProps) {
   const [locale, setLocale] = useState(config.defaultLocale ?? '')
   // The locale read from the picked file, kept to say so beside the field.
   const [headerLocale, setHeaderLocale] = useState<string | undefined>(undefined)
+  // Whether the person typed into the locale field, as against it holding
+  // what config or the file's header put there. Only a typed locale is carried
+  // to another file: one that came from a header belongs to that file, and
+  // carrying it would review a de_DE catalogue as tr_TR because the last one
+  // was.
+  const [localeTyped, setLocaleTyped] = useState(false)
+  const typeLocale = (value: string) => {
+    setLocale(value)
+    setLocaleTyped(true)
+  }
+  // Where the picker opens: the screen's cwd at first, then the folder of the
+  // file just finished once `a` asks for another.
+  const [pickDir, setPickDir] = useState(cwd)
   // Antigravity's lookup server takes its locale from config when it starts
   // and never hears one read from a file (resolveFileLocale says why), so the
   // header is not offered for it.
@@ -134,6 +151,25 @@ export function Review({ cwd, onBack }: ReviewProps) {
     )
   }
 
+  // The next file with the choices just made, from the folder this one came
+  // from. Batch size and Skip AI are the person's preferences and stay as they
+  // are. Start over does not: it was a decision about this file's saved
+  // progress, and carried to the next one it would throw that file's cache
+  // away for nothing. The cursor waits on Start, so it is one enter rather than
+  // none: the options screen is where a wrong carry-over gets caught.
+  const anotherFile = () => {
+    setPickDir(dirname(file))
+    setFresh(false)
+    setHeaderLocale(undefined)
+    if (!localeTyped) setLocale(config.defaultLocale ?? '')
+    // The requester goes too: the next file in a folder of submissions is
+    // usually someone else's, and a reply carried over would greet the last
+    // contributor by name. The field stays in view on the options screen.
+    setRequester('')
+    setFocus(fields.indexOf('start'))
+    setPhase('pick')
+  }
+
   // Stays subscribed during the run: Ink only reads stdin (and so only sees Ctrl+C)
   // while some useInput is active.
   const running = stage === 'running'
@@ -148,6 +184,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
     },
     back: { esc: running ? undefined : onBack, q: running || typing ? undefined : onBack },
     finished: { close: stage === 'done' ? onBack : undefined },
+    another: { file: stage === 'done' ? anotherFile : undefined },
     runForm: {
       move: options
         ? (_input, key) =>
@@ -169,7 +206,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
         options && !typing
           ? () => {
               if (field === 'start') {
-                const normalized = resolveLocale(locale)?.id ?? normalizeLocale(locale)
+                const normalized = resolvedLocale(locale)
                 if (normalized.length > 0) {
                   setLocale(normalized)
                   start(normalized)
@@ -195,7 +232,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
       {stage === 'pick' && (
         <>
           <FilePicker
-            dir={cwd}
+            dir={pickDir}
             extensions={PO_EXTENSIONS}
             annotate={poEntryCount}
             onPick={(path) => {
@@ -221,12 +258,20 @@ export function Review({ cwd, onBack }: ReviewProps) {
           <Box>
             <Text>{marker('locale')}Locale:          </Text>
             {typing && field === 'locale' ? (
-              <TextInput value={locale} onChange={setLocale} onSubmit={() => setFocus(1)} />
+              <TextInput value={locale} onChange={typeLocale} onSubmit={() => setFocus(1)} />
             ) : (
               <Text>{locale}</Text>
             )}
           </Box>
           {headerLocale !== undefined && locale === headerLocale && <Text dimColor>  From the file's Language header.</Text>}
+          {/* A typed locale is never overwritten by the header, and one carried
+              from the last file by a arrives with the cursor already on Start.
+              Without this line a carry that does not fit the new file goes
+              through on a single enter with nothing on screen to say so. Held
+              back while typing, where every partial keystroke would disagree. */}
+          {!typing && headerLocale !== undefined && locale.trim() !== '' && resolvedLocale(locale) !== headerLocale && (
+            <Text color="yellow">  The file's Language header says {headerLocale}.</Text>
+          )}
           {locale.trim() === '' && config.reviewProvider === 'antigravity' && config.defaultLocale === undefined && (
             <Text color="yellow">  With Antigravity reviewing, type the locale: its lookup server never hears one read from the file.</Text>
           )}
@@ -286,7 +331,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
             </ScrollTarget>
           )}
           {task.state.status === 'error' && <Text color="red">Review failed: {task.state.message}</Text>}
-          {stage === 'done' && <Hint>{DONE_HINT}</Hint>}
+          {stage === 'done' && <Hint>{RUN_DONE_HINT}</Hint>}
         </>
       )}
     </Box>

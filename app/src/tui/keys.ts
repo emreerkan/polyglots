@@ -93,6 +93,13 @@ export const KEYS = {
   finished: {
     close: { keys: 'enter', does: 'back to the menu once it is done', match: enter },
   },
+  // On a finished or stopped review or translation: the next file, from the
+  // same folder, with the choices just made. Its own group rather than a second
+  // id under finished, because every screen that binds finished would then
+  // have to answer a key that means nothing on a one-shot job.
+  another: {
+    file: { keys: 'a', does: 'another file with the same settings', match: char('a') },
+  },
   retry: {
     again: { keys: 'enter', does: 'try again after a failure', match: enter },
   },
@@ -339,19 +346,20 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   config: { shown: MENU },
   translate: {
     shown: [...FORM, ...RUN, KEYS.translateResult.open],
-    more: [picker.sort, finished.close],
-    stages: { pick: [picker.sort], options: FORM, running: RUN, done: [KEYS.translateResult.open, finished.close] },
+    more: [KEYS.another.file, picker.sort, finished.close],
+    stages: { pick: [picker.sort], options: FORM, running: RUN, done: [KEYS.translateResult.open, KEYS.another.file, finished.close] },
   },
   review: {
     shown: [...FORM, ...RUN, KEYS.reviewResult.open, KEYS.reviewResult.copy],
-    more: [KEYS.reviewResult.reply, KEYS.reviewResult.template, picker.sort, finished.close],
+    more: [KEYS.reviewResult.reply, KEYS.reviewResult.template, KEYS.another.file, picker.sort, finished.close],
     stages: {
       pick: [picker.sort],
       options: FORM,
       running: RUN,
-      // The reply's keys after close: the footer has room for three, and the
-      // reply names its own keys on screen beside the text they act on.
-      done: [KEYS.reviewResult.open, KEYS.reviewResult.copy, finished.close, KEYS.reviewResult.reply, KEYS.reviewResult.template],
+      // The footer has room for three: open, another file, and the way back.
+      // Copy and the reply's keys give way, because each is named on screen
+      // beside the text it copies ("c to copy", "y to copy").
+      done: [KEYS.reviewResult.open, KEYS.another.file, finished.close, KEYS.reviewResult.copy, KEYS.reviewResult.reply, KEYS.reviewResult.template],
     },
   },
   fetch: {

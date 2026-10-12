@@ -110,8 +110,18 @@ Review and Translate work the same way, in four stages.
    which `c` copies, and `o` opens the repaired file in your `.po` editor.
    With a [reply template](reply-templates.md) for the locale it also shows
    the whole reply: `y` copies it and `t` switches template. Without one, a
-   line points to **Configuration › Reply templates**. `enter` goes back to
-   the menu.
+   line points to **Configuration › Reply templates**. `a` picks another file
+   with the same settings, and `enter` goes back to the menu.
+
+`a` works after a finished run and after a stopped one. The file list opens
+in the folder of the file just done, and the pick goes straight to the
+options with your last choices filled in and **Start** selected, so one
+`enter` starts it. The batch size, skip AI and draft engine carry over. Start
+over goes back to no, and a translation's mode goes back to pending only, so
+neither throws away work in the next file. A locale you typed carries over; a
+locale that came from your settings or the file's `Language` header is read
+again for the new file. When a carried locale does not match the new file's
+`Language` header, the options screen says what the header names.
 
 A stopped run is never wasted. Start the same file again and only the entries
 that were not reached are sent; the rest come from the cache.

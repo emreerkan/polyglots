@@ -13,6 +13,7 @@ Entries say what changed. For why and how, read the commit.
 ### Added
 
 - `config list-names` prints a locale's proper nouns numbered; `config remove-name` takes the numbers or the names.
+- `a` on a finished or stopped review or translation picks another file from the same folder, with the last run's settings filled in.
 - The Turkish rules template carries two example patterns to turn on: a suffix glued to a placeholder (`%s'de`) and a plural noun after a count (`%d dosyalar`).
 
 ### Changed
