@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-10-12
+
 ### Added
 
 - `config list-names` prints a locale's proper nouns numbered; `config remove-name` takes the numbers or the names.
