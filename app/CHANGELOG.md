@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-10-14
+
 ### Added
 
 - `polyglots lint` checks a plugin's or theme's source strings for problems translators cannot fix, with exit codes and GitHub annotations for CI.
