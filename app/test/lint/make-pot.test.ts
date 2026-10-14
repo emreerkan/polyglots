@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { LintNotStarted } from '../../src/lint/errors.js'
-import { findCommand, makePot, spawnPlan, type MakePotIo, type MakePotOptions, type WpCliPin } from '../../src/lint/make-pot.js'
+import { makePot, type MakePotIo, type MakePotOptions, type WpCliPin } from '../../src/lint/make-pot.js'
 
 const PHAR = Buffer.from('<?php // a fake phar')
 const sha512 = (b: Buffer): string => createHash('sha512').update(b).digest('hex')
@@ -166,32 +166,6 @@ describe('running make-pot', () => {
   })
 })
 
-// Node refuses to spawn a .bat or .cmd without a shell since the fix for
-// CVE-2024-27980, and wp on Windows is wp.bat.
-describe('spawnPlan', () => {
-  it('runs a .bat on Windows through the shell, with every argument quoted', () => {
-    expect(spawnPlan('C:\\tools\\wp.bat', ['i18n', 'C:\\out.pot'], 'win32')).toEqual({
-      file: '"C:\\tools\\wp.bat" "i18n" "C:\\out.pot"',
-      args: [],
-      shell: true,
-    })
-  })
-  // cmd.exe expands %NAME% inside quotes, so the plugin's path reaches it
-  // through a variable, which it expands once and never again.
-  it('passes the source folder to a .bat through an environment variable', () => {
-    expect(spawnPlan('C:\\tools\\wp.bat', ['make-pot', 'C:\\100%PATH%\\plug', 'out.pot'], 'win32', 'C:\\100%PATH%\\plug')).toEqual({
-      file: '"C:\\tools\\wp.bat" "make-pot" "%POLYGLOTS_LINT_SRC%" "out.pot"',
-      args: [],
-      shell: true,
-      env: { POLYGLOTS_LINT_SRC: 'C:\\100%PATH%\\plug' },
-    })
-  })
-  it('runs an .exe on Windows, and anything elsewhere, directly', () => {
-    expect(spawnPlan('C:\\php\\php.exe', ['a b'], 'win32')).toEqual({ file: 'C:\\php\\php.exe', args: ['a b'], shell: false })
-    expect(spawnPlan('/usr/local/bin/wp', ['a b'], 'darwin')).toEqual({ file: '/usr/local/bin/wp', args: ['a b'], shell: false })
-  })
-})
-
 // Review finding I3: a download that drops after the headers is still a
 // failure to start, not a crash.
 describe('a download cut off part way', () => {
@@ -202,16 +176,7 @@ describe('a download cut off part way', () => {
   })
 })
 
-// Review finding I2: Composer's vendor\bin holds a sh proxy named wp beside
-// wp.bat, and the proxy cannot be run on Windows.
-describe('findCommand', () => {
-  it('takes the PATHEXT file on Windows over the one with no extension', async () => {
-    const bin = join(dir, 'bin')
-    await mkdir(bin)
-    await writeFile(join(bin, 'wp'), '#!/bin/sh')
-    await writeFile(join(bin, 'wp.bat'), '@echo off')
-    expect(findCommand('wp', { PATH: bin, PATHEXT: '.com;.exe;.bat' }, 'win32')).toBe(join(bin, 'wp.bat'))
-  })
+describe('POLYGLOTS_WP_BIN', () => {
   it('resolves a bare POLYGLOTS_WP_BIN through PATH', async () => {
     const fake = io({ env: { POLYGLOTS_WP_BIN: 'wp-custom' }, onPath: { 'wp-custom': '/x/wp-custom.bat' } })
     await makePot(opts, fake, PIN)

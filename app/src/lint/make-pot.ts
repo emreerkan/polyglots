@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { statSync } from 'node:fs'
 import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { findOnPath } from '../agent/discover.js'
 import { dataDir } from '../paths.js'
+import { spawnPlan } from '../spawn-plan.js'
 import { VERSION } from '../version.js'
 import { LintNotStarted } from './errors.js'
 import { WP_CLI } from './wp-cli-pin.js'
@@ -49,31 +49,8 @@ const ELSEWHERE = [
   'For example, with Docker: npx wp-env run cli wp i18n make-pot . languages/<slug>.pot',
 ]
 
-// Node refuses to spawn a .bat or .cmd directly since the fix for
-// CVE-2024-27980, and wp on Windows is wp.bat. Through the shell, every part
-// is quoted, because a path can hold spaces, and the whole line is one string:
-// Node 24 deprecates an args array beside shell: true (DEP0190), and would
-// print a warning on every run.
-//
-// cmd.exe still expands %NAME% inside quotes when such a variable exists, and
-// nothing escapes it in a command line. So the plugin's path, the one part a
-// person names freely, goes through a variable of its own: cmd.exe expands
-// %POLYGLOTS_LINT_SRC% once and does not expand what it held. What remains on
-// the line is the wp.bat path and the temporary .pot path.
-export function spawnPlan(
-  cmd: string,
-  args: readonly string[],
-  platform: NodeJS.Platform,
-  source?: string,
-): { file: string; args: string[]; shell: boolean; env?: Record<string, string> } {
-  if (platform !== 'win32' || !/\.(bat|cmd)$/i.test(cmd)) return { file: cmd, args: [...args], shell: false }
-  const quote = (s: string): string => `"${s.replace(/"/g, '""')}"`
-  const parts = [cmd, ...args].map((part) => (source !== undefined && part === source ? '"%POLYGLOTS_LINT_SRC%"' : quote(part)))
-  return { file: parts.join(' '), args: [], shell: true, ...(source === undefined ? {} : { env: { POLYGLOTS_LINT_SRC: source } }) }
-}
-
 function runCommand(cmd: string, args: string[], options: { cwd?: string; source?: string } = {}): Promise<RunResult> {
-  const plan = spawnPlan(cmd, args, process.platform, options.source)
+  const plan = spawnPlan(cmd, args, process.platform, options.source === undefined ? undefined : { name: 'POLYGLOTS_LINT_SRC', value: options.source })
   return new Promise((resolve, reject) => {
     const child = spawn(plan.file, plan.args, {
       shell: plan.shell,
@@ -91,32 +68,10 @@ function runCommand(cmd: string, args: string[], options: { cwd?: string; source
   })
 }
 
-// On Windows a command is a file with a PATHEXT extension. findOnPath tries
-// the bare name first, which picks Composer's vendor\\bin\\wp, a sh proxy that
-// cannot be spawned, over the wp.bat beside it.
-export function findCommand(cmd: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): string | undefined {
-  if (platform !== 'win32' || /\.[^\\/.]+$/.test(cmd)) return findOnPath(cmd, env, platform)
-  const exts = (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)
-  const isFile = (path: string): boolean => {
-    try {
-      return statSync(path).isFile()
-    } catch {
-      return false
-    }
-  }
-  if (cmd.includes('\\') || cmd.includes('/')) return exts.map((ext) => cmd + ext).find(isFile)
-  for (const dir of (env.PATH ?? '').split(';')) {
-    if (!dir) continue
-    const found = exts.map((ext) => join(dir, cmd + ext)).find(isFile)
-    if (found) return found
-  }
-  return undefined
-}
-
 export function defaultIo(): MakePotIo {
   return {
     env: process.env,
-    which: (cmd) => findCommand(cmd, process.env),
+    which: (cmd) => findOnPath(cmd, process.env),
     run: runCommand,
     // The whole download, body included: a stalled connection would
     // otherwise hold a CI job until the runner's own limit, hours later.

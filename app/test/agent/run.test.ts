@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { childEnv } from '../../src/agent/run.js'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { agentSpawnPlan, childEnv } from '../../src/agent/run.js'
 
 describe('childEnv', () => {
   // The values a Claude Code session exported into this shell, as observed on
@@ -39,5 +42,30 @@ describe('childEnv', () => {
     }
     const env = childEnv({ ...markers, ...config, HOME: '/h' })
     expect(env).toEqual({ ...config, HOME: '/h' })
+  })
+})
+
+// An npm-installed claude on Windows is claude.cmd, beside an extensionless sh
+// shim of the same name. Spawned by its bare name, Node looks only for .com
+// and .exe, and finds neither.
+describe('agentSpawnPlan', () => {
+  let bin: string
+  beforeEach(() => {
+    bin = mkdtempSync(join(tmpdir(), 'polyglots-agent-bin-'))
+    writeFileSync(join(bin, 'claude'), '#!/bin/sh')
+    writeFileSync(join(bin, 'claude.cmd'), '@echo off')
+  })
+  afterEach(() => rmSync(bin, { recursive: true, force: true }))
+
+  it('runs claude.cmd through the shell on Windows', () => {
+    const env = { PATH: bin, PATHEXT: '.com;.exe;.bat;.cmd' }
+    expect(agentSpawnPlan('claude', ['-p', '--json-schema', '{"a":1}'], env, 'win32')).toEqual({
+      file: `"${join(bin, 'claude.cmd')}" "-p" "--json-schema" "{""a"":1}"`,
+      args: [],
+      shell: true,
+    })
+  })
+  it('runs the bin as named elsewhere', () => {
+    expect(agentSpawnPlan('claude', ['-p'], { PATH: bin }, 'darwin')).toEqual({ file: 'claude', args: ['-p'], shell: false })
   })
 })

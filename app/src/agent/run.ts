@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { findOnPath, killTree, spawnPlan, type SpawnPlan } from '../spawn-plan.js'
 import {
   AgentError,
   providerSpec,
@@ -83,6 +84,19 @@ export interface AgentOutput {
 }
 
 /**
+ * How the agent CLI is started. Elsewhere the bin is spawned as named. On
+ * Windows it is looked up first: an npm-installed claude is claude.cmd, and
+ * Node, given the bare name, looks only for claude.com and claude.exe, so
+ * every batch failed to spawn. A .cmd then goes through the shell (see
+ * spawnPlan). A bin that is not found is left as named, so the spawn error
+ * names what was asked for.
+ */
+export function agentSpawnPlan(bin: string, argv: string[], env: NodeJS.ProcessEnv, platform: NodeJS.Platform): SpawnPlan {
+  const command = platform === 'win32' ? (findOnPath(bin, env, platform) ?? bin) : bin
+  return spawnPlan(command, argv, platform)
+}
+
+/**
  * Runs the agent CLI to completion, prompt on stdin.
  *
  * Returns stderr alongside stdout rather than discarding it, because both
@@ -96,9 +110,13 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
   const timeoutMs = opts.timeoutMs ?? spec.defaultTimeoutMs
   const killGraceMs = opts.killGraceMs ?? DEFAULT_KILL_GRACE_MS
   return new Promise((resolve, reject) => {
-    const child = spawn(command, argv, {
+    const env = childEnv(process.env)
+    const plan = agentSpawnPlan(command, argv, env, process.platform)
+    const child = spawn(plan.file, plan.args, {
       cwd: opts.cwd,
-      env: childEnv(process.env),
+      env,
+      shell: plan.shell,
+      windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     let stdout = ''
@@ -118,11 +136,15 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
-      child.kill('SIGTERM')
-      killTimer = setTimeout(() => {
-        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
-      }, killGraceMs)
-      killTimer.unref()
+      if (plan.shell) {
+        killTree(child.pid)
+      } else {
+        child.kill('SIGTERM')
+        killTimer = setTimeout(() => {
+          if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+        }, killGraceMs)
+        killTimer.unref()
+      }
       reject(new AgentError(`${spec.name} timed out after ${timeoutMs}ms; stderr: ${excerpt()}`, { stderr: excerpt() }))
     }, timeoutMs)
 

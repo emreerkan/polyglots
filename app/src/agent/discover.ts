@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process'
-import { accessSync, constants, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { findOnPath, killTree, spawnPlan } from '../spawn-plan.js'
 import type { ReviewProvider } from '../types.js'
 import {
   configuredModel,
@@ -15,6 +14,8 @@ import {
   type SetupStatus,
 } from './providers.js'
 import { childEnv } from './run.js'
+
+export { findOnPath }
 
 export type { AuthStatus, BinSource, ProbeExec, ProbeResult, SetupStatus } from './providers.js'
 
@@ -68,38 +69,6 @@ const STDERR_EXCERPT = 500
 const LIVE_PROMPT = 'Reply with the single word OK and nothing else.'
 
 /**
- * Where a binary would be run from, by scanning PATH the way the shell does.
- *
- * Not a `which` spawn: that would cost a process, behave differently from
- * shell to shell, and need a fake of its own. A bin naming a path is checked
- * as it stands. On win32 the PATHEXT suffixes are tried too, because `claude`
- * is `claude.cmd` there.
- */
-export function findOnPath(bin: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): string | undefined {
-  const exts = platform === 'win32' ? ['', ...(env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : ['']
-  const sep = platform === 'win32' ? ';' : delimiter
-  const executable = (path: string): boolean => {
-    try {
-      // X_OK alone is true for a directory that can be traversed.
-      if (!statSync(path).isFile()) return false
-      accessSync(path, platform === 'win32' ? constants.F_OK : constants.X_OK)
-      return true
-    } catch {
-      return false
-    }
-  }
-  if (bin.includes('/') || (platform === 'win32' && bin.includes('\\'))) {
-    return exts.map((ext) => bin + ext).find(executable)
-  }
-  for (const dir of (env.PATH ?? '').split(sep)) {
-    if (!dir) continue
-    const found = exts.map((ext) => join(dir, bin + ext)).find(executable)
-    if (found) return found
-  }
-  return undefined
-}
-
-/**
  * The default probe runner. Never rejects: a spawn error is `code: null`. A
  * timeout kills outright, because a probe that hangs has already answered
  * the only question asked of it.
@@ -117,8 +86,9 @@ export const defaultExec: ProbeExec = (cmd, args, { timeoutMs, env, input }) =>
       resolve({ code, stdout, stderr, timedOut })
     }
     let child: ReturnType<typeof spawn>
+    const plan = spawnPlan(cmd, args, process.platform)
     try {
-      child = spawn(cmd, args, { env, stdio: ['pipe', 'pipe', 'pipe'] })
+      child = spawn(plan.file, plan.args, { env, shell: plan.shell, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
     } catch (err) {
       stderr = err instanceof Error ? err.message : String(err)
       resolve({ code: null, stdout, stderr, timedOut })
@@ -126,7 +96,8 @@ export const defaultExec: ProbeExec = (cmd, args, { timeoutMs, env, input }) =>
     }
     const timer = setTimeout(() => {
       timedOut = true
-      child.kill('SIGKILL')
+      if (plan.shell) killTree(child.pid)
+      else child.kill('SIGKILL')
       finish(null)
     }, timeoutMs)
     child.stdout?.setEncoding('utf8').on('data', (chunk: string) => (stdout += chunk))

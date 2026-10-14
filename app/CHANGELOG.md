@@ -14,6 +14,10 @@ Entries say what changed. For why and how, read the commit.
 
 - `polyglots lint` checks a plugin's or theme's source strings for problems translators cannot fix, with exit codes and GitHub annotations for CI.
 
+### Fixed
+
+- On Windows, an npm-installed `claude` (`claude.cmd`) is found and started instead of failing every batch, and a timed-out agent is stopped with the process it started.
+
 ## [0.29.2] - 2026-10-12
 
 ### Fixed

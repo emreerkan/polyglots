@@ -121,6 +121,15 @@ describe('findOnPath', () => {
     expect(findOnPath(join(elsewhere, 'missing'), env, 'darwin')).toBeUndefined()
   })
 
+  // npm puts claude, a sh shim, beside claude.cmd, and Composer does the same
+  // with wp and wp.bat. Only the PATHEXT file can be run on Windows.
+  it('takes the PATHEXT file on Windows over the one with no extension', () => {
+    writeFileSync(join(binDir, 'claude.cmd'), '@echo off')
+    expect(findOnPath('claude', { PATH: binDir, PATHEXT: '.com;.exe;.bat;.cmd' }, 'win32')).toBe(join(binDir, 'claude.cmd'))
+    expect(findOnPath(join(binDir, 'claude'), { PATHEXT: '.cmd' }, 'win32')).toBe(join(binDir, 'claude.cmd'))
+    expect(findOnPath('claude.cmd', { PATH: binDir }, 'win32')).toBe(join(binDir, 'claude.cmd'))
+  })
+
   it('returns undefined on a miss', () => {
     expect(findOnPath('gemini', env, 'darwin')).toBeUndefined()
     expect(findOnPath('claude', {}, 'darwin')).toBeUndefined()
