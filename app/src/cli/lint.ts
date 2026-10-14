@@ -135,7 +135,7 @@ export async function runLint(cli: LintCli, target: string, flags: LintFlags): P
         const { file, line } = parseReference(ref)
         const path = relative(base, join(root, file))
         // Outside the repository GitHub cannot attach it to any file.
-        if (path.startsWith('..') || isAbsolute(path)) return undefined
+        if (path === '..' || path.startsWith(`..${sep}`) || isAbsolute(path)) return undefined
         const posix = path.split(sep).join('/')
         return line === undefined ? { file: posix } : { file: posix, line }
       }

@@ -236,7 +236,11 @@ export async function makePot(opts: MakePotOptions, io: MakePotIo = defaultIo(),
   try {
     // Never run inside the plugin: WP-CLI reads wp-cli.yml from its working
     // folder upward and runs the files its require: names, and the plugin
-    // being linted may be anyone's. The .pot's own temporary folder is empty.
+    // being linted may be anyone's. It runs in the .pot's own temporary
+    // folder instead, with an empty wp-cli.yml there, because the search
+    // stops at the first one it finds and would otherwise go on up into
+    // os.tmpdir(), which on Linux is /tmp and anyone can write to.
+    await writeFile(join(dirname(opts.out), 'wp-cli.yml'), '{}\n')
     const domain = opts.domain === undefined ? [] : [`--domain=${opts.domain}`]
     result = await io.run(wp.cmd, [...wp.args, 'i18n', 'make-pot', opts.dir, opts.out, '--skip-audit', ...domain], {
       cwd: dirname(opts.out),

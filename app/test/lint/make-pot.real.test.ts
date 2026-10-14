@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -56,7 +56,35 @@ describe.skipIf(wp === undefined)('polyglots lint with the real make-pot', () =>
     const sink = { isTTY: false, write: () => true }
     const stdin = new PassThrough()
     stdin.end()
-    await main(['lint', plugin], { env: {}, streams: { stdin, stdout: sink, stderr: sink } })
+    const code = await main(['lint', plugin], { env: {}, streams: { stdin, stdout: sink, stderr: sink } })
+    // 1 is the fixture's own error: make-pot ran, so the absent marker means
+    // the config was not read, not that nothing ran at all.
+    expect(code).toBe(1)
     expect(existsSync(marker)).toBe(false)
+  }, 60_000)
+
+  // os.tmpdir() is /tmp on Linux, which every user can write to, and WP-CLI
+  // searches for wp-cli.yml upward from the temporary folder make-pot runs in.
+  it('does not run a wp-cli.yml above its temporary folder', async () => {
+    const plugin = join(home, 'lint-fixture')
+    await cp(fixture, plugin, { recursive: true })
+    const shared = join(home, 'shared-tmp')
+    await mkdir(shared)
+    const marker = join(home, 'ran')
+    await writeFile(join(shared, 'wp-cli.yml'), `require:\n  - ${join(shared, 'evil.php')}\n`)
+    await writeFile(join(shared, 'evil.php'), `<?php file_put_contents(${JSON.stringify(marker)}, 'x');\n`)
+    const savedTmp = process.env.TMPDIR
+    process.env.TMPDIR = shared
+    try {
+      const sink = { isTTY: false, write: () => true }
+      const stdin = new PassThrough()
+      stdin.end()
+      const code = await main(['lint', plugin], { env: {}, streams: { stdin, stdout: sink, stderr: sink } })
+      expect(code).toBe(1)
+      expect(existsSync(marker)).toBe(false)
+    } finally {
+      if (savedTmp === undefined) delete process.env.TMPDIR
+      else process.env.TMPDIR = savedTmp
+    }
   }, 60_000)
 })

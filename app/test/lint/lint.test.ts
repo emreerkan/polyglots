@@ -161,3 +161,10 @@ describe('markerAt, block comment edges', () => {
     expect(markerAt(["foo( 'polyglots-ignore' ); /* x", ' y */', 'x'], 3)).toBeUndefined()
   })
 })
+
+describe('markerAt, closing lines with prose', () => {
+  it('reads a block whose last line has parentheses or a semicolon', () => {
+    expect(markerAt(['/* polyglots-ignore', '   shown elsewhere (in the title). */', "__('x')"], 3)).toBe('all')
+    expect(markerAt(['/*', ' * polyglots-ignore', ' * Uses sprintf(); see #12. */', "__('x')"], 4)).toBe('all')
+  })
+})

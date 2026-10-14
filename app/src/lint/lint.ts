@@ -46,6 +46,7 @@ const COMMENT_LINE = /^(?:<\?php\s+|\{\s*)?(?:\/\/|#|\/\*|\*)/
 // punctuation. Not inside a path or glob such as src/**/*.js, which a
 // comment's text can hold.
 const COMMENT_OPENER = /(?:^|[\s;{}()])\/\*/
+const REGEX_LITERAL_END = /(?:[=(,:]|\breturn)\s*\/(?:\\.|[^/\\])*\*\/$/
 
 function markerIn(text: string): Marker | undefined {
   const m = MARKER.exec(text)
@@ -84,9 +85,10 @@ export function markerAt(lines: readonly string[], line: number): Marker | undef
       continue
     }
     if (text.endsWith('*/') && !COMMENT_OPENER.test(text)) {
-      // A regex literal such as /\s*/ ends a line of code in */ too; a
-      // closer has comment text before it, never an assignment or a call.
-      if (/[=;(){}]/.test(text.slice(0, -2))) return undefined
+      // A regex literal such as /\s*/ ends a line of code in */ too. It is
+      // told apart by what comes before it, an assignment, a call or a
+      // return; prose in a comment's last line, parentheses and all, is not.
+      if (REGEX_LITERAL_END.test(text)) return undefined
       inBlock = true
       const found = markerIn(text)
       if (found) return found

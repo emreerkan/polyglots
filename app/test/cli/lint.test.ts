@@ -279,6 +279,20 @@ describe('second pass', () => {
       else process.env.GITHUB_WORKSPACE = saved
     }
   })
+  it('keeps a path under a folder whose name starts with two dots', async () => {
+    const saved = process.env.GITHUB_WORKSPACE
+    const dotted = join(home, '..config')
+    await mkdir(dotted)
+    await writeFile(join(dotted, 'plugin.php'), "<?php\n\necho __( 'Post' );\n")
+    process.env.GITHUB_WORKSPACE = home
+    try {
+      const r = await run([dotted, '--format', 'github'], { makePot: fakeMakePot(ERROR_POT).fn })
+      expect(r.out).toMatch(/^::error file=\.\.config\/plugin\.php,line=3,/m)
+    } finally {
+      if (saved === undefined) delete process.env.GITHUB_WORKSPACE
+      else process.env.GITHUB_WORKSPACE = saved
+    }
+  })
   it('leaves file and line out for a plugin outside GITHUB_WORKSPACE', async () => {
     const saved = process.env.GITHUB_WORKSPACE
     process.env.GITHUB_WORKSPACE = join(home, 'elsewhere')

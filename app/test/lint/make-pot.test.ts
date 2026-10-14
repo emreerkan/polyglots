@@ -267,3 +267,13 @@ describe('a phar that cannot be kept', () => {
     expect((await readdir(cacheDir)).filter((f) => f.endsWith('.tmp'))).toEqual([])
   })
 })
+
+// WP-CLI looks for wp-cli.yml from its working folder upward and stops at the
+// first; on Linux that folder is under /tmp, where anyone can write one.
+describe('the config make-pot sees', () => {
+  it('is an empty wp-cli.yml in its own folder', async () => {
+    const fake = io({ onPath: { wp: '/usr/local/bin/wp' } })
+    await makePot(opts, fake, PIN)
+    expect(await readFile(join(dirname(opts.out), 'wp-cli.yml'), 'utf8')).toBe('{}\n')
+  })
+})

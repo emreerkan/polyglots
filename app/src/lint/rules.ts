@@ -35,8 +35,10 @@ export interface Rule {
 // silence. Only the two hex digits after a percent sign go, so a real %s or
 // %1$s in a URL, which WordPress strings often carry, is kept.
 export function printfPlaceholders(text: string): string[] {
-  const decoded = text.replace(/https?:\/\/[^\s"'<>]*/gi, (url) => url.replace(/%[0-9A-Fa-f]{2}/g, ''))
-  return [...decoded.replaceAll('%%', '').matchAll(new RegExp(PRINTF_PLACEHOLDER, 'g'))].map((m) => m[0])
+  // %% first, as printf reads it: in a URL, %%20 is a literal %20.
+  const literal = text.replaceAll('%%', '')
+  const decoded = literal.replace(/https?:\/\/[^\s"'<>]*/gi, (url) => url.replace(/%[0-9A-Fa-f]{2}/g, ''))
+  return [...decoded.matchAll(new RegExp(PRINTF_PLACEHOLDER, 'g'))].map((m) => m[0])
 }
 
 const forms = (unit: TranslationUnit): string[] =>
