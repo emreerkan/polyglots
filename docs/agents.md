@@ -1,7 +1,7 @@
 # polyglots for AI agents
 
 Instructions for an AI agent asked to review or translate WordPress `.po`
-files with polyglots. A person can follow them too. The same text is served as
+files with polyglots, or to check a plugin's or theme's translatable strings. A person can follow them too. The same text is served as
 plain text at https://ada.tools/polyglots/ai.txt, followed by the full command
 reference.
 
@@ -10,7 +10,8 @@ locale on translate.wordpress.org. `review` checks a contributor's submitted
 strings and writes out only the entries that need work, already repaired.
 `translate` fills in untranslated strings with a machine draft that an AI
 agent then reviews. Results are `.po` files for a person to read in their own
-`.po` editor.
+`.po` editor. `lint` is for the people who write plugins and themes: it
+checks their source strings for what translators cannot fix.
 polyglots never uploads anything to translate.wordpress.org. It does send
 text off the machine: a review sends each batch of strings to the agent's
 model provider, a translation sends source strings to DeepL or OpenAI, and
@@ -54,6 +55,28 @@ the drafts and the review verdicts, so a real run right after it, with the
 same draft engine, review model and settings, does not pay for them again;
 changing any of those, or passing `--fresh`, pays again.
 
+## Checking a plugin's or theme's strings
+
+`polyglots lint <folder>` or `polyglots lint <file>.pot`. It uses no model,
+no account and no key, and costs nothing, so it needs no permission to run.
+Details are in [Linting plugin and theme strings](lint.md).
+
+- **A folder needs WP-CLI's make-pot.** polyglots uses `wp` when it is on
+  `PATH`. Without it, the first run downloads WP-CLI (about 7 MB) from
+  GitHub, checks its hash, keeps it, and runs it with `php`. Tell the person
+  before that first run. Without PHP, ask them for a `.pot` and lint that.
+- **No strings checked** usually means the main plugin file or `style.css`
+  has no `Text Domain` header and the folder is not named after the slug.
+  Ask for the slug and pass `--domain <slug>`.
+- **Its exit codes are its own:** `0` no errors (warnings allowed), `1`
+  errors, or warnings with `--strict`, `2` nothing was checked. The table
+  under Running unattended is for the other commands.
+- **Parse `--format json`**, not the text output. Report errors first, each
+  with its file and line and the fix the finding names.
+- **Fix the strings, not the report.** Change source code only when the
+  person asked you to. Never add a `polyglots-ignore` marker or turn a rule
+  off in `.polyglots-lint.json` to make the lint pass without asking.
+
 ## Ask the person before
 
 - **Any run that uses a model**: `review` without `--no-ai`, `translate`
@@ -64,6 +87,8 @@ changing any of those, or passing `--fresh`, pays again.
 - **`translate --all`**, which re-translates entries that are already done.
 - **`--fresh`**, which throws away cached work and pays for it again.
 - **`doctor --live`**, which sends a real prompt.
+- **The first `lint` of a folder without `wp` installed**, which downloads
+  WP-CLI from GitHub.
 - **Changing settings or keys** (`config set`, `config set-key`), importing
   into the translation memory (`tm import`, which cannot be undone), or
   editing locale rules (which makes every file of that locale review again).
@@ -139,5 +164,6 @@ When you are done, tell the person:
 - [Getting started](getting-started.md)
 - [Reviewing submissions](review.md)
 - [Translating](translate.md)
+- [Linting plugin and theme strings](lint.md)
 - [Configuration](configuration.md)
 - [Command reference](https://ada.tools/polyglots/docs/commands/)

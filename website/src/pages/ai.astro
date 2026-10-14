@@ -17,7 +17,7 @@ const quoted = /## Give this to your agent\s+((?:>.*\n?)+)/.exec(entry.body ?? '
 if (!quoted) throw new Error('docs/agents.md lost its "Give this to your agent" quote');
 const prompt = quoted[1]!.replace(/^> ?/gm, '').replace(/\s+/g, ' ').trim();
 ---
-<Base title="polyglots for AI agents" description="The runbook an AI agent follows to review or translate WordPress .po files with polyglots: the order of work, what to ask first, exit codes." path="ai/">
+<Base title="polyglots for AI agents" description="The runbook an AI agent follows to review or translate WordPress .po files with polyglots, or to lint a plugin's strings: the order of work, what to ask first, exit codes." path="ai/">
   <div class="wrap ai">
     <header class="intro">
       <p class="eyebrow">ada.tools/polyglots/ai</p>

@@ -11,7 +11,7 @@ export const GET: APIRoute = async () => {
   const lines = [
     '# polyglots',
     '',
-    '> A command-line tool that reviews and translates WordPress .po files for translate.wordpress.org locale teams. Reviews check submitted strings with deterministic rules and an AI agent, and write out only the entries that need work, already repaired. Nothing is uploaded to translate.wordpress.org; review batches go to the chosen agent\'s model provider and drafts to DeepL or OpenAI, unless both run on a local model.',
+    '> A command-line tool that reviews and translates WordPress .po files for translate.wordpress.org locale teams. Reviews check submitted strings with deterministic rules and an AI agent, and write out only the entries that need work, already repaired. Nothing is uploaded to translate.wordpress.org; review batches go to the chosen agent\'s model provider and drafts to DeepL or OpenAI, unless both run on a local model. For plugin and theme developers, polyglots lint checks source strings for what translators cannot fix, with no model and no account.',
     '',
     `Install: npm install -g polyglots (Node.js 24 or later). Agents should start with the runbook, which says what to run in which order and what to ask the person before running.`,
     '',
