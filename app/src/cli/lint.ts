@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, type Stats } from 'node:fs'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { findConfig, type LintConfig } from '../lint/config.js'
 import { LintNotStarted } from '../lint/errors.js'
 import { lintPot, parseReference, type ReadSource } from '../lint/lint.js'
@@ -103,6 +103,7 @@ export async function runLint(cli: LintCli, target: string, flags: LintFlags): P
     }
     const units = (await loadPo(potFile)).units('all')
     if (kind === 'pot') {
+      if (flags.domain !== undefined) cli.err(warnLine(cli.ui.err, '--domain is only for a folder; a .pot is read as it is.'))
       const first = units.flatMap((u) => u.references)[0]
       root = potSourceRoot(target, flags, first)
       if (first !== undefined && (root === undefined || !existsSync(join(root, parseReference(first).file)))) {
@@ -132,8 +133,11 @@ export async function runLint(cli: LintCli, target: string, flags: LintFlags): P
       const locate = (ref: string) => {
         if (root === undefined) return undefined
         const { file, line } = parseReference(ref)
-        const path = relative(base, join(root, file)).split(sep).join('/')
-        return line === undefined ? { file: path } : { file: path, line }
+        const path = relative(base, join(root, file))
+        // Outside the repository GitHub cannot attach it to any file.
+        if (path.startsWith('..') || isAbsolute(path)) return undefined
+        const posix = path.split(sep).join('/')
+        return line === undefined ? { file: posix } : { file: posix, line }
       }
       for (const line of githubReport(report, locate)) cli.out(line)
       cli.out(totalLine(cli.ui.out, report, strict))

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { LintNotStarted } from '../../src/lint/errors.js'
 import { findCommand, makePot, spawnPlan, type MakePotIo, type MakePotOptions, type WpCliPin } from '../../src/lint/make-pot.js'
 
@@ -17,6 +17,7 @@ let opts: MakePotOptions & { notices: string[] }
 interface FakeIo extends MakePotIo {
   runs: Array<[string, string[]]>
   cwds: Array<string | undefined>
+  sources: Array<string | undefined>
   fetches: string[]
 }
 
@@ -24,13 +25,15 @@ function io(over: Partial<MakePotIo> & { onPath?: Record<string, string> } = {})
   const { onPath = { php: '/usr/bin/php' }, ...rest } = over
   const runs: Array<[string, string[]]> = []
   const cwds: Array<string | undefined> = []
+  const sources: Array<string | undefined> = []
   const fetches: string[] = []
   return {
     env: {},
     which: (cmd) => onPath[cmd],
-    run: async (cmd, args, cwd) => {
+    run: async (cmd, args, options) => {
       runs.push([cmd, args])
-      cwds.push(cwd)
+      cwds.push(options?.cwd)
+      sources.push(options?.source)
       // The output path follows make-pot's source folder argument.
       await writeFile(args[args.indexOf('make-pot') + 2]!, 'msgid ""\nmsgstr ""\n')
       return { code: 0, stdout: 'Success: POT file successfully generated.', stderr: '' }
@@ -43,6 +46,7 @@ function io(over: Partial<MakePotIo> & { onPath?: Record<string, string> } = {})
     ...rest,
     runs,
     cwds,
+    sources,
     fetches,
   }
 }
@@ -67,7 +71,7 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-const MAKE_POT_ARGS = (o: MakePotOptions) => ['i18n', 'make-pot', '.', o.out, '--skip-audit']
+const MAKE_POT_ARGS = (o: MakePotOptions) => ['i18n', 'make-pot', o.dir, o.out, '--skip-audit']
 
 describe('which make-pot runs', () => {
   it('takes POLYGLOTS_WP_BIN before wp on PATH', async () => {
@@ -166,10 +170,20 @@ describe('running make-pot', () => {
 // CVE-2024-27980, and wp on Windows is wp.bat.
 describe('spawnPlan', () => {
   it('runs a .bat on Windows through the shell, with every argument quoted', () => {
-    expect(spawnPlan('C:\\tools\\wp.bat', ['i18n', 'C:\\My Plugin'], 'win32')).toEqual({
-      file: '"C:\\tools\\wp.bat" "i18n" "C:\\My Plugin"',
+    expect(spawnPlan('C:\\tools\\wp.bat', ['i18n', 'C:\\out.pot'], 'win32')).toEqual({
+      file: '"C:\\tools\\wp.bat" "i18n" "C:\\out.pot"',
       args: [],
       shell: true,
+    })
+  })
+  // cmd.exe expands %NAME% inside quotes, so the plugin's path reaches it
+  // through a variable, which it expands once and never again.
+  it('passes the source folder to a .bat through an environment variable', () => {
+    expect(spawnPlan('C:\\tools\\wp.bat', ['make-pot', 'C:\\100%PATH%\\plug', 'out.pot'], 'win32', 'C:\\100%PATH%\\plug')).toEqual({
+      file: '"C:\\tools\\wp.bat" "make-pot" "%POLYGLOTS_LINT_SRC%" "out.pot"',
+      args: [],
+      shell: true,
+      env: { POLYGLOTS_LINT_SRC: 'C:\\100%PATH%\\plug' },
     })
   })
   it('runs an .exe on Windows, and anything elsewhere, directly', () => {
@@ -207,13 +221,21 @@ describe('findCommand', () => {
 
 describe('the source folder and the text domain', () => {
   const withWp = { onPath: { wp: '/usr/local/bin/wp' } }
-  // m2: cmd.exe expands %NAME% even inside quotes, so the plugin's path is
-  // never put on the command line: make-pot runs inside the folder on ".".
-  it('runs make-pot inside the plugin folder', async () => {
+  // WP-CLI loads wp-cli.yml from its working folder upward, and runs the
+  // files its require: names. Run inside the plugin, linting someone else's
+  // plugin would run their code; so make-pot runs in the .pot's empty
+  // temporary folder.
+  it('runs make-pot outside the plugin folder, in the folder of the .pot', async () => {
     const fake = io(withWp)
     await makePot(opts, fake, PIN)
-    expect(fake.cwds).toEqual([opts.dir])
-    expect(fake.runs[0]![1]).not.toContain(opts.dir)
+    expect(fake.cwds).toEqual([dirname(opts.out)])
+    expect(fake.sources).toEqual([opts.dir])
+  })
+  // A relative command would otherwise resolve against that folder.
+  it('runs a relative POLYGLOTS_WP_BIN from where polyglots was started', async () => {
+    const fake = io({ env: { POLYGLOTS_WP_BIN: 'vendor/bin/wp' } })
+    await makePot(opts, fake, PIN)
+    expect(fake.runs[0]![0]).toBe(resolve('vendor/bin/wp'))
   })
   it('passes --domain to make-pot when given', async () => {
     const fake = io(withWp)

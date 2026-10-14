@@ -57,6 +57,10 @@ its SHA-512 hash are fixed in polyglots' source; a download that does not
 match is refused and not kept, and the kept file is checked again before
 each use. This needs PHP on your `PATH`.
 
+make-pot runs outside the folder being checked, so a `wp-cli.yml` in that
+folder is not loaded and the files its `require:` names never run. That
+matters when you lint a plugin you did not write.
+
 Without PHP, make the `.pot` another way and lint that. With Docker, for
 example:
 

@@ -42,6 +42,10 @@ const MARKER = /polyglots-ignore\b(.*)$/
 // A line that is only a comment: PHP, JS and block comment lines, a PHP
 // template's one-line <?php /* ... */ ?>, and JSX's {/* ... */}.
 const COMMENT_LINE = /^(?:<\?php\s+|\{\s*)?(?:\/\/|#|\/\*|\*)/
+// Where a block comment opens: at the start, or after a space or code
+// punctuation. Not inside a path or glob such as src/**/*.js, which a
+// comment's text can hold.
+const COMMENT_OPENER = /(?:^|[\s;{}()])\/\*/
 
 function markerIn(text: string): Marker | undefined {
   const m = MARKER.exec(text)
@@ -73,12 +77,16 @@ export function markerAt(lines: readonly string[], line: number): Marker | undef
   for (let i = line - 2; i >= 0; i--) {
     const text = lines[i]!.trim()
     if (inBlock) {
-      const found = markerIn(text)
+      const opener = COMMENT_OPENER.exec(text)
+      const found = markerIn(opener ? text.slice(opener.index) : text)
       if (found) return found
-      if (text.includes('/*')) inBlock = false
+      if (opener) inBlock = false
       continue
     }
-    if (text.endsWith('*/') && !text.includes('/*')) {
+    if (text.endsWith('*/') && !COMMENT_OPENER.test(text)) {
+      // A regex literal such as /\s*/ ends a line of code in */ too; a
+      // closer has comment text before it, never an assignment or a call.
+      if (/[=;(){}]/.test(text.slice(0, -2))) return undefined
       inBlock = true
       const found = markerIn(text)
       if (found) return found

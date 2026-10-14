@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cp, mkdtemp, rm } from 'node:fs/promises'
+import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -42,5 +43,20 @@ describe.skipIf(wp === undefined)('polyglots lint with the real make-pot', () =>
     const found = data.findings.map((f: { rule: string; msgid: string }) => `${f.rule} ${f.msgid}`)
     expect(found).toEqual(['translators-comment Hello %s', 'ambiguous-word Order'])
     expect(code).toBe(1)
+  }, 60_000)
+
+  // WP-CLI runs the files a wp-cli.yml names in require:, from its working
+  // folder upward. A plugin being linted is someone else's code.
+  it("does not run the plugin's wp-cli.yml", async () => {
+    const plugin = join(home, 'lint-fixture')
+    await cp(fixture, plugin, { recursive: true })
+    const marker = join(home, 'ran')
+    await writeFile(join(plugin, 'wp-cli.yml'), 'require:\n  - evil.php\n')
+    await writeFile(join(plugin, 'evil.php'), `<?php file_put_contents(${JSON.stringify(marker)}, 'x');\n`)
+    const sink = { isTTY: false, write: () => true }
+    const stdin = new PassThrough()
+    stdin.end()
+    await main(['lint', plugin], { env: {}, streams: { stdin, stdout: sink, stderr: sink } })
+    expect(existsSync(marker)).toBe(false)
   }, 60_000)
 })

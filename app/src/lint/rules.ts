@@ -30,11 +30,13 @@ export interface Rule {
 }
 
 // %% goes first, so "%%s" is the literal text "%s" and not a placeholder.
-// URLs go too: a percent-encoded %20b or %2F reads as a placeholder to the
-// shared pattern, and here it would raise an error no marker can silence. A
-// URL in the string is markup-in-string's to report.
+// Inside a URL, percent-encoding goes too: %20b or %2F reads as a placeholder
+// to the shared pattern, and here it would raise an error no marker can
+// silence. Only the two hex digits after a percent sign go, so a real %s or
+// %1$s in a URL, which WordPress strings often carry, is kept.
 export function printfPlaceholders(text: string): string[] {
-  return [...text.replace(/https?:\/\/[^\s"'<>]*/gi, '').replaceAll('%%', '').matchAll(new RegExp(PRINTF_PLACEHOLDER, 'g'))].map((m) => m[0])
+  const decoded = text.replace(/https?:\/\/[^\s"'<>]*/gi, (url) => url.replace(/%[0-9A-Fa-f]{2}/g, ''))
+  return [...decoded.replaceAll('%%', '').matchAll(new RegExp(PRINTF_PLACEHOLDER, 'g'))].map((m) => m[0])
 }
 
 const forms = (unit: TranslationUnit): string[] =>

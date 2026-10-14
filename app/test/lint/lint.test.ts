@@ -148,3 +148,16 @@ describe('markerAt, comments only', () => {
     expect(markerAt(['/*', '  polyglots-ignore', '  because it is fine', '*/', 'x'], 5)).toBe('all')
   })
 })
+
+describe('markerAt, block comment edges', () => {
+  // A regex literal at the end of a line is no comment closer.
+  it('does not take a line of code ending in */ for the end of a comment', () => {
+    expect(markerAt(["$s = '// polyglots-ignore';", 'const re = /\\s*/', 'x'], 3)).toBeUndefined()
+  })
+  it('does not end the block at a glob inside it', () => {
+    expect(markerAt(['/*', ' polyglots-ignore', ' Reads src/**/*.js', '*/', 'x'], 5)).toBe('all')
+  })
+  it('reads the opener line from its /* only', () => {
+    expect(markerAt(["foo( 'polyglots-ignore' ); /* x", ' y */', 'x'], 3)).toBeUndefined()
+  })
+})

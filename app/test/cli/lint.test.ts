@@ -190,9 +190,16 @@ describe('polyglots lint <file.pot>', () => {
   })
   it('writes GitHub annotations with --format github, then the total', async () => {
     await writeFile(pot(), ERROR_POT)
-    const r = await run([pot(), '--format', 'github'], { makePot: refuseMakePot })
-    expect(r.out).toMatch(/^::error file=[^,]*plugin\.php,line=3,title=polyglots translators-comment::"Hello %25s": /m)
-    expect(r.out).toMatch(/1 error, 0 warnings in 1 string\./)
+    const saved = process.env.GITHUB_WORKSPACE
+    process.env.GITHUB_WORKSPACE = home
+    try {
+      const r = await run([pot(), '--format', 'github'], { makePot: refuseMakePot })
+      expect(r.out).toMatch(/^::error file=my-plugin\/plugin\.php,line=3,title=polyglots translators-comment::"Hello %25s": /m)
+      expect(r.out).toMatch(/1 error, 0 warnings in 1 string\./)
+    } finally {
+      if (saved === undefined) delete process.env.GITHUB_WORKSPACE
+      else process.env.GITHUB_WORKSPACE = saved
+    }
   })
 })
 
@@ -271,6 +278,22 @@ describe('second pass', () => {
       if (saved === undefined) delete process.env.GITHUB_WORKSPACE
       else process.env.GITHUB_WORKSPACE = saved
     }
+  })
+  it('leaves file and line out for a plugin outside GITHUB_WORKSPACE', async () => {
+    const saved = process.env.GITHUB_WORKSPACE
+    process.env.GITHUB_WORKSPACE = join(home, 'elsewhere')
+    try {
+      const r = await run([plugin, '--format', 'github'], { makePot: fakeMakePot(ERROR_POT).fn })
+      expect(r.out).toMatch(/^::error title=polyglots translators-comment::/m)
+    } finally {
+      if (saved === undefined) delete process.env.GITHUB_WORKSPACE
+      else process.env.GITHUB_WORKSPACE = saved
+    }
+  })
+  it('says --domain does nothing for a .pot', async () => {
+    await writeFile(join(home, 'loose.pot'), CLEAN_POT)
+    const r = await run([join(home, 'loose.pot'), '--domain', 'acme'], { makePot: refuseMakePot })
+    expect(r.err).toMatch(/--domain is only for a folder/)
   })
   it('leaves file and line out when the sources were not found', async () => {
     await writeFile(join(home, 'loose.pot'), ERROR_POT)

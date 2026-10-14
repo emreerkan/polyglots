@@ -191,4 +191,9 @@ describe('placeholders inside URLs', () => {
   it('do not hide a real placeholder beside the URL', () => {
     expect(printfPlaceholders('%s, see https://example.com/a%20b')).toEqual(['%s'])
   })
+  it('keep real placeholders inside the URL', () => {
+    expect(printfPlaceholders('Visit https://wordpress.org/plugins/%s/ now')).toEqual(['%s'])
+    expect(printfPlaceholders('See https://%1$s/wp-admin')).toEqual(['%1$s'])
+    expect(printfPlaceholders('Docs at https://x.com/?p=%d.')).toEqual(['%d'])
+  })
 })

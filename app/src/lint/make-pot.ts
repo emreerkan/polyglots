@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { findOnPath } from '../agent/discover.js'
 import { dataDir } from '../paths.js'
 import { VERSION } from '../version.js'
@@ -27,8 +27,9 @@ export interface RunResult {
 export interface MakePotIo {
   env: NodeJS.ProcessEnv
   which(cmd: string): string | undefined
-  // cwd is the plugin or theme folder make-pot runs in.
-  run(cmd: string, args: string[], cwd?: string): Promise<RunResult>
+  // cwd is the folder make-pot runs in; source is the plugin or theme folder,
+  // which is also among args (see spawnPlan for why it is named apart).
+  run(cmd: string, args: string[], options?: { cwd?: string; source?: string }): Promise<RunResult>
   fetch(url: string): Promise<Response>
   cacheDir: string
 }
@@ -55,23 +56,31 @@ const ELSEWHERE = [
 // print a warning on every run.
 //
 // cmd.exe still expands %NAME% inside quotes when such a variable exists, and
-// nothing escapes it in a command line. So the plugin's own path is never on
-// it: make-pot runs inside the folder on ".". What remains is the wp.bat path
-// itself and the temporary .pot path.
-export function spawnPlan(cmd: string, args: readonly string[], platform: NodeJS.Platform): { file: string; args: string[]; shell: boolean } {
+// nothing escapes it in a command line. So the plugin's path, the one part a
+// person names freely, goes through a variable of its own: cmd.exe expands
+// %POLYGLOTS_LINT_SRC% once and does not expand what it held. What remains on
+// the line is the wp.bat path and the temporary .pot path.
+export function spawnPlan(
+  cmd: string,
+  args: readonly string[],
+  platform: NodeJS.Platform,
+  source?: string,
+): { file: string; args: string[]; shell: boolean; env?: Record<string, string> } {
   if (platform !== 'win32' || !/\.(bat|cmd)$/i.test(cmd)) return { file: cmd, args: [...args], shell: false }
   const quote = (s: string): string => `"${s.replace(/"/g, '""')}"`
-  return { file: [cmd, ...args].map(quote).join(' '), args: [], shell: true }
+  const parts = [cmd, ...args].map((part) => (source !== undefined && part === source ? '"%POLYGLOTS_LINT_SRC%"' : quote(part)))
+  return { file: parts.join(' '), args: [], shell: true, ...(source === undefined ? {} : { env: { POLYGLOTS_LINT_SRC: source } }) }
 }
 
-function runCommand(cmd: string, args: string[], cwd?: string): Promise<RunResult> {
-  const plan = spawnPlan(cmd, args, process.platform)
+function runCommand(cmd: string, args: string[], options: { cwd?: string; source?: string } = {}): Promise<RunResult> {
+  const plan = spawnPlan(cmd, args, process.platform, options.source)
   return new Promise((resolve, reject) => {
     const child = spawn(plan.file, plan.args, {
       shell: plan.shell,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-      ...(cwd === undefined ? {} : { cwd }),
+      ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+      ...(plan.env === undefined ? {} : { env: { ...process.env, ...plan.env } }),
     })
     let stdout = ''
     let stderr = ''
@@ -138,7 +147,9 @@ async function keptPharMatches(phar: string, pin: WpCliPin): Promise<boolean> {
     return false
   }
   if (sha512(bytes) === pin.sha512) return true
-  await rm(phar, { force: true })
+  // A phar another run has open cannot be removed on Windows; the download
+  // then replaces it, or says it could not.
+  await rm(phar, { force: true }).catch(() => undefined)
   return false
 }
 
@@ -194,13 +205,18 @@ async function downloadPhar(io: MakePotIo, pin: WpCliPin, phar: string, notice: 
  * download, since without it the phar cannot run.
  */
 export async function findWp(io: MakePotIo, notice: (line: string) => void, pin: WpCliPin = WP_CLI): Promise<{ cmd: string; args: string[] }> {
+  // make-pot runs in another folder (see makePot), so a relative path, from
+  // POLYGLOTS_WP_BIN or a relative PATH entry, is made absolute here, against
+  // the folder polyglots was started in.
+  const absolute = (path: string): string => (/[\\/]/.test(path) && !isAbsolute(path) ? resolve(path) : path)
   const override = io.env.POLYGLOTS_WP_BIN
   // A bare name goes through the same lookup as wp, so wp-custom finds
   // wp-custom.bat on Windows; a path, or a name not found, is run as given.
-  if (override) return { cmd: io.which(override) ?? override, args: [] }
+  if (override) return { cmd: absolute(io.which(override) ?? override), args: [] }
   const wp = io.which('wp')
-  if (wp) return { cmd: wp, args: [] }
-  const php = io.which('php')
+  if (wp) return { cmd: absolute(wp), args: [] }
+  const which = io.which('php')
+  const php = which === undefined ? undefined : absolute(which)
   if (!php) {
     throw new LintNotStarted('No wp command and no PHP found, so the .pot cannot be made.', [
       'Install PHP, and polyglots downloads WP-CLI itself; or install WP-CLI: https://wp-cli.org',
@@ -218,10 +234,14 @@ export async function makePot(opts: MakePotOptions, io: MakePotIo = defaultIo(),
   const wp = await findWp(io, opts.notice, pin)
   let result: RunResult
   try {
-    // Run inside the folder on ".", which keeps the plugin's path off a
-    // Windows command line (see spawnPlan); the references come out the same.
+    // Never run inside the plugin: WP-CLI reads wp-cli.yml from its working
+    // folder upward and runs the files its require: names, and the plugin
+    // being linted may be anyone's. The .pot's own temporary folder is empty.
     const domain = opts.domain === undefined ? [] : [`--domain=${opts.domain}`]
-    result = await io.run(wp.cmd, [...wp.args, 'i18n', 'make-pot', '.', opts.out, '--skip-audit', ...domain], opts.dir)
+    result = await io.run(wp.cmd, [...wp.args, 'i18n', 'make-pot', opts.dir, opts.out, '--skip-audit', ...domain], {
+      cwd: dirname(opts.out),
+      source: opts.dir,
+    })
   } catch (err) {
     throw new LintNotStarted(`Could not run ${wp.cmd}: ${err instanceof Error ? err.message : String(err)}`)
   }
