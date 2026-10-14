@@ -128,6 +128,8 @@ describe('Translate run', () => {
     await tick()
     stdin.write(keys.down)
     await tick()
+    stdin.write(keys.down)
+    await tick()
     stdin.write(keys.enter)
     await waitForText(lastFrame, 'Done. 2 translated, 1 fuzzy, 1 from TM, 0 skipped.')
     expect(flat(lastFrame())).toContain(`Open ${poFile} in your .po editor to review.`)
@@ -159,7 +161,7 @@ describe('Translate run', () => {
     let back = 0
     const { lastFrame, stdin } = mount(commands, () => back++)
     await pickFile(stdin, lastFrame)
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       stdin.write(keys.down)
       await tick()
     }
@@ -186,7 +188,7 @@ describe('Translate run', () => {
     })
     const { lastFrame, stdin } = mount(commands)
     await pickFile(stdin, lastFrame)
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       stdin.write(keys.down)
       await tick()
     }
@@ -207,7 +209,7 @@ describe('Translate starting a run', () => {
     const commands = fakeCommands()
     const { lastFrame, stdin } = mount(commands)
     await pickFile(stdin, lastFrame)
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       stdin.write(keys.down)
       await tick()
     }
@@ -226,7 +228,7 @@ describe('Translate starting a run', () => {
       const commands = fakeCommands()
       const { lastFrame, stdin } = mount(commands)
       await pickFile(stdin, lastFrame)
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 5; i++) {
         stdin.write(keys.down)
         await tick()
       }
@@ -256,7 +258,7 @@ describe('Translate starting a run', () => {
     // Said on the options screen, where the mode is chosen.
     expect(flat(lastFrame())).toMatch(/re-translate already-translated entries/i)
 
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       stdin.write(keys.down)
       await tick()
     }
@@ -289,10 +291,51 @@ describe('Translate batch size', () => {
     await waitForText(lastFrame, /Batch size:\s+50/)
     stdin.write(keys.down)
     await tick()
+    stdin.write(keys.down)
+    await tick()
     stdin.write(keys.enter)
 
     await waitFor(() => (commands.translateFile as ReturnType<typeof vi.fn>).mock.calls.length > 0)
     expect((commands.translateFile as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toMatchObject({ batchSize: 50 })
+  })
+})
+
+/**
+ * Draft keys hold only the source, so mode all on a file translated before
+ * re-translated every entry from the cache and changed nothing. The CLI has
+ * had --fresh, and the batch form a Start over field; this screen had
+ * neither, so there was no way here to draft again.
+ */
+describe('Translate start over', () => {
+  it('reuses the cache by default', async () => {
+    const commands = fakeCommands()
+    const { lastFrame, stdin } = mount(commands)
+    await pickFile(stdin, lastFrame)
+    expect(flat(lastFrame())).toMatch(/Start over:\s+no, reuse what is cached/)
+    for (let i = 0; i < 5; i++) {
+      stdin.write(keys.down)
+      await tick()
+    }
+    stdin.write(keys.enter)
+    await waitFor(() => (commands.translateFile as ReturnType<typeof vi.fn>).mock.calls.length > 0)
+    expect((commands.translateFile as ReturnType<typeof vi.fn>).mock.calls[0]![0]).not.toHaveProperty('fresh')
+  })
+
+  it('passes fresh when start over is chosen', async () => {
+    const commands = fakeCommands()
+    const { lastFrame, stdin } = mount(commands)
+    await pickFile(stdin, lastFrame)
+    for (let i = 0; i < 4; i++) {
+      stdin.write(keys.down)
+      await tick()
+    }
+    stdin.write(keys.right)
+    await waitForText(lastFrame, /Start over:\s+yes, ignore what is cached/)
+    stdin.write(keys.down)
+    await tick()
+    stdin.write(keys.enter)
+    await waitFor(() => (commands.translateFile as ReturnType<typeof vi.fn>).mock.calls.length > 0)
+    expect((commands.translateFile as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toMatchObject({ fresh: true })
   })
 })
 
@@ -324,7 +367,7 @@ describe('Translate with the local engine', () => {
     await pickFile(stdin, lastFrame)
     await toQwen(stdin, lastFrame)
     await waitForText(() => flat(lastFrame()), `Pull it with: ollama pull ${DEFAULT_QWEN_MODEL}`)
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       stdin.write(keys.down)
       await tick()
     }

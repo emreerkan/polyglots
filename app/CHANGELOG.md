@@ -18,6 +18,7 @@ Entries say what changed. For why and how, read the commit.
 
 - On Windows, an npm-installed `claude` (`claude.cmd`) is found and started instead of failing every batch, and a timed-out agent is stopped with the process it started.
 - `polyglots doctor` reports antigravity as unavailable when its registered polyglots tool server, or the Node it runs with, no longer exists.
+- The app's Translate screen has a Start over field, so a file can be drafted and reviewed again instead of taken from the cache.
 
 ## [0.29.2] - 2026-10-12
 

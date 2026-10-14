@@ -266,7 +266,7 @@ describe('another file after a review', () => {
 })
 
 describe('another file after a translation', () => {
-  it('carries the engine and batch size, and resets the mode', async () => {
+  it('carries the engine and batch size, and resets the mode and start over', async () => {
     saveConfig({ defaultLocale: 'tr' })
     const translateFile = vi.fn(async (opts: TranslateOptions) => {
       const summary = summaryOf(opts.file)
@@ -288,9 +288,13 @@ describe('another file after a translation', () => {
     await press(view, keys.down, 2) // batch
     await press(view, keys.right)
     await waitForText(() => flat(view.lastFrame()), /Batch size:\s*50/)
+    await press(view, keys.down) // start over
+    await press(view, keys.right)
+    await waitForText(() => flat(view.lastFrame()), /Start over:\s*yes/)
     await press(view, keys.down)
     view.stdin.write(keys.enter)
     await waitFor(() => translateFile.mock.calls.length === 1)
+    expect(translateFile.mock.calls[0]?.[0]).toMatchObject({ fresh: true })
     await waitForText(() => flat(view.lastFrame()), 'a another file')
 
     view.stdin.write('a')
@@ -300,9 +304,11 @@ describe('another file after a translation', () => {
     expect(frame).toMatch(/Mode:\s*pending only/)
     expect(frame).toMatch(/Draft engine:\s*openai/)
     expect(frame).toMatch(/Batch size:\s*50/)
+    expect(frame).toMatch(/Start over:\s*no/)
     expect(frame).toContain('❯ Start translation')
     view.stdin.write(keys.enter)
     await waitFor(() => translateFile.mock.calls.length === 2)
+    expect(translateFile.mock.calls[1]?.[0]).not.toHaveProperty('fresh')
     expect(translateFile.mock.calls[1]?.[0]).toMatchObject({
       file: join(folder, 'b.po'),
       mode: 'pending',
@@ -342,7 +348,7 @@ describe('another file after a translation, the locale and a stop', () => {
     const view = renderTranslate(translateFile)
     await pickFirst(view)
     await waitForText(() => flat(view.lastFrame()), /Locale: +sv\b/)
-    await press(view, keys.down, 4)
+    await press(view, keys.down, 5)
     view.stdin.write(keys.enter)
     await waitFor(() => translateFile.mock.calls.length === 1)
     expect(translateFile.mock.calls[0]?.[0]).toMatchObject({ locale: 'sv' })
@@ -364,7 +370,7 @@ describe('another file after a translation, the locale and a stop', () => {
     await press(view, keys.down, 2) // locale
     view.stdin.write('pt_BR')
     await waitForText(() => flat(view.lastFrame()), /Locale: +pt_BR/)
-    await press(view, keys.down, 2)
+    await press(view, keys.down, 3)
     view.stdin.write(keys.enter)
     await waitFor(() => translateFile.mock.calls.length === 1)
     await waitForText(() => flat(view.lastFrame()), 'a another file')
@@ -402,7 +408,7 @@ describe('another file after a translation, the locale and a stop', () => {
     await press(view, keys.down) // engine
     await press(view, keys.right)
     await waitForText(() => flat(view.lastFrame()), /Draft engine:\s*openai/)
-    await press(view, keys.down, 3)
+    await press(view, keys.down, 4)
     view.stdin.write(keys.enter)
     await waitFor(() => translateFile.mock.calls.length === 1)
     view.stdin.write('q')
@@ -443,7 +449,7 @@ describe('a carried locale that disagrees with the file', () => {
     await pickFirst(view)
     await press(view, keys.down, 2)
     view.stdin.write('pt_BR')
-    await press(view, keys.down, 2)
+    await press(view, keys.down, 3)
     view.stdin.write(keys.enter)
     await waitFor(() => translateFile.mock.calls.length === 1)
     await waitForText(() => flat(view.lastFrame()), 'a another file')

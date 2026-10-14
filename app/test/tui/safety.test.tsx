@@ -57,7 +57,7 @@ async function startTranslate(view: ReturnType<typeof render>) {
   await tick()
   view.stdin.write(keys.enter)
   await waitForText(view.lastFrame, /Draft engine/)
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     view.stdin.write(keys.down)
     await tick()
   }

@@ -42,8 +42,9 @@ const FIELD_MODE = 0
 const FIELD_ENGINE = 1
 const FIELD_LOCALE = 2
 const FIELD_BATCH = 3
-const FIELD_START = 4
-const FIELD_COUNT = 5
+const FIELD_FRESH = 4
+const FIELD_START = 5
+const FIELD_COUNT = 6
 
 function next<T>(values: T[], current: T, step: number): T {
   const i = values.indexOf(current)
@@ -84,6 +85,10 @@ export function Translate({ cwd, onBack }: TranslateProps) {
   // header is not offered for it.
   const headerAllowed = config.defaultLocale === undefined && config.reviewProvider !== 'antigravity'
   const [batchSize, setBatchSize] = useState(initialBatchSize(config))
+  // Draft keys hold only the source, so mode all on a file translated before
+  // took every draft from the cache and changed nothing. This is the way to
+  // ask again, as --fresh is on the command line.
+  const [fresh, setFresh] = useState(false)
   const [focus, setFocus] = useState(FIELD_MODE)
   const [events, setEvents] = useState<TranslateEvent[]>([])
   // Held in a ref so a keypress reaches the run in flight without re-rendering
@@ -159,6 +164,7 @@ export function Translate({ cwd, onBack }: TranslateProps) {
         mode,
         draftEngine: engine,
         batchSize,
+        ...(fresh ? { fresh: true } : {}),
         ...(bin === undefined ? {} : { bin }),
         // Bounded: a long run's per-entry events would otherwise all stay in memory.
         onProgress: (e) => setEvents((prev) => appendEvent(prev, e)),
@@ -174,9 +180,13 @@ export function Translate({ cwd, onBack }: TranslateProps) {
   // the next file's translations on a single enter, so it goes back to pending
   // and has to be chosen again. The cursor waits on Start, so it is one enter
   // rather than none: the options screen is where a wrong carry-over is caught.
+  //
+  // Start over goes back for the same reason: it spends a request on every
+  // entry, and was chosen about the file just finished.
   const anotherFile = () => {
     setPickDir(dirname(file))
     setMode('pending')
+    setFresh(false)
     setHeaderLocale(undefined)
     if (!localeTyped) setLocale(config.defaultLocale ?? '')
     setFocus(FIELD_START)
@@ -211,6 +221,7 @@ export function Translate({ cwd, onBack }: TranslateProps) {
             if (focus === FIELD_MODE) setMode((m) => next(MODES, m, step))
             if (focus === FIELD_ENGINE) setEngine((e) => next(ENGINES, e, step))
             if (focus === FIELD_BATCH) setBatchSize((n) => next(batchSizeChoices(initialBatchSize(config)), n, step))
+            if (focus === FIELD_FRESH) setFresh((v) => !v)
           }
         : undefined,
       select:
@@ -349,6 +360,9 @@ export function Translate({ cwd, onBack }: TranslateProps) {
           {screenBatchAdvice(config, batchSize, locale) && (
             <Text color="yellow">{screenBatchAdvice(config, batchSize, locale)}</Text>
           )}
+          <Text>
+            {marker(FIELD_FRESH)}Start over:    {fresh ? 'yes, ignore what is cached' : 'no, reuse what is cached'}
+          </Text>
           <Text>{marker(FIELD_START)}Start translation</Text>
           <Hint>↑↓ move · ←→ change · enter select · esc back to menu</Hint>
         </>

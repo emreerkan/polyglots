@@ -59,7 +59,7 @@ async function openTranslateAndStart(stdin: FakeStdin, lastFrame: () => string |
   await tick()
   stdin.write(keys.enter)
   await waitForText(lastFrame, /Draft engine/)
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     stdin.write(keys.down)
     await tick()
   }
