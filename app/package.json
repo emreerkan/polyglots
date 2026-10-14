@@ -44,6 +44,7 @@
     "prepare": "npm run build",
     "prebuild": "node scripts/no-live-run.mjs && node scripts/stats-i18n.mjs && node scripts/stats-client.mjs",
     "update-locales": "node scripts/update-locales.mjs",
+    "update-wp-cli": "node scripts/update-wp-cli.mjs",
     "stats-pot": "tsx scripts/stats-pot.ts",
     "stats-i18n": "node scripts/stats-i18n.mjs",
     "stats-client": "node scripts/stats-client.mjs",

@@ -68,6 +68,13 @@ command that starts calling an unfaked one fails the snapshot, and so the
 release, until the demo fakes it. That is deliberate: the alternative is a
 build that quietly runs the real thing.
 
+**`npm run update-wp-cli` moves the WP-CLI pin.** `polyglots lint` downloads
+the phar in `src/lint/wp-cli-pin.ts` when no `wp` is installed, and refuses it
+unless it matches the pinned SHA-512. The script reads the latest WP-CLI
+release, checks the phar against the `.sha512` published beside it, and
+rewrites the pin. Run it on purpose and commit the diff, like
+`update-locales`; never edit the pin by hand.
+
 ## Language and style
 
 TypeScript ESM with `module: NodeNext`, so relative imports carry a `.js`
