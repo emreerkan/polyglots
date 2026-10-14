@@ -79,6 +79,7 @@ const INJECTABLE = {
   raiseSignal: true,
   sendUsage: true,
   checkUpdate: true,
+  makePot: true,
 } satisfies Record<Exclude<keyof CliDeps, 'streams' | 'env'>, true>
 
 function refuseUnfaked(what: string): CliDeps {

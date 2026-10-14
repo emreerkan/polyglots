@@ -10,6 +10,9 @@ import { exportGlossary } from './commands/glossary-export.js'
 import { exportTm, type TmExportFormat } from './commands/tm-export.js'
 import { fetchProjects, resolveProjects } from './commands/fetch.js'
 import { runFetch, type FetchFlags } from './cli/fetch.js'
+import { runLint, type LintFlags } from './cli/lint.js'
+import { CONFIG_FILE } from './lint/config.js'
+import { makePot } from './lint/make-pot.js'
 import { warnAboutLocalModel, warnAboutLocalReview, warnUniversalOnly } from './cli/run-notices.js'
 import { copyRules, describeRules, editRules, openInEditor, type OpenEditor } from './cli/rules.js'
 import type { ProjectEnd } from './commands/fetch-report.js'
@@ -121,6 +124,9 @@ export interface CliDeps {
   // Resolves with the newer version npm holds, or undefined (src/update).
   // Injected so no test, and no website demo, asks the registry.
   checkUpdate?: () => Promise<string | undefined>
+  // Turns a plugin or theme folder into a .pot (src/lint/make-pot.ts).
+  // Injected so no test, and no website demo, runs WP-CLI or downloads it.
+  makePot?: typeof makePot
 }
 
 interface Cli {
@@ -141,6 +147,7 @@ interface Cli {
   discoverAgents: typeof discoverAgents
   discoverModels: typeof discoverModels
   checkLocalModel: typeof checkLocalModel
+  makePot: typeof makePot
   // Listens for SIGINT and SIGTERM until the returned function is called.
   stopRunsOnSignal: () => () => void
   config: () => PolyglotsConfig
@@ -184,6 +191,7 @@ function createCli(deps: CliDeps): Cli {
     discoverAgents: deps.discoverAgents ?? discoverAgents,
     discoverModels: deps.discoverModels ?? discoverModels,
     checkLocalModel: deps.checkLocalModel ?? checkLocalModel,
+    makePot: deps.makePot ?? makePot,
     stopRunsOnSignal: () =>
       stopOnSignal({
         // Only installed around a run, so a run is what a signal interrupts.
@@ -841,6 +849,7 @@ const ENVIRONMENT_HELP = [
   '  POLYGLOTS_AGENT_BIN   agent executable for the review pass, whichever provider is set (default: claude or agy on PATH)',
   '  POLYGLOTS_CLAUDE_BIN  the older name, applied to claude only',
   '  POLYGLOTS_HOME        root for config/ and data/ instead of the XDG directories',
+  '  POLYGLOTS_WP_BIN      wp executable for polyglots lint (default: wp on PATH, else WP-CLI downloaded and run with php)',
   '  POLYGLOTS_ASCII=1     plain ASCII glyphs instead of Unicode; =0 keeps Unicode (also NO_COLOR, FORCE_COLOR)',
   '  DO_NOT_TRACK=1        never send usage statistics, whatever usageStats says',
   '  POLYGLOTS_USAGE_URL   where opted-in usage statistics go (default: https://ada.tools/polyglots/api/usage)',
@@ -1361,6 +1370,28 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
       if (summary.leftBehind.length > 0) {
         cli.err(warnLine(cli.ui.err, `Left alone, not part of this split: ${summary.leftBehind.join(', ')}`))
       }
+    })
+
+  program
+    .command('lint <path>')
+    .description('For plugin and theme developers: check the source strings for what translators cannot fix')
+    .option('--strict', 'Exit 1 on warnings too, not only on errors')
+    .option('--format <format>', 'text, json, or github (annotations for GitHub Actions)', 'text')
+    .option('--source <dir>', 'For a .pot: the plugin or theme folder its references point into')
+    .option('--config <file>', `Settings file to use instead of ${CONFIG_FILE}`)
+    .addHelpText(
+      'after',
+      [
+        '',
+        '<path> is a plugin or theme folder, made into a .pot with wp i18n make-pot, or a .pot file.',
+        'Exit codes: 0 no errors, 1 errors (or warnings with --strict), 2 the lint did not start.',
+        '',
+        'Environment:',
+        '  POLYGLOTS_WP_BIN  wp executable for make-pot (default: wp on PATH, else WP-CLI downloaded once and run with php)',
+      ].join('\n'),
+    )
+    .action(async (target: string, flags: LintFlags) => {
+      setExitCode(await runLint(cli, target, flags))
     })
 
   tm.command('export [file]')
