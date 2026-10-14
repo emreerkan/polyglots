@@ -2,7 +2,7 @@ import { getCollection, type CollectionEntry } from 'astro:content';
 
 // Reading order for the docs navigation. A doc missing from this list still
 // gets a page, listed after these, so a new file is never silently left out.
-const ORDER = ['getting-started', 'interactive', 'review', 'reply-templates', 'translate', 'configuration', 'locale-rules', 'suffixes-and-plurals', 'antigravity', 'local-models', 'usage-statistics'];
+const ORDER = ['getting-started', 'interactive', 'review', 'reply-templates', 'translate', 'configuration', 'locale-rules', 'suffixes-and-plurals', 'antigravity', 'local-models', 'lint', 'usage-statistics'];
 
 // agents.md is published as the agent page at /ai, not as a doc.
 export const AGENTS = 'agents';

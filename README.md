@@ -31,6 +31,10 @@ Documentation: https://ada.tools/polyglots/docs/
 - **Interactive mode.** Run `polyglots` with no arguments for a full-screen
   menu with a setup wizard, help on every screen and live progress. Everything
   it does is also a command, for scripts and automation.
+- **For plugin and theme developers.** `polyglots lint ./my-plugin` lists
+  the source strings translators cannot get right, such as a placeholder with
+  no translators comment or a sentence glued together in code, with exit
+  codes and GitHub annotations for CI.
 
 Nothing is uploaded to translate.wordpress.org. You import the results
 yourself.
@@ -116,7 +120,9 @@ If you opt in to [usage statistics](https://ada.tools/polyglots/docs/usage-stati
 a weekly count of strings reviewed goes to ada.tools/polyglots; it is off
 unless you turn it on. Once a day, polyglots asks registry.npmjs.org for its
 latest version number, to say when an update is out; turn that off with
-`polyglots config set updateCheck off` or `NO_UPDATE_NOTIFIER=1`. Nothing else.
+`polyglots config set updateCheck off` or `NO_UPDATE_NOTIFIER=1`.
+`polyglots lint` downloads WP-CLI from GitHub once, and only when no `wp`
+command is installed. Nothing else.
 
 ## Contributing
 

@@ -10,6 +10,10 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Added
+
+- `polyglots lint` checks a plugin's or theme's source strings for problems translators cannot fix, with exit codes and GitHub annotations for CI.
+
 ## [0.29.2] - 2026-10-12
 
 ### Fixed

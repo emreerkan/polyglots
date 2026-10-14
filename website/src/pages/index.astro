@@ -225,6 +225,7 @@ const doc = (slug: string) => `${base}docs/${slug}/`;
           <strong data-usage-key="drafted">{usage && approx(usage.drafted)}</strong> drafted. <a href={doc('usage-statistics')}>How this is counted</a>
         </p>
         <p class="muted small">Version {snapshot.version}. Driving polyglots from an agent? Point it at <a href={`${base}ai/`}>ada.tools/polyglots/ai</a>.</p>
+        <p class="muted small">Writing a plugin or theme? <code>polyglots lint</code> checks your strings before translators see them. <a href={doc('lint')}>How it works</a></p>
       </div>
       <ul class="doclist">
         {docs.map((d) => <li><a href={doc(d.slug)}>{d.title}</a></li>)}
