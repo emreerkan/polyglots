@@ -37,6 +37,18 @@ function agySettings(content: unknown): void {
   writeFileSync(join(dir, 'settings.json'), typeof content === 'string' ? content : JSON.stringify(content))
 }
 
+// Where `agy mcp add` registers servers: ~/.gemini/config, beside the CLI's
+// own folder rather than inside it.
+function agyMcp(content: unknown): void {
+  const dir = join(home, '.gemini', 'config')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'mcp_config.json'), typeof content === 'string' ? content : JSON.stringify(content))
+}
+
+function agyServer(args: string[], extra: Record<string, unknown> = {}): unknown {
+  return { mcpServers: { polyglots: { command: process.execPath, args, env: { POLYGLOTS_LOCALE: 'tr' }, ...extra } } }
+}
+
 function agyToken(): void {
   const dir = join(home, '.gemini', 'antigravity-cli')
   mkdirSync(dir, { recursive: true })
@@ -89,6 +101,7 @@ beforeEach(() => {
   script(binDir, 'claude')
   script(binDir, 'agy')
   agySettings({ model: 'Gemini 3.8 Flash (Medium)', permissions: { allow: RULES } })
+  agyMcp(agyServer([script(root, 'server.js')]))
   agyToken()
 })
 
@@ -299,6 +312,49 @@ describe('antigravity sign-in and setup', () => {
     const agy = statusOf(await discover(fakeExec()), 'antigravity')
     expect(agy.setup.state).toBe('unknown')
     expect(agy.usable).toBe(true)
+  })
+
+  // A moved or deleted checkout leaves the registration pointing at nothing.
+  // agy starts without the tools and says nothing, every batch runs without
+  // a glossary or memory lookup, and a model with nothing to call sometimes
+  // reaches for a shell command, is denied, and returns no answer.
+  it('is unusable when the registered server file does not exist, and names it', async () => {
+    const gone = join(root, 'moved', 'dist', 'mcp', 'server.js')
+    agyMcp(agyServer([gone]))
+    const agy = statusOf(await discover(fakeExec()), 'antigravity')
+    expect(agy.setup.state).toBe('missing')
+    expect(agy.usable).toBe(false)
+    expect(agy.reason).toContain(gone)
+    expect(agy.reason).toContain('https://ada.tools/polyglots/docs/antigravity/')
+  })
+
+  it('is unusable when the registered command does not exist', async () => {
+    agyMcp({ mcpServers: { polyglots: { command: join(root, 'old-node'), args: [script(root, 'server.js')] } } })
+    const agy = statusOf(await discover(fakeExec()), 'antigravity')
+    expect(agy.setup.state).toBe('missing')
+    expect(agy.reason).toContain(join(root, 'old-node'))
+  })
+
+  it('is unusable when no polyglots server is registered, or it is disabled', async () => {
+    agyMcp({ mcpServers: {} })
+    expect(statusOf(await discover(fakeExec()), 'antigravity').reason).toMatch(/not registered/)
+    agyMcp(agyServer([script(root, 'server.js')], { disabled: true }))
+    expect(statusOf(await discover(fakeExec()), 'antigravity').reason).toMatch(/disabled/)
+  })
+
+  it('reads an unreadable MCP config as setup unknown, and stays usable', async () => {
+    agyMcp('{ not json')
+    const agy = statusOf(await discover(fakeExec()), 'antigravity')
+    expect(agy.setup.state).toBe('unknown')
+    expect(agy.usable).toBe(true)
+  })
+
+  it('names a missing rule and a missing server file together', async () => {
+    agySettings({ permissions: { allow: [RULES[0]] } })
+    agyMcp(agyServer([join(root, 'gone.js')]))
+    const agy = statusOf(await discover(fakeExec()), 'antigravity')
+    expect(agy.reason).toContain(join(root, 'gone.js'))
+    expect(agy.reason).toContain(RULES[1])
   })
 
   it('has nothing to set up for claude', async () => {

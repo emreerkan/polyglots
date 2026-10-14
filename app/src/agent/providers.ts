@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { docsUrl } from '../docs-links.js'
 import type { ReviewChoice, ReviewProvider } from '../types.js'
 
@@ -284,34 +284,20 @@ const antigravity: ProviderSpec = {
       : { state: 'unknown', detail: 'no token file where antigravity used to keep it' }
   },
   /**
-   * Checked because its failure is the silent one: without these rules every
-   * tool call is denied, the CLI exits zero, and the run is worse than
-   * useless (notes/antigravity.md). A readable file without them is missing; a
+   * Checked because both failures are silent. Without the allow-rules every
+   * tool call is denied; without a registered server that starts, there are no
+   * tools to call. Either way the CLI exits zero and the run is worse than
+   * useless (notes/antigravity.md). A missing rule or server is missing; a
    * file that cannot be read or has an unexpected shape is unknown, and fails
    * open the way configuredModel does.
    */
   checkSetup(home) {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(readFileSync(join(antigravityDir(home), 'settings.json'), 'utf8'))
-    } catch {
-      return { state: 'unknown', detail: 'could not read antigravity settings.json' }
+    const parts = [antigravityServerSetup(home), antigravityRuleSetup(home)]
+    const missing = parts.filter((part) => part.state === 'missing')
+    if (missing.length > 0) {
+      return { state: 'missing', detail: `${missing.map((part) => part.detail).join('; ')} (see ${docsUrl('antigravity')})` }
     }
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return { state: 'unknown', detail: 'antigravity settings.json is not an object' }
-    }
-    // No permissions block at all is a readable file that allows nothing,
-    // which is the ordinary state before the documented setup step.
-    const permissions = (parsed as { permissions?: unknown }).permissions ?? {}
-    if (typeof permissions !== 'object' || permissions === null || Array.isArray(permissions)) {
-      return { state: 'unknown', detail: 'permissions in antigravity settings.json is not an object' }
-    }
-    const allow = (permissions as { allow?: unknown }).allow ?? []
-    if (!Array.isArray(allow)) return { state: 'unknown', detail: 'permissions.allow is not a list' }
-    const rules = allow.filter((given): given is string => typeof given === 'string')
-    const missing = ANTIGRAVITY_RULES.filter((rule) => !rules.some((given) => antigravityRuleCovers(given, rule)))
-    if (missing.length === 0) return { state: 'ok' }
-    return { state: 'missing', detail: `missing permission rules: ${missing.join(', ')} (see ${docsUrl('antigravity')})` }
+    return parts.find((part) => part.state === 'unknown') ?? { state: 'ok' }
   },
   liveProbe: {
     args: (timeoutMs) => ['--output-format', 'json', '--print-timeout', printTimeout(timeoutMs)],
@@ -374,6 +360,68 @@ const SPECS: Record<ReviewProvider, ProviderSpec> = { claude, antigravity }
 
 function antigravityDir(home: string): string {
   return join(home, '.gemini', 'antigravity-cli')
+}
+
+function antigravityRuleSetup(home: string): SetupStatus {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(join(antigravityDir(home), 'settings.json'), 'utf8'))
+  } catch {
+    return { state: 'unknown', detail: 'could not read antigravity settings.json' }
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { state: 'unknown', detail: 'antigravity settings.json is not an object' }
+  }
+  // No permissions block at all is a readable file that allows nothing,
+  // which is the ordinary state before the documented setup step.
+  const permissions = (parsed as { permissions?: unknown }).permissions ?? {}
+  if (typeof permissions !== 'object' || permissions === null || Array.isArray(permissions)) {
+    return { state: 'unknown', detail: 'permissions in antigravity settings.json is not an object' }
+  }
+  const allow = (permissions as { allow?: unknown }).allow ?? []
+  if (!Array.isArray(allow)) return { state: 'unknown', detail: 'permissions.allow is not a list' }
+  const rules = allow.filter((given): given is string => typeof given === 'string')
+  const missing = ANTIGRAVITY_RULES.filter((rule) => !rules.some((given) => antigravityRuleCovers(given, rule)))
+  if (missing.length === 0) return { state: 'ok' }
+  return { state: 'missing', detail: `missing permission rules: ${missing.join(', ')}` }
+}
+
+/**
+ * The server `agy mcp add polyglots` registered, in ~/.gemini/config, which
+ * is shared with the other Gemini tools rather than kept in the CLI's folder.
+ *
+ * A checkout that moved left the registration pointing at a server.js that no
+ * longer existed. agy started without the tools and logged nothing, so every
+ * batch ran with no glossary or memory lookup, and a model with nothing to
+ * call sometimes reached for a shell command instead, was denied, and ended
+ * the batch with no answer. Only absolute paths are checked: a relative one
+ * resolves against whatever folder agy is started in, which is not ours to
+ * know.
+ */
+function antigravityServerSetup(home: string): SetupStatus {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(join(home, '.gemini', 'config', 'mcp_config.json'), 'utf8'))
+  } catch {
+    return { state: 'unknown', detail: 'could not read antigravity mcp_config.json' }
+  }
+  const servers = (parsed as { mcpServers?: unknown } | null)?.mcpServers
+  if (typeof servers !== 'object' || servers === null || Array.isArray(servers)) {
+    return { state: 'unknown', detail: 'mcpServers in antigravity mcp_config.json is not an object' }
+  }
+  const server = (servers as Record<string, unknown>).polyglots
+  if (server === undefined) return { state: 'missing', detail: 'the polyglots MCP server is not registered' }
+  if (typeof server !== 'object' || server === null) {
+    return { state: 'unknown', detail: 'the polyglots entry in mcp_config.json is not an object' }
+  }
+  const { command, args, disabled } = server as { command?: unknown; args?: unknown; disabled?: unknown }
+  if (disabled === true) return { state: 'missing', detail: 'the polyglots MCP server is disabled' }
+  const paths = [command, ...(Array.isArray(args) ? args : [])].filter(
+    (part): part is string => typeof part === 'string' && isAbsolute(part),
+  )
+  const gone = paths.find((path) => !existsSync(path))
+  if (gone !== undefined) return { state: 'missing', detail: `the polyglots MCP server points at ${gone}, which does not exist` }
+  return { state: 'ok' }
 }
 
 function printTimeout(budgetMs: number): string {

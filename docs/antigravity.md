@@ -47,6 +47,12 @@ agy mcp add --env POLYGLOTS_LOCALE=de polyglots \
   print a path that only exists while that shell is open. Use the stable
   path of the Node installation instead; with fnm it is
   `~/.local/share/fnm/node-versions/<version>/installation/bin/node`.
+- The registration keeps both paths as they were. If either stops existing,
+  because Node was upgraded or removed, or polyglots was moved or installed
+  somewhere else, run the command again. Antigravity says nothing when it
+  cannot start the tools: every review runs without the glossary, the
+  translation memory or the wordpress.org lookups, and some batches fail
+  when the model tries a shell command in their place.
 
 Check it with `agy mcp list`.
 
@@ -87,8 +93,9 @@ untrusted text.
 polyglots doctor
 ```
 
-`doctor` reads the settings file and names any rule that is missing, without
-sending a prompt. Then review a small file:
+`doctor` reads the settings file and the tool registration, without sending
+a prompt. It names any rule that is missing, and a registered path to Node or
+to polyglots that no longer exists. Then review a small file:
 
 ```
 polyglots config set reviewProvider antigravity
