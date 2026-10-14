@@ -37,7 +37,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc",
+    "build": "node scripts/clean-dist.mjs && tsc && node scripts/bin-mode.mjs",
     "typecheck": "tsc -p tsconfig.test.json && tsc -p tsconfig.client.json",
     "test": "vitest run",
     "dev": "tsx src/cli.ts",
