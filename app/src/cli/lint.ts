@@ -103,6 +103,13 @@ export async function runLint(cli: LintCli, target: string, flags: LintFlags): P
     }
     const report = lintPot(units, config!, root === undefined ? undefined : sourceReader(root))
     const strict = flags.strict === true
+    // make-pot keeps only the strings in the Text Domain header's domain, or
+    // the folder's name when there is no header, so a checkout folder named
+    // after the repository can make a .pot with nothing in it, which would
+    // otherwise read as a clean pass.
+    if (kind === 'folder' && report.checked === 0) {
+      cli.err(warnLine(cli.ui.err, 'make-pot found no strings outside the plugin or theme header. It keeps only strings whose text domain matches the Text Domain header, or the folder name when there is no such header; check that header.'))
+    }
 
     if (format === 'json') cli.out(jsonReport(report, target))
     else if (format === 'github') {
@@ -117,9 +124,14 @@ export async function runLint(cli: LintCli, target: string, flags: LintFlags): P
 
     return report.errors > 0 || (strict && report.warnings > 0) ? EXIT_FINDINGS : EXIT_OK
   } catch (err) {
-    if (!(err instanceof LintNotStarted)) throw err
-    cli.err(errorLine(cli.ui.err, err.message))
-    for (const line of err.detail) cli.err(hintLine(cli.ui.err, line))
+    if (err instanceof UsageError) throw err
+    // Anything that stops the lint before a report is printed means nothing
+    // was checked: an unreadable .pot, a cache folder that cannot be written,
+    // no temporary folder. Exit 1 would tell a CI job the strings have
+    // errors, so every such failure is exit 2.
+    const message = err instanceof LintNotStarted ? err.message : `The lint did not start: ${err instanceof Error ? err.message : String(err)}`
+    cli.err(errorLine(cli.ui.err, message))
+    if (err instanceof LintNotStarted) for (const line of err.detail) cli.err(hintLine(cli.ui.err, line))
     return EXIT_NOT_STARTED
   } finally {
     if (tmp !== undefined) await rm(tmp, { recursive: true, force: true })

@@ -101,7 +101,7 @@ describe('polyglots lint <folder>', () => {
         throw new Error('boom')
       },
     })
-    expect(r.code).toBe(1)
+    expect(r.code).toBe(2)
     expect(existsSync(dirname(calls[0]!.out))).toBe(false)
   })
   it('passes the download notice to stderr', async () => {
@@ -217,5 +217,25 @@ describe('polyglots lint refusals', () => {
     const r = await run(['--help'])
     expect(r.out).toMatch(/POLYGLOTS_WP_BIN/)
     expect(r.out).toMatch(/2 the lint did not start/)
+  })
+})
+
+describe('review findings', () => {
+  // I3: a .pot without a header entry used to crash with exit 1, which CI
+  // reads as "the strings have errors".
+  it('exits 2 when the .pot cannot be read', async () => {
+    await writeFile(join(home, 'bad.pot'), entry('Post', ['plugin.php:3']))
+    const r = await run([join(home, 'bad.pot')], { makePot: refuseMakePot })
+    expect(r.code).toBe(2)
+    expect(r.err).not.toBe('')
+  })
+  // I1: make-pot keeps only the Text Domain header's domain, or the folder
+  // name; a mismatch otherwise reads as a clean pass.
+  it('warns when make-pot found nothing outside the header', async () => {
+    const headerOnly = HEADER + '#. Plugin Name of the plugin\n#: plugin.php\nmsgid "My Plugin"\nmsgstr ""\n\n'
+    const r = await run([plugin], { makePot: fakeMakePot(headerOnly).fn })
+    expect(r.code).toBe(0)
+    expect(r.out).toMatch(/No problems in 0 strings\./)
+    expect(r.err).toMatch(/Text Domain/)
   })
 })

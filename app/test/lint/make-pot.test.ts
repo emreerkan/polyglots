@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { LintNotStarted } from '../../src/lint/errors.js'
-import { makePot, spawnPlan, type MakePotIo, type MakePotOptions, type WpCliPin } from '../../src/lint/make-pot.js'
+import { findCommand, makePot, spawnPlan, type MakePotIo, type MakePotOptions, type WpCliPin } from '../../src/lint/make-pot.js'
 
 const PHAR = Buffer.from('<?php // a fake phar')
 const sha512 = (b: Buffer): string => createHash('sha512').update(b).digest('hex')
@@ -170,5 +170,32 @@ describe('spawnPlan', () => {
   it('runs an .exe on Windows, and anything elsewhere, directly', () => {
     expect(spawnPlan('C:\\php\\php.exe', ['a b'], 'win32')).toEqual({ file: 'C:\\php\\php.exe', args: ['a b'], shell: false })
     expect(spawnPlan('/usr/local/bin/wp', ['a b'], 'darwin')).toEqual({ file: '/usr/local/bin/wp', args: ['a b'], shell: false })
+  })
+})
+
+// Review finding I3: a download that drops after the headers is still a
+// failure to start, not a crash.
+describe('a download cut off part way', () => {
+  it('stops with LintNotStarted', async () => {
+    const broken = { ok: true, status: 200, arrayBuffer: async () => { throw new TypeError('terminated') } } as unknown as Response
+    const err = await notStarted(makePot(opts, io({ fetch: async () => broken }), PIN))
+    expect(err.message).toMatch(/Could not download WP-CLI 9\.9\.9: terminated/)
+  })
+})
+
+// Review finding I2: Composer's vendor\bin holds a sh proxy named wp beside
+// wp.bat, and the proxy cannot be run on Windows.
+describe('findCommand', () => {
+  it('takes the PATHEXT file on Windows over the one with no extension', async () => {
+    const bin = join(dir, 'bin')
+    await mkdir(bin)
+    await writeFile(join(bin, 'wp'), '#!/bin/sh')
+    await writeFile(join(bin, 'wp.bat'), '@echo off')
+    expect(findCommand('wp', { PATH: bin, PATHEXT: '.com;.exe;.bat' }, 'win32')).toBe(join(bin, 'wp.bat'))
+  })
+  it('resolves a bare POLYGLOTS_WP_BIN through PATH', async () => {
+    const fake = io({ env: { POLYGLOTS_WP_BIN: 'wp-custom' }, onPath: { 'wp-custom': '/x/wp-custom.bat' } })
+    await makePot(opts, fake, PIN)
+    expect(fake.runs[0]![0]).toBe('/x/wp-custom.bat')
   })
 })

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { statSync } from 'node:fs'
 import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { findOnPath } from '../agent/discover.js'
@@ -65,10 +66,32 @@ function runCommand(cmd: string, args: string[]): Promise<RunResult> {
   })
 }
 
+// On Windows a command is a file with a PATHEXT extension. findOnPath tries
+// the bare name first, which picks Composer's vendor\\bin\\wp, a sh proxy that
+// cannot be spawned, over the wp.bat beside it.
+export function findCommand(cmd: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): string | undefined {
+  if (platform !== 'win32' || /\.[^\\/.]+$/.test(cmd)) return findOnPath(cmd, env, platform)
+  const exts = (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)
+  const isFile = (path: string): boolean => {
+    try {
+      return statSync(path).isFile()
+    } catch {
+      return false
+    }
+  }
+  if (cmd.includes('\\') || cmd.includes('/')) return exts.map((ext) => cmd + ext).find(isFile)
+  for (const dir of (env.PATH ?? '').split(';')) {
+    if (!dir) continue
+    const found = exts.map((ext) => join(dir, cmd + ext)).find(isFile)
+    if (found) return found
+  }
+  return undefined
+}
+
 export function defaultIo(): MakePotIo {
   return {
     env: process.env,
-    which: (cmd) => findOnPath(cmd, process.env),
+    which: (cmd) => findCommand(cmd, process.env),
     run: runCommand,
     fetch: (url) => fetch(url, { headers: { 'User-Agent': `polyglots/${VERSION} (+https://github.com/emreerkan/polyglots)` } }),
     cacheDir: join(dataDir(), 'wp-cli'),
@@ -109,7 +132,12 @@ async function downloadPhar(io: MakePotIo, pin: WpCliPin, phar: string, notice: 
   // match never reaches the disk, then written under a temporary name and
   // renamed, so a crash part way leaves no half-written phar under the real
   // name.
-  const bytes = Buffer.from(await res.arrayBuffer())
+  let bytes: Buffer
+  try {
+    bytes = Buffer.from(await res.arrayBuffer())
+  } catch (err) {
+    throw new LintNotStarted(`Could not download WP-CLI ${pin.version}: ${err instanceof Error ? err.message : String(err)}`, ELSEWHERE)
+  }
   const got = sha512(bytes)
   if (got !== pin.sha512) {
     throw new LintNotStarted(`The downloaded WP-CLI ${pin.version} does not match the pinned SHA-512, so it was not kept.`, [
@@ -135,7 +163,9 @@ async function downloadPhar(io: MakePotIo, pin: WpCliPin, phar: string, notice: 
  */
 export async function findWp(io: MakePotIo, notice: (line: string) => void, pin: WpCliPin = WP_CLI): Promise<{ cmd: string; args: string[] }> {
   const override = io.env.POLYGLOTS_WP_BIN
-  if (override) return { cmd: override, args: [] }
+  // A bare name goes through the same lookup as wp, so wp-custom finds
+  // wp-custom.bat on Windows; a path, or a name not found, is run as given.
+  if (override) return { cmd: io.which(override) ?? override, args: [] }
   const wp = io.which('wp')
   if (wp) return { cmd: wp, args: [] }
   const php = io.which('php')

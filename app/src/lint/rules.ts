@@ -59,6 +59,24 @@ const AMBIGUOUS_WORDS = new Set(
   ].map((w) => w.toLowerCase()),
 )
 
+// Whole phrases that end on in or on: "Log in", "Turn on". The second word
+// belongs to the verb, not to text glued on after it.
+const PHRASAL_VERBS = new Set(['log', 'logged', 'sign', 'signed', 'opt', 'check', 'checked', 'zoom', 'turn', 'switch', 'plug', 'plugged', 'built', 'add', 'drop'])
+// One-word toggle labels, beside "Off".
+const TOGGLE_LABELS = new Set(['on', 'in'])
+
+function endsOnJoiningWord(text: string): boolean {
+  const m = /([\p{L}']+)$/u.exec(text)
+  if (!m) return false
+  const last = m[1]!.toLowerCase()
+  if (!JOINING_WORDS.has(last)) return false
+  // "Add-on", "Opt-in", "Built-in": one hyphenated word, not a fragment.
+  if (text[m.index - 1] === '-') return false
+  const previous = /([\p{L}']+)$/u.exec(text.slice(0, m.index).trimEnd())?.[1]?.toLowerCase()
+  if (previous === undefined) return !TOGGLE_LABELS.has(last)
+  return !((last === 'in' || last === 'on') && PHRASAL_VERBS.has(previous))
+}
+
 const isAmbiguousWord = (unit: TranslationUnit): boolean =>
   unit.msgctxt === undefined && AMBIGUOUS_WORDS.has(unit.msgid.trim().toLowerCase())
 
@@ -111,8 +129,7 @@ export const RULES: readonly Rule[] = [
       const text = unit.msgid
       if (text.length === 0) return false
       if (text !== text.trim()) return true
-      const last = /([\p{L}']+)$/u.exec(text)?.[1]?.toLowerCase()
-      if (last !== undefined && JOINING_WORDS.has(last)) return true
+      if (endsOnJoiningWord(text)) return true
       return /^[\p{P}\p{S}\s]+$/u.test(text)
     },
   },

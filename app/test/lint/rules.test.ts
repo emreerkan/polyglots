@@ -154,3 +154,18 @@ describe('typography', () => {
     expect(fires('typography', unit('  leading'))).toBe(false)
   })
 })
+
+// Review finding I5: phrasal verbs, hyphenated words and toggle labels end on
+// a joining word without being fragments.
+describe('concatenation, ordinary UI phrases', () => {
+  it('passes phrasal verbs, hyphenated words and one-word toggle labels', () => {
+    for (const text of ['Log in', 'Sign in', 'Turn on', 'Logged in', 'Add-on', 'Opt-in', 'Built-in', 'On', 'In']) {
+      expect(fires('concatenation', unit(text)), text).toBe(false)
+    }
+  })
+  it('still fires on fragments', () => {
+    for (const text of ['Posted by', 'Or', 'Read more of', 'Comments on']) {
+      expect(fires('concatenation', unit(text)), text).toBe(true)
+    }
+  })
+})

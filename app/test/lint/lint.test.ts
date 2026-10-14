@@ -122,3 +122,18 @@ describe('marker suppression', () => {
     expect(rulesOf([unit('Post')], EMPTY_CONFIG)).toEqual(['ambiguous-word'])
   })
 })
+
+// Review finding I4: make-pot extracts the plugin or theme header, which the
+// developer cannot give a context, a placeholder or a marker.
+describe('header entries', () => {
+  it('are neither checked nor counted', () => {
+    const header = [
+      unit('https://example.com/acme', { comments: ['Plugin URI of the plugin'] }),
+      unit('Acme Order Tools', { comments: ['Plugin Name of the plugin'] }),
+      unit('https://example.com', { comments: ['Author URI of the theme'] }),
+    ]
+    const report = lintPot([...header, unit('Post')], EMPTY_CONFIG)
+    expect(report.checked).toBe(1)
+    expect(report.findings.map((f) => f.msgid)).toEqual(['Post'])
+  })
+})

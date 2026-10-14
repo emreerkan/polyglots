@@ -24,6 +24,15 @@ export type ReadSource = (file: string) => readonly string[] | undefined
 
 export type Marker = ReadonlySet<RuleId> | 'all'
 
+// make-pot's own comments on the header strings it extracts: "Plugin URI of
+// the plugin", "Author of the theme". The developer cannot give a header a
+// context, a placeholder or a marker, so these are neither checked nor
+// counted. Matched whole, so a translators comment that happens to end in
+// "of the plugin" is not mistaken for one.
+const HEADER_COMMENT = /^(?:Plugin Name|Plugin URI|Theme Name|Theme URI|Description|Author|Author URI|Template Name) of the (?:plugin|theme)$/
+
+export const isHeaderEntry = (unit: TranslationUnit): boolean => unit.comments.some((c) => HEADER_COMMENT.test(c.trim()))
+
 export function parseReference(ref: string): { file: string; line?: number } {
   const m = /^(.*):(\d+)$/.exec(ref)
   return m ? { file: m[1]!, line: Number(m[2]) } : { file: ref }
@@ -89,7 +98,8 @@ function ignoredByMarkers(readSource: ReadSource | undefined, id: RuleId, unit: 
 
 export function lintPot(units: readonly TranslationUnit[], config: LintConfig, readSource?: ReadSource): LintReport {
   const findings: Finding[] = []
-  for (const unit of units) {
+  const checked = units.filter((unit) => !isHeaderEntry(unit))
+  for (const unit of checked) {
     for (const rule of RULES) {
       const level = config.rules[rule.id] ?? rule.level
       if (level === 'off' || !rule.test(unit)) continue
@@ -110,5 +120,5 @@ export function lintPot(units: readonly TranslationUnit[], config: LintConfig, r
   const rank = (f: Finding): number => (f.level === 'error' ? 0 : RULE_IDS.length) + RULE_IDS.indexOf(f.rule)
   findings.sort((a, b) => rank(a) - rank(b))
   const errors = findings.filter((f) => f.level === 'error').length
-  return { checked: units.length, findings, errors, warnings: findings.length - errors }
+  return { checked: checked.length, findings, errors, warnings: findings.length - errors }
 }

@@ -20,6 +20,15 @@ command WordPress.org uses, then linted. The temporary file is removed
 afterwards. If the `.pot` cannot be made, nothing is checked and the command
 exits 2 with make-pot's own message.
 
+make-pot keeps only the strings whose text domain matches the `Text Domain`
+header of your main plugin file or `style.css`. Without that header it uses
+the folder's name, which in CI is usually the repository's name. When the
+`.pot` has nothing in it beyond the header, polyglots says so; add the
+header and run again.
+
+Strings make-pot takes from the header itself (the name, description and
+URIs) are not checked: you cannot give them a context or a placeholder.
+
 A `.pot` file is linted as it is. To read `polyglots-ignore` markers,
 polyglots needs the source files the `.pot` points to. It looks in the
 `.pot`'s folder, then one folder up, which is where they are when the
