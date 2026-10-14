@@ -169,3 +169,26 @@ describe('concatenation, ordinary UI phrases', () => {
     }
   })
 })
+
+// m7: block plugins commit build/ beside src/, so one string has a reference
+// in each without being used in two places.
+describe('same-text-different-use and build output', () => {
+  it('does not count a built copy as a second file', () => {
+    expect(fires('same-text-different-use', unit('Read more', { references: ['src/edit.js:4', 'build/index.js:1'] }))).toBe(false)
+  })
+  it('still fires on two source files', () => {
+    expect(fires('same-text-different-use', unit('Read more', { references: ['src/edit.js:4', 'src/save.js:2', 'build/index.js:1'] }))).toBe(true)
+  })
+})
+
+// m8: a percent-encoded URL is not a placeholder, and the error it raised
+// could not be silenced.
+describe('placeholders inside URLs', () => {
+  it('are not placeholders', () => {
+    expect(printfPlaceholders('See https://example.com/a%20b%2Fc for more')).toEqual([])
+    expect(fires('translators-comment', unit('See https://example.com/a%20b'))).toBe(false)
+  })
+  it('do not hide a real placeholder beside the URL', () => {
+    expect(printfPlaceholders('%s, see https://example.com/a%20b')).toEqual(['%s'])
+  })
+})

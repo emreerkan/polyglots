@@ -62,10 +62,28 @@ function markerIn(text: string): Marker | undefined {
 export function markerAt(lines: readonly string[], line: number): Marker | undefined {
   const own = lines[line - 1]
   if (own === undefined) return undefined
-  const same = markerIn(own)
+  // On the call's own line, only the comment counts, not the word inside a
+  // string literal.
+  const comment = /\/\/|#|\/\*/.exec(own)
+  const same = comment ? markerIn(own.slice(comment.index)) : undefined
   if (same) return same
+  // Inside a block comment walked from its end, every line is comment,
+  // whether or not it starts with a star.
+  let inBlock = false
   for (let i = line - 2; i >= 0; i--) {
     const text = lines[i]!.trim()
+    if (inBlock) {
+      const found = markerIn(text)
+      if (found) return found
+      if (text.includes('/*')) inBlock = false
+      continue
+    }
+    if (text.endsWith('*/') && !text.includes('/*')) {
+      inBlock = true
+      const found = markerIn(text)
+      if (found) return found
+      continue
+    }
     if (!COMMENT_LINE.test(text)) return undefined
     const found = markerIn(text)
     if (found) return found

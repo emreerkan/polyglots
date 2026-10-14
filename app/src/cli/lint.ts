@@ -17,6 +17,7 @@ export interface LintFlags {
   format?: string
   source?: string
   config?: string
+  domain?: string
 }
 
 export interface LintCli {
@@ -67,6 +68,10 @@ function potSourceRoot(target: string, flags: LintFlags, firstReference: string 
 
 export async function runLint(cli: LintCli, target: string, flags: LintFlags): Promise<number> {
   const format = parseFormat(flags.format)
+  // Checked here because it reaches a command line, through cmd.exe on Windows.
+  if (flags.domain !== undefined && !/^[A-Za-z0-9_.-]+$/.test(flags.domain)) {
+    throw new UsageError('--domain must be a text domain: letters, digits, dots, hyphens and underscores')
+  }
   let info: Stats
   try {
     info = await stat(target)
@@ -88,7 +93,13 @@ export async function runLint(cli: LintCli, target: string, flags: LintFlags): P
       config = (await findConfig([root], flags.config)).config
       tmp = await mkdtemp(join(tmpdir(), 'polyglots-lint-'))
       potFile = join(tmp, 'lint.pot')
-      await cli.makePot({ dir: root, out: potFile, notice: (line) => cli.err(warnLine(cli.ui.err, line)) })
+      if (flags.source !== undefined) cli.err(warnLine(cli.ui.err, '--source is only for a .pot; for a folder, the folder is the source.'))
+      await cli.makePot({
+        dir: root,
+        out: potFile,
+        ...(flags.domain === undefined ? {} : { domain: flags.domain }),
+        notice: (line) => cli.err(warnLine(cli.ui.err, line)),
+      })
     }
     const units = (await loadPo(potFile)).units('all')
     if (kind === 'pot') {
@@ -108,14 +119,20 @@ export async function runLint(cli: LintCli, target: string, flags: LintFlags): P
     // after the repository can make a .pot with nothing in it, which would
     // otherwise read as a clean pass.
     if (kind === 'folder' && report.checked === 0) {
-      cli.err(warnLine(cli.ui.err, 'make-pot found no strings outside the plugin or theme header. It keeps only strings whose text domain matches the Text Domain header, or the folder name when there is no such header; check that header.'))
+      cli.err(warnLine(cli.ui.err, 'make-pot found no strings outside the plugin or theme header. It keeps only strings whose text domain matches the Text Domain header, or the folder name when there is no such header. Add the header, or name the domain with --domain.'))
     }
 
     if (format === 'json') cli.out(jsonReport(report, target))
     else if (format === 'github') {
+      // GitHub reads annotation paths from the repository root, which is
+      // GITHUB_WORKSPACE in a workflow, not necessarily the folder lint ran
+      // in. Without a source root a reference is relative to a folder nobody
+      // found, so the annotation names no file rather than a wrong one.
+      const base = process.env.GITHUB_WORKSPACE || process.cwd()
       const locate = (ref: string) => {
+        if (root === undefined) return undefined
         const { file, line } = parseReference(ref)
-        const path = root === undefined ? file : relative(process.cwd(), join(root, file)).split(sep).join('/')
+        const path = relative(base, join(root, file)).split(sep).join('/')
         return line === undefined ? { file: path } : { file: path, line }
       }
       for (const line of githubReport(report, locate)) cli.out(line)

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -27,7 +27,8 @@ export interface RunResult {
 export interface MakePotIo {
   env: NodeJS.ProcessEnv
   which(cmd: string): string | undefined
-  run(cmd: string, args: string[]): Promise<RunResult>
+  // cwd is the plugin or theme folder make-pot runs in.
+  run(cmd: string, args: string[], cwd?: string): Promise<RunResult>
   fetch(url: string): Promise<Response>
   cacheDir: string
 }
@@ -35,6 +36,9 @@ export interface MakePotIo {
 export interface MakePotOptions {
   dir: string
   out: string
+  // Passed to make-pot as --domain, for a plugin without a Text Domain header
+  // whose folder is not named after its slug.
+  domain?: string
   // One line for stderr, said before anything slow or surprising: a download.
   notice(line: string): void
 }
@@ -45,18 +49,30 @@ const ELSEWHERE = [
 ]
 
 // Node refuses to spawn a .bat or .cmd directly since the fix for
-// CVE-2024-27980, and wp on Windows is wp.bat. Through the shell, every
-// argument is quoted, because a plugin folder name can hold spaces.
+// CVE-2024-27980, and wp on Windows is wp.bat. Through the shell, every part
+// is quoted, because a path can hold spaces, and the whole line is one string:
+// Node 24 deprecates an args array beside shell: true (DEP0190), and would
+// print a warning on every run.
+//
+// cmd.exe still expands %NAME% inside quotes when such a variable exists, and
+// nothing escapes it in a command line. So the plugin's own path is never on
+// it: make-pot runs inside the folder on ".". What remains is the wp.bat path
+// itself and the temporary .pot path.
 export function spawnPlan(cmd: string, args: readonly string[], platform: NodeJS.Platform): { file: string; args: string[]; shell: boolean } {
   if (platform !== 'win32' || !/\.(bat|cmd)$/i.test(cmd)) return { file: cmd, args: [...args], shell: false }
   const quote = (s: string): string => `"${s.replace(/"/g, '""')}"`
-  return { file: quote(cmd), args: args.map(quote), shell: true }
+  return { file: [cmd, ...args].map(quote).join(' '), args: [], shell: true }
 }
 
-function runCommand(cmd: string, args: string[]): Promise<RunResult> {
+function runCommand(cmd: string, args: string[], cwd?: string): Promise<RunResult> {
   const plan = spawnPlan(cmd, args, process.platform)
   return new Promise((resolve, reject) => {
-    const child = spawn(plan.file, plan.args, { shell: plan.shell, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(plan.file, plan.args, {
+      shell: plan.shell,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...(cwd === undefined ? {} : { cwd }),
+    })
     let stdout = ''
     let stderr = ''
     child.stdout?.setEncoding('utf8').on('data', (chunk: string) => (stdout += chunk))
@@ -93,10 +109,21 @@ export function defaultIo(): MakePotIo {
     env: process.env,
     which: (cmd) => findCommand(cmd, process.env),
     run: runCommand,
-    fetch: (url) => fetch(url, { headers: { 'User-Agent': `polyglots/${VERSION} (+https://github.com/emreerkan/polyglots)` } }),
+    // The whole download, body included: a stalled connection would
+    // otherwise hold a CI job until the runner's own limit, hours later.
+    fetch: (url) =>
+      fetch(url, {
+        headers: { 'User-Agent': `polyglots/${VERSION} (+https://github.com/emreerkan/polyglots)` },
+        signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+      }),
     cacheDir: join(dataDir(), 'wp-cli'),
   }
 }
+
+const DOWNLOAD_TIMEOUT_MS = 5 * 60_000
+
+const downloadError = (err: unknown): string =>
+  err instanceof Error && err.name === 'TimeoutError' ? 'timed out after 5 minutes' : err instanceof Error ? err.message : String(err)
 
 const sha512 = (bytes: Uint8Array): string => createHash('sha512').update(bytes).digest('hex')
 
@@ -122,7 +149,7 @@ async function downloadPhar(io: MakePotIo, pin: WpCliPin, phar: string, notice: 
   try {
     res = await io.fetch(pin.url)
   } catch (err) {
-    throw new LintNotStarted(`Could not download WP-CLI ${pin.version}: ${err instanceof Error ? err.message : String(err)}`, [
+    throw new LintNotStarted(`Could not download WP-CLI ${pin.version}: ${downloadError(err)}`, [
       'Connect once to download it, or install WP-CLI: https://wp-cli.org',
       ...ELSEWHERE,
     ])
@@ -136,7 +163,7 @@ async function downloadPhar(io: MakePotIo, pin: WpCliPin, phar: string, notice: 
   try {
     bytes = Buffer.from(await res.arrayBuffer())
   } catch (err) {
-    throw new LintNotStarted(`Could not download WP-CLI ${pin.version}: ${err instanceof Error ? err.message : String(err)}`, ELSEWHERE)
+    throw new LintNotStarted(`Could not download WP-CLI ${pin.version}: ${downloadError(err)}`, ELSEWHERE)
   }
   const got = sha512(bytes)
   if (got !== pin.sha512) {
@@ -145,14 +172,19 @@ async function downloadPhar(io: MakePotIo, pin: WpCliPin, phar: string, notice: 
       `got      ${got}`,
     ])
   }
-  await mkdir(io.cacheDir, { recursive: true })
-  const tmp = `${phar}.${process.pid}.tmp`
+  // A name of its own per download, so two runs at once never write into one
+  // temporary file. If the rename fails, another run may have put the same
+  // phar in place first (on Windows, a phar another run has open cannot be
+  // replaced); a kept phar that verifies is as good as this one.
+  const tmp = `${phar}.${randomUUID()}.tmp`
   try {
+    await mkdir(io.cacheDir, { recursive: true })
     await writeFile(tmp, bytes)
     await rename(tmp, phar)
   } catch (err) {
     await rm(tmp, { force: true })
-    throw err
+    if (await keptPharMatches(phar, pin)) return
+    throw new LintNotStarted(`Could not keep WP-CLI in ${io.cacheDir}: ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
@@ -186,7 +218,10 @@ export async function makePot(opts: MakePotOptions, io: MakePotIo = defaultIo(),
   const wp = await findWp(io, opts.notice, pin)
   let result: RunResult
   try {
-    result = await io.run(wp.cmd, [...wp.args, 'i18n', 'make-pot', opts.dir, opts.out, '--skip-audit'])
+    // Run inside the folder on ".", which keeps the plugin's path off a
+    // Windows command line (see spawnPlan); the references come out the same.
+    const domain = opts.domain === undefined ? [] : [`--domain=${opts.domain}`]
+    result = await io.run(wp.cmd, [...wp.args, 'i18n', 'make-pot', '.', opts.out, '--skip-audit', ...domain], opts.dir)
   } catch (err) {
     throw new LintNotStarted(`Could not run ${wp.cmd}: ${err instanceof Error ? err.message : String(err)}`)
   }

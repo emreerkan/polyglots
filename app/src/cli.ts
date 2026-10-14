@@ -1379,6 +1379,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .option('--format <format>', 'text, json, or github (annotations for GitHub Actions)', 'text')
     .option('--source <dir>', 'For a .pot: the plugin or theme folder its references point into')
     .option('--config <file>', `Settings file to use instead of ${CONFIG_FILE}`)
+    .option('--domain <domain>', 'For a folder: the text domain make-pot keeps, when there is no Text Domain header')
     .addHelpText(
       'after',
       [

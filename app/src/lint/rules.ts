@@ -30,8 +30,11 @@ export interface Rule {
 }
 
 // %% goes first, so "%%s" is the literal text "%s" and not a placeholder.
+// URLs go too: a percent-encoded %20b or %2F reads as a placeholder to the
+// shared pattern, and here it would raise an error no marker can silence. A
+// URL in the string is markup-in-string's to report.
 export function printfPlaceholders(text: string): string[] {
-  return [...text.replaceAll('%%', '').matchAll(new RegExp(PRINTF_PLACEHOLDER, 'g'))].map((m) => m[0])
+  return [...text.replace(/https?:\/\/[^\s"'<>]*/gi, '').replaceAll('%%', '').matchAll(new RegExp(PRINTF_PLACEHOLDER, 'g'))].map((m) => m[0])
 }
 
 const forms = (unit: TranslationUnit): string[] =>
@@ -147,7 +150,12 @@ export const RULES: readonly Rule[] = [
       if (unit.msgctxt !== undefined || isAmbiguousWord(unit)) return false
       const words = unit.msgid.trim().split(/\s+/).filter(Boolean)
       if (words.length < 1 || words.length > 3) return false
-      return new Set(unit.references.map(referenceFile)).size >= 2
+      // Block plugins commit build/ beside src/, and make-pot reads both, so a
+      // built copy is not a second use. Counted only when a source file is
+      // referenced too, so a plugin that ships only build/ is still checked.
+      const files = [...new Set(unit.references.map(referenceFile))]
+      const sources = files.filter((f) => !/(?:^|\/)build\//.test(f))
+      return (sources.length > 0 ? sources.length : files.length) >= 2
     },
   },
   {

@@ -239,3 +239,42 @@ describe('review findings', () => {
     expect(r.err).toMatch(/Text Domain/)
   })
 })
+
+describe('second pass', () => {
+  it('passes --domain to make-pot', async () => {
+    const make = fakeMakePot(CLEAN_POT)
+    await run([plugin, '--domain', 'acme'], { makePot: make.fn })
+    expect(make.calls[0]!.domain).toBe('acme')
+  })
+  it('refuses a --domain that is not a text domain', async () => {
+    const r = await run([plugin, '--domain', 'a b'], { makePot: refuseMakePot })
+    expect(r.code).toBe(2)
+    expect(r.err).toMatch(/--domain/)
+  })
+  it('names --domain when make-pot found nothing outside the header', async () => {
+    const r = await run([plugin], { makePot: fakeMakePot(HEADER).fn })
+    expect(r.err).toMatch(/--domain/)
+  })
+  // m10
+  it('says --source does nothing for a folder', async () => {
+    const r = await run([plugin, '--source', home], { makePot: fakeMakePot(CLEAN_POT).fn })
+    expect(r.err).toMatch(/--source is only for a \.pot/)
+  })
+  // m3: GitHub resolves annotation paths from the repository root.
+  it('writes annotation paths from GITHUB_WORKSPACE when it is set', async () => {
+    const saved = process.env.GITHUB_WORKSPACE
+    process.env.GITHUB_WORKSPACE = home
+    try {
+      const r = await run([plugin, '--format', 'github'], { makePot: fakeMakePot(ERROR_POT).fn })
+      expect(r.out).toMatch(/^::error file=my-plugin\/plugin\.php,line=3,/m)
+    } finally {
+      if (saved === undefined) delete process.env.GITHUB_WORKSPACE
+      else process.env.GITHUB_WORKSPACE = saved
+    }
+  })
+  it('leaves file and line out when the sources were not found', async () => {
+    await writeFile(join(home, 'loose.pot'), ERROR_POT)
+    const r = await run([join(home, 'loose.pot'), '--format', 'github'], { makePot: refuseMakePot })
+    expect(r.out).toMatch(/^::error title=polyglots translators-comment::/m)
+  })
+})

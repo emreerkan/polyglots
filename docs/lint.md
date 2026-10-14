@@ -23,8 +23,12 @@ exits 2 with make-pot's own message.
 make-pot keeps only the strings whose text domain matches the `Text Domain`
 header of your main plugin file or `style.css`. Without that header it uses
 the folder's name, which in CI is usually the repository's name. When the
-`.pot` has nothing in it beyond the header, polyglots says so; add the
-header and run again.
+`.pot` has nothing in it beyond the header, polyglots says so. Add the
+header, or name the domain:
+
+```
+polyglots lint . --domain my-plugin
+```
 
 Strings make-pot takes from the header itself (the name, description and
 URIs) are not checked: you cannot give them a context or a placeholder.
@@ -46,7 +50,8 @@ In this order:
 2. `wp` on your `PATH`.
 3. WP-CLI downloaded by polyglots and run with `php`.
 
-The download happens once, says so before it starts, and is kept in
+The download happens once, says so before it starts, gives up after five
+minutes, and is kept in
 polyglots' data folder (`~/.local/share/polyglots/wp-cli/`). The version and
 its SHA-512 hash are fixed in polyglots' source; a download that does not
 match is refused and not kept, and the kept file is checked again before
@@ -166,6 +171,10 @@ __( 'Read the <a href="https://example.com/docs">documentation</a>.', 'my-plugin
 sprintf( __( 'Read the %s.', 'my-plugin' ), '<a href="https://example.com/docs">' . esc_html__( 'documentation', 'my-plugin' ) . '</a>' );
 ```
 
+With `createInterpolateElement()` in JavaScript the tags are meant to be in
+the string, and translators keep them. Silence the warning there with a
+marker, or for the whole plugin in the settings file.
+
 ### `typography`
 
 Use `…` instead of `...`, and one space between words.
@@ -232,7 +241,9 @@ In the plugin or theme folder (or name another file with `--config`):
 
 `--format text` (the default) groups findings by rule, errors first.
 `--format json` is for tools. `--format github` writes annotations that
-GitHub Actions draws on the pull request.
+GitHub Actions draws on the pull request; their paths are written from
+`GITHUB_WORKSPACE`, so they point at the right files when the plugin is in a
+subfolder of the repository.
 
 | Exit | Means |
 |---|---|

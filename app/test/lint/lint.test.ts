@@ -137,3 +137,14 @@ describe('header entries', () => {
     expect(report.findings.map((f) => f.msgid)).toEqual(['Post'])
   })
 })
+
+// m9: the marker has to be in a comment, and a block comment's body lines
+// need no leading star.
+describe('markerAt, comments only', () => {
+  it('ignores the word inside a string on the line', () => {
+    expect(markerAt(["echo __( 'polyglots-ignore' );"], 1)).toBeUndefined()
+  })
+  it('walks a block comment whose lines have no leading star', () => {
+    expect(markerAt(['/*', '  polyglots-ignore', '  because it is fine', '*/', 'x'], 5)).toBe('all')
+  })
+})

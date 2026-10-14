@@ -56,7 +56,7 @@ const escapeProperty = (s: string): string => escapeData(s).replace(/:/g, '%3A')
 // One annotation per finding, at its first reference: GitHub draws it on that
 // line of the pull request's diff. locate turns a .pot reference into a path
 // from the repository root, which is where a workflow runs.
-export function githubReport(r: LintReport, locate: (ref: string) => { file: string; line?: number }): string[] {
+export function githubReport(r: LintReport, locate: (ref: string) => { file: string; line?: number } | undefined): string[] {
   return r.findings.map((f) => {
     const where = f.references[0] === undefined ? undefined : locate(f.references[0])
     const props = [

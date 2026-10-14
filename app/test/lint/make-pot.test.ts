@@ -16,19 +16,23 @@ let opts: MakePotOptions & { notices: string[] }
 
 interface FakeIo extends MakePotIo {
   runs: Array<[string, string[]]>
+  cwds: Array<string | undefined>
   fetches: string[]
 }
 
 function io(over: Partial<MakePotIo> & { onPath?: Record<string, string> } = {}): FakeIo {
   const { onPath = { php: '/usr/bin/php' }, ...rest } = over
   const runs: Array<[string, string[]]> = []
+  const cwds: Array<string | undefined> = []
   const fetches: string[] = []
   return {
     env: {},
     which: (cmd) => onPath[cmd],
-    run: async (cmd, args) => {
+    run: async (cmd, args, cwd) => {
       runs.push([cmd, args])
-      await writeFile(args.at(-2)!, 'msgid ""\nmsgstr ""\n')
+      cwds.push(cwd)
+      // The output path follows make-pot's source folder argument.
+      await writeFile(args[args.indexOf('make-pot') + 2]!, 'msgid ""\nmsgstr ""\n')
       return { code: 0, stdout: 'Success: POT file successfully generated.', stderr: '' }
     },
     fetch: async (url) => {
@@ -38,6 +42,7 @@ function io(over: Partial<MakePotIo> & { onPath?: Record<string, string> } = {})
     cacheDir,
     ...rest,
     runs,
+    cwds,
     fetches,
   }
 }
@@ -62,7 +67,7 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-const MAKE_POT_ARGS = (o: MakePotOptions) => ['i18n', 'make-pot', o.dir, o.out, '--skip-audit']
+const MAKE_POT_ARGS = (o: MakePotOptions) => ['i18n', 'make-pot', '.', o.out, '--skip-audit']
 
 describe('which make-pot runs', () => {
   it('takes POLYGLOTS_WP_BIN before wp on PATH', async () => {
@@ -162,8 +167,8 @@ describe('running make-pot', () => {
 describe('spawnPlan', () => {
   it('runs a .bat on Windows through the shell, with every argument quoted', () => {
     expect(spawnPlan('C:\\tools\\wp.bat', ['i18n', 'C:\\My Plugin'], 'win32')).toEqual({
-      file: '"C:\\tools\\wp.bat"',
-      args: ['"i18n"', '"C:\\My Plugin"'],
+      file: '"C:\\tools\\wp.bat" "i18n" "C:\\My Plugin"',
+      args: [],
       shell: true,
     })
   })
@@ -197,5 +202,46 @@ describe('findCommand', () => {
     const fake = io({ env: { POLYGLOTS_WP_BIN: 'wp-custom' }, onPath: { 'wp-custom': '/x/wp-custom.bat' } })
     await makePot(opts, fake, PIN)
     expect(fake.runs[0]![0]).toBe('/x/wp-custom.bat')
+  })
+})
+
+describe('the source folder and the text domain', () => {
+  const withWp = { onPath: { wp: '/usr/local/bin/wp' } }
+  // m2: cmd.exe expands %NAME% even inside quotes, so the plugin's path is
+  // never put on the command line: make-pot runs inside the folder on ".".
+  it('runs make-pot inside the plugin folder', async () => {
+    const fake = io(withWp)
+    await makePot(opts, fake, PIN)
+    expect(fake.cwds).toEqual([opts.dir])
+    expect(fake.runs[0]![1]).not.toContain(opts.dir)
+  })
+  it('passes --domain to make-pot when given', async () => {
+    const fake = io(withWp)
+    await makePot({ ...opts, domain: 'acme' }, fake, PIN)
+    expect(fake.runs[0]![1]).toEqual([...MAKE_POT_ARGS(opts), '--domain=acme'])
+  })
+})
+
+// m4: a stalled download must not hang a CI job.
+describe('a download that times out', () => {
+  it('stops with LintNotStarted saying it timed out', async () => {
+    const timeout = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })
+    const err = await notStarted(makePot(opts, io({ fetch: async () => { throw timeout } }), PIN))
+    expect(err.message).toMatch(/timed out/)
+  })
+})
+
+// m5: the phar cannot be put in place (on Windows, another run has it open).
+describe('a phar that cannot be kept', () => {
+  it('stops with LintNotStarted naming the cache folder', async () => {
+    await mkdir(join(cacheDir, 'wp-cli-9.9.9.phar', 'blocker'), { recursive: true })
+    const err = await notStarted(makePot(opts, io(), PIN))
+    expect(err.message).toMatch(/Could not keep WP-CLI/)
+    expect(err.message).toContain(cacheDir)
+  })
+  it('leaves no temporary file behind', async () => {
+    await mkdir(join(cacheDir, 'wp-cli-9.9.9.phar', 'blocker'), { recursive: true })
+    await notStarted(makePot(opts, io(), PIN))
+    expect((await readdir(cacheDir)).filter((f) => f.endsWith('.tmp'))).toEqual([])
   })
 })
