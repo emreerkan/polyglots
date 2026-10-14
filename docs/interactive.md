@@ -97,8 +97,12 @@ Review and Translate work the same way, in four stages.
    up a folder, `s` changes the order.
 2. **Options.** The locale (filled in from your settings, or from the file
    itself when you have none), how many entries go to the agent at a time,
-   and for a review, whether to skip the AI and use the rules alone, and
-   whether to start over instead of carrying on where an earlier run stopped.
+   for a review, whether to skip the AI and use the rules alone, and for a
+   translation, the mode and the draft engine. **Start over** ignores what is
+   cached and asks again: for a review, instead of carrying on where an
+   earlier run stopped; for a translation, instead of reusing the drafts and
+   reviews from an earlier run, which a re-translation of every entry would
+   otherwise take from the cache unchanged.
    Move with `↑` `↓` or `tab`, change a choice with `←` `→` or `space`, and
    choose **Start** with `enter`.
 3. **Running.** A progress bar, the batch being worked on, the time left and

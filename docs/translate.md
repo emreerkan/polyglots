@@ -102,4 +102,7 @@ on its own.
 
 Drafts and their reviews are cached. Running the same command again after a
 stop, a crash or a quota limit sends only the entries not finished yet, and
-does not pay for a draft twice. `--fresh` ignores the cache and asks again.
+does not pay for a draft twice. `--fresh` ignores the cache and asks again;
+in the app, it is **Start over** on the Translate screen. The cache is keyed
+by the source text, so `--all` without `--fresh` writes the cached drafts
+back rather than drafting again.
