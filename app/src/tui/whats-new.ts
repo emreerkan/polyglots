@@ -13,7 +13,7 @@ import { isNewer } from '../update/index.js'
 // flags, and a patch like "the entry table is no longer written" is right
 // there and noise here.
 export const WHATS_NEW: Readonly<Record<string, readonly string[]>> = {
-  unreleased: ['Home shows what is new once, after an update.'],
+  '0.33.0': ['Home shows what is new once, after an update.'],
 }
 
 export interface WhatsNew {
