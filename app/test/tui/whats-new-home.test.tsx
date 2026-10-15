@@ -52,6 +52,15 @@ describe("What's new on home", () => {
     expect(lastSeen(tui)).toBe('0.34.0')
   })
 
+  it('leaves an empty line between the cards and the heading', async () => {
+    const { lastFrame } = app(settled('0.33.0'), '0.34.0')
+    await waitForText(lastFrame, "What's new in 0.34.0")
+    const lines = lastFrame().split('\n')
+    const at = lines.findIndex((l) => l.includes("What's new in 0.34.0"))
+    expect(lines[at - 1]!.trim()).toBe('')
+    expect(lines[at - 2]!.trim()).not.toBe('')
+  })
+
   // Three lines at most, whatever was skipped: the rest are a link away.
   it('names the version on each line when several are shown, and says how many more there are', async () => {
     const { lastFrame } = app(settled('0.31.0'), '0.34.0')

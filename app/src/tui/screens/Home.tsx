@@ -126,15 +126,16 @@ export interface HomeProps extends MenuScreenProps {
 const MAX_WHATS_NEW = 3
 
 /**
- * The lines of "What's new" that fit in `spare` rows, heading and overflow
- * line included, or undefined when not even one item does. One version reads
+ * The lines of "What's new" that fit in `spare` rows, the empty line above it,
+ * the heading and the overflow line included, or undefined when not even one
+ * item does. One version reads
  * as "in 0.33.0" in the heading; several put the version in front of each line.
  */
 export function whatsNewLines(news: readonly WhatsNew[], spare: number): { heading: string; items: string[]; more: number } | undefined {
   const all = news.flatMap((n) => n.items.map((item) => (news.length > 1 ? `${n.version} ${item}` : item)))
   if (all.length === 0) return undefined
-  const fitsAll = all.length <= MAX_WHATS_NEW && spare >= 1 + all.length
-  const shown = fitsAll ? all.length : Math.min(MAX_WHATS_NEW, spare - 2)
+  const fitsAll = all.length <= MAX_WHATS_NEW && spare >= 2 + all.length
+  const shown = fitsAll ? all.length : Math.min(MAX_WHATS_NEW, spare - 3)
   if (shown < 1) return undefined
   const heading = news.length > 1 ? "What's new" : `What's new in ${news[0]!.version}`
   return { heading, items: all.slice(0, shown), more: all.length - shown }
@@ -227,7 +228,7 @@ export function Home(props: HomeProps) {
         </Text>
       )}
       {news && (
-        <Box flexDirection="column">
+        <Box flexDirection="column" marginTop={1}>
           <Text {...TOKENS.heading.ink} wrap="truncate-end">
             {news.heading}
           </Text>
