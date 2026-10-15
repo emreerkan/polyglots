@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { configDir } from '../paths.js'
+import { VERSION } from '../version.js'
 
 // What only the interactive app cares about: where the setup wizard was left,
 // and settings for the app itself. Kept in its own file beside config.json
@@ -25,11 +26,21 @@ export interface TuiState {
     // review's "Wrote x-problems.po" is gone the moment the app closes.
     exitSummary: boolean
   }
+  whatsNew: {
+    // The newest version whose "What's new" the home screen has shown. Absent
+    // in a file written before the feature, which tells an existing user apart
+    // from a new one (src/tui/whats-new.ts).
+    seen?: string
+  }
 }
 
 export const DEFAULT_TUI_STATE: TuiState = {
   wizard: { dismissed: false, skipped: [], confirmed: [] },
   settings: { exitSummary: true },
+  // No file at all is someone opening the app here for the first time, to
+  // whom nothing is new. A damaged file lands here too, which costs at most
+  // one release's lines.
+  whatsNew: { seen: VERSION },
 }
 
 export function tuiStateFile(): string {
@@ -54,6 +65,7 @@ export function parseTuiState(raw: string): TuiState {
   const root = obj(parsed)
   const wizard = obj(root.wizard)
   const settings = obj(root.settings)
+  const whatsNew = obj(root.whatsNew)
   return {
     wizard: {
       dismissed: wizard.dismissed === true,
@@ -63,6 +75,8 @@ export function parseTuiState(raw: string): TuiState {
     settings: {
       exitSummary: typeof settings.exitSummary === 'boolean' ? settings.exitSummary : DEFAULT_TUI_STATE.settings.exitSummary,
     },
+    // Not the default's version: a file without one predates the feature.
+    whatsNew: typeof whatsNew.seen === 'string' ? { seen: whatsNew.seen } : {},
   }
 }
 

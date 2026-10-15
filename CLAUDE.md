@@ -159,9 +159,15 @@ message, which is where anyone wanting the reasoning is sent.
 Changelog lines are written under `## [Unreleased]` when work is merged, not at
 release time. A release only moves them under a dated heading.
 
+**"What's new" lines go in the same commit.** When a change is something a TUI
+user would notice, add a line under `unreleased` in `src/tui/whats-new.ts`,
+written for them rather than for the changelog: it is what the home screen
+shows once after the update. The release renames `unreleased` to the version
+it cuts, as it moves the changelog's heading. Most patches have none.
+
 `npm run release -- <patch|minor>` is the whole release: it refuses on a dirty
 tree or a running job, typechecks, tests, runs the website's demo snapshot,
-bumps, cuts the changelog, builds and commits, then ships through
+bumps, cuts the changelog and "What's new", builds and commits, then ships through
 `scripts/ship.mjs`. Shipping asks once, then pushes main, waits for CI, tags,
 pushes the tag (`.github/workflows/release.yml` publishes to npm with trusted
 publishing and makes the GitHub Release) and runs `deploy.sh`. It resumes from

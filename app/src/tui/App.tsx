@@ -37,6 +37,8 @@ import { SyncGlossary } from './screens/SyncGlossary.js'
 import { Translate } from './screens/Translate.js'
 import { UsageStats } from './screens/UsageStats.js'
 import { Wizard } from './screens/Wizard.js'
+import { laterVersion, WHATS_NEW, whatsNewFor } from './whats-new.js'
+import { VERSION } from '../version.js'
 
 export interface AppProps {
   commands?: TuiCommands
@@ -47,6 +49,9 @@ export interface AppProps {
   // The update check main() started; the header names a newer version once
   // it answers.
   update?: Promise<string | undefined>
+  // The running version and its "What's new" lines; tests pass their own.
+  version?: string
+  whatsNew?: Readonly<Record<string, readonly string[]>>
 }
 
 type Overlay = 'help' | 'palette' | 'quit'
@@ -116,7 +121,7 @@ export function App(props: AppProps) {
   )
 }
 
-function Shell({ cwd = process.cwd(), onExit, update }: AppProps) {
+function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNew = WHATS_NEW }: AppProps) {
   // The wrapped commands, so a run started from here is recorded for the
   // exit line: read through the context the App just provided, not the prop.
   const commands = useCommands()
@@ -139,6 +144,11 @@ function Shell({ cwd = process.cwd(), onExit, update }: AppProps) {
   const statsError = useStatsError()
 
   const [tuiState, setTuiState] = useState<TuiState>(() => commands.loadTuiState())
+  // Worked out once, from the state as launched: recording the version moves
+  // tuiState on, and the block stays for the session rather than vanishing the
+  // moment it is first drawn.
+  const [news] = useState(() => whatsNewFor(tuiState.whatsNew.seen, version, whatsNew))
+  const newsRecorded = useRef(false)
   // Re-read whenever a screen is left, since most of what setup counts is
   // changed by screens: a synced glossary, a saved key, a rules file.
   const [setupEpoch, setSetupEpoch] = useState(0)
@@ -306,6 +316,15 @@ function Shell({ cwd = process.cwd(), onExit, update }: AppProps) {
     },
   })
 
+  // Once a session, the first time home has drawn the block or had none to
+  // draw. Written even when nothing changes, so a first-time user's tui.json
+  // exists and the next update is news to them.
+  const recordNewsSeen = () => {
+    if (newsRecorded.current) return
+    newsRecorded.current = true
+    record((s) => ({ ...s, whatsNew: { seen: laterVersion(s.whatsNew.seen, version) } }))
+  }
+
   const switchProvider = (next: ReviewChoice) => {
     // The display only moves once the setting is written. A run reads the
     // saved config, so showing a provider that failed to save would name an
@@ -341,6 +360,9 @@ function Shell({ cwd = process.cwd(), onExit, update }: AppProps) {
             status={status}
             {...(statusFocus === undefined ? {} : { statusFocus })}
             onStatusFocus={setStatusFocus}
+            rows={bodyRows}
+            whatsNew={news}
+            onWhatsNewSeen={recordNewsSeen}
             onOpenStep={(step) => {
               setWizardReturn('home')
               setWizardStart(step)

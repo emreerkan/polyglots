@@ -10,6 +10,10 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Added
+
+- Home lists what is new in the version you updated to, once, under the cards.
+
 ## [0.32.1] - 2026-10-15
 
 ### Removed

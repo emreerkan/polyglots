@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Box, Text } from 'ink'
 import { usableProviders, type AgentStatus } from '../../agent/discover.js'
 import { PROVIDERS } from '../../agent/providers.js'
+import { RELEASES_URL } from '../../docs-links.js'
 import type { ReviewChoice } from '../../types.js'
 import { TOKENS } from '../../ui/tokens.js'
 import { MenuGrid, moveFocus } from '../components/MenuGrid.js'
@@ -10,6 +11,7 @@ import type { Key } from '../input.js'
 import type { MenuNode, ScreenId } from '../menu.js'
 import type { SetupStatus } from '../setup.js'
 import { SETUP_STEPS, type SetupStep } from '../state.js'
+import type { WhatsNew } from '../whats-new.js'
 
 /**
  * The provider `p` moves to. Wraps, so one key reaches every candidate
@@ -111,10 +113,38 @@ export interface HomeProps extends MenuScreenProps {
   statusFocus?: SetupStep
   onStatusFocus: (step: SetupStep | undefined) => void
   onOpenStep: (step: SetupStep) => void
+  // The rows the body has, which decides whether "What's new" fits under the
+  // cards at all.
+  rows: number
+  whatsNew: readonly WhatsNew[]
+  // Called on each render where the block was drawn, or where there was none
+  // to draw; the caller records the version once. Not called while the block
+  // is held back for want of room, so a short terminal does not spend it.
+  onWhatsNewSeen: () => void
 }
 
+const MAX_WHATS_NEW = 3
+
+/**
+ * The lines of "What's new" that fit in `spare` rows, heading and overflow
+ * line included, or undefined when not even one item does. One version reads
+ * as "in 0.33.0" in the heading; several put the version in front of each line.
+ */
+export function whatsNewLines(news: readonly WhatsNew[], spare: number): { heading: string; items: string[]; more: number } | undefined {
+  const all = news.flatMap((n) => n.items.map((item) => (news.length > 1 ? `${n.version} ${item}` : item)))
+  if (all.length === 0) return undefined
+  const fitsAll = all.length <= MAX_WHATS_NEW && spare >= 1 + all.length
+  const shown = fitsAll ? all.length : Math.min(MAX_WHATS_NEW, spare - 2)
+  if (shown < 1) return undefined
+  const heading = news.length > 1 ? "What's new" : `What's new in ${news[0]!.version}`
+  return { heading, items: all.slice(0, shown), more: all.length - shown }
+}
+
+// Four-line cards two to a row, or one line each in the list.
+const menuRows = (count: number, layout: 'grid' | 'list'): number => (layout === 'grid' ? Math.ceil(count / 2) * 4 : count)
+
 export function Home(props: HomeProps) {
-  const { provider, onProvider, providerError, agents, checking, configured, status, statusFocus, onStatusFocus, onOpenStep } = props
+  const { provider, onProvider, providerError, agents, checking, configured, status, statusFocus, onStatusFocus, onOpenStep, whatsNew, onWhatsNewSeen } = props
   const [notice, setNotice] = useState<string | undefined>(undefined)
   const usable = agents === undefined ? undefined : [...usableProviders(agents), ...(configured ? [configured] : [])]
   const unusable = (agents ?? []).filter((a) => !a.usable)
@@ -180,6 +210,14 @@ export function Home(props: HomeProps) {
             ? { token: TOKENS.muted, text: `Unavailable: ${others.map((a) => `${a.provider} (${a.reason ?? 'unavailable'})`).join(', ')}` }
             : undefined
 
+  // Below the notice line rather than above it, so a warning about the agent
+  // stays beside the cards it is about.
+  const news = whatsNewLines(whatsNew, props.rows - menuRows(props.items.length, props.layout) - (line ? 1 : 0))
+  const seen = whatsNew.length === 0 || news !== undefined
+  useEffect(() => {
+    if (seen) onWhatsNewSeen()
+  })
+
   return (
     <Box flexDirection="column">
       <MenuGrid items={props.items} focus={focus} layout={props.layout} width={props.width} active={onCards} />
@@ -187,6 +225,23 @@ export function Home(props: HomeProps) {
         <Text {...line.token.ink} wrap="truncate-end">
           {line.text}
         </Text>
+      )}
+      {news && (
+        <Box flexDirection="column">
+          <Text {...TOKENS.heading.ink} wrap="truncate-end">
+            {news.heading}
+          </Text>
+          {news.items.map((item, i) => (
+            <Text key={i} wrap="truncate-end">
+              {item}
+            </Text>
+          ))}
+          {news.more > 0 && (
+            <Text {...TOKENS.muted.ink} wrap="truncate-end">
+              and {news.more} more: {RELEASES_URL}
+            </Text>
+          )}
+        </Box>
       )}
     </Box>
   )

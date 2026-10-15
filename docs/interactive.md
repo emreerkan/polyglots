@@ -71,6 +71,12 @@ and press `enter`.
 
 `q` on home quits.
 
+After an update, home lists what is new in that version under the cards, once:
+the next time you open the app it is gone. If you skipped versions, it lists
+what each of them added, up to three lines, with a link to the full release
+notes for the rest. When the window is too short to show it under the cards,
+it waits until the window is taller.
+
 ## Keys that work everywhere
 
 | Key | What it does |

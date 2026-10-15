@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '../../src/config.js'
 import { glossaryCount, localeConfigured, setupStatus, type SetupFacts } from '../../src/tui/setup.js'
 import { DEFAULT_TUI_STATE, loadTuiState, parseTuiState, saveTuiState, tuiStateFile } from '../../src/tui/state.js'
+import { VERSION } from '../../src/version.js'
 import { agentStatus, makeHome, unusableAgent, type Home } from './helpers.js'
 
 let home: Home
@@ -126,7 +127,11 @@ describe('tui.json', () => {
   })
 
   it('round-trips through the file beside config.json', () => {
-    const state = { wizard: { dismissed: true, skipped: ['keys' as const], confirmed: ['locale' as const] }, settings: { exitSummary: false } }
+    const state = {
+      wizard: { dismissed: true, skipped: ['keys' as const], confirmed: ['locale' as const] },
+      settings: { exitSummary: false },
+      whatsNew: { seen: '0.31.0' },
+    }
     saveTuiState(state)
     expect(tuiStateFile()).toBe(join(home.path, 'config', 'tui.json'))
     expect(loadTuiState()).toEqual(state)
@@ -137,6 +142,16 @@ describe('tui.json', () => {
     expect(parseTuiState(JSON.stringify({ wizard: { skipped: ['keys', 'nonsense'] }, settings: { exitSummary: 'yes' } }))).toEqual({
       wizard: { dismissed: false, skipped: ['keys'], confirmed: [] },
       settings: { exitSummary: true },
+      whatsNew: {},
     })
+  })
+
+  // No file means nobody has opened the app here before, so there is nothing
+  // new to them: the current version counts as seen. A file without the field
+  // was written by a version before "What's new", so its owner is told.
+  it('treats a missing file as having seen this version, and an older file as not', () => {
+    expect(loadTuiState().whatsNew).toEqual({ seen: VERSION })
+    expect(parseTuiState(JSON.stringify({ wizard: { dismissed: true } })).whatsNew).toEqual({})
+    expect(parseTuiState(JSON.stringify({ whatsNew: { seen: 7 } })).whatsNew).toEqual({})
   })
 })

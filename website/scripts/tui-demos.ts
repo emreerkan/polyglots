@@ -2,6 +2,7 @@ import type { TuiCommands } from '../../app/src/tui/commands.js'
 import type { TuiState } from '../../app/src/tui/state.js'
 import type { AgentStatus } from '../../app/src/agent/discover.js'
 import type { ReviewEntry, ReviewEvent, ReviewSummary } from '../../app/src/types.js'
+import { VERSION } from '../../app/src/version.js'
 
 // The scenarios the site's TUI panels play. Each renders the real App from
 // app/src/tui, at a fixed terminal size, and drives it with the keys a person
@@ -102,6 +103,8 @@ const AGENTS: AgentStatus[] = [
 const SET_UP: TuiState = {
   wizard: { dismissed: true, skipped: ['keys'], confirmed: ['locale'] },
   settings: { exitSummary: true },
+  // Seen already, so the home demo shows the cards and not this release's news.
+  whatsNew: { seen: VERSION },
 }
 
 // What a settled install reports: a glossary synced, no rules file yet.

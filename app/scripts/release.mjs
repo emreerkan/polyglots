@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // npm run release -- <patch|minor> [--no-ship]
 //
-// Verify, bump, cut the changelog, build and commit, in that order. Each step
+// Verify, bump, cut the changelog and "What's new", build and commit, in that order. Each step
 // can stop the release, and the order is the point: a version bumped onto a
 // red tree has to be withdrawn, and a build under a running review can hand a
 // half-written dist/ to the MCP server its next batch spawns.
@@ -21,11 +21,13 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cutRelease } from './release-changelog.mjs'
+import { cutWhatsNew } from './release-whats-new.mjs'
 import { auditRefusal } from './release-audit.mjs'
 
 const app = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repo = join(app, '..')
 const changelogPath = join(app, 'CHANGELOG.md')
+const whatsNewPath = join(app, 'src', 'tui', 'whats-new.ts')
 
 const run = (cmd, args, cwd = app) => execFileSync(cmd, args, { cwd, stdio: 'inherit' })
 const read = (cmd, args, cwd = app) => execFileSync(cmd, args, { cwd, encoding: 'utf8' }).trim()
@@ -79,13 +81,23 @@ if (existsSync(sitePkg) && JSON.parse(readFileSync(sitePkg, 'utf8')).scripts?.sn
 const before = readFileSync(changelogPath, 'utf8')
 cutRelease(before, '0.0.0', '1970-01-01')
 
-const files = ['package.json', 'package-lock.json', 'CHANGELOG.md']
+// Said, not refused: a minor can be a CLI flag no TUI user will meet. But a
+// minor is where a line is most often forgotten, so it is said before the
+// slow part, while stopping costs nothing.
+const whatsNewBefore = readFileSync(whatsNewPath, 'utf8')
+if (!cutWhatsNew(whatsNewBefore, '0.0.0').cut) {
+  console.log(`› No "What's new" lines under unreleased in src/tui/whats-new.ts${size === 'minor' ? ': the home screen will say nothing about this minor.' : '.'}`)
+}
+
+const files = ['package.json', 'package-lock.json', 'CHANGELOG.md', 'src/tui/whats-new.ts']
 try {
   console.log(`==> Bumping (${size})`)
   const version = read('npm', ['version', size, '--no-git-tag-version']).replace(/^v/, '')
   const date = new Date().toISOString().slice(0, 10)
   const { changelog, notes } = cutRelease(before, version, date)
   writeFileSync(changelogPath, changelog)
+  const whatsNew = cutWhatsNew(whatsNewBefore, version)
+  if (whatsNew.cut) writeFileSync(whatsNewPath, whatsNew.text)
 
   console.log('==> Building')
   run('npm', ['run', 'build'])
