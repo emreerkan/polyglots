@@ -40,13 +40,6 @@ CREATE TABLE IF NOT EXISTS run (
   by_category TEXT
 );
 
-CREATE TABLE IF NOT EXISTS entry (
-  run_id INTEGER NOT NULL REFERENCES run(id) ON DELETE CASCADE,
-  key    TEXT NOT NULL,
-  ord    INTEGER NOT NULL,
-  PRIMARY KEY (run_id, key)
-) WITHOUT ROWID;
-
 CREATE TABLE IF NOT EXISTS audit_verdict (
   src_hash    TEXT NOT NULL,
   config_hash TEXT NOT NULL,
@@ -96,6 +89,16 @@ function addMissingColumns(db: Database.Database): void {
   if (!has('run', 'ended')) db.exec('ALTER TABLE run ADD COLUMN ended TEXT')
 }
 
+// Until 0.32.0 a run listed its entries in an `entry` table, in order, so that
+// progress and batching could survive a restart. Nothing ever read the list
+// back: a resumed run gets its work from the verdict and draft caches, keyed by
+// source. So the table is no longer created or written.
+//
+// It is deliberately not dropped from a database that has it. A build from
+// then deletes its own rows when a run ends, and a batch on such a build holds
+// one connection open across all its files, so it may sit between two runs with
+// nothing marked running. Dropping the table under either throws in a run that
+// did nothing wrong, and an empty table costs a few pages of a disposable file.
 export function openJobsDb(path: string = jobsDbFile()): Database.Database {
   mkdirSync(dirname(path), { recursive: true })
   const db = new Database(path)

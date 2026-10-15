@@ -28,7 +28,6 @@ import {
   reapAbandonedRuns,
   pruneStaleConfigs,
   putAuditVerdict,
-  recordEntries,
   startRun,
 } from '../jobs/index.js'
 import { writeMcpConfig, MCP_ENV } from '../mcp/config.js'
@@ -361,11 +360,6 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
       // on it later would be reading rule findings as Claude's opinions.
       engine: noAi ? 'rules' : engine,
     })
-    recordEntries(
-      jobs,
-      runId,
-      reviewable.map((e) => e.key),
-    )
 
     emit({
       type: 'start',
@@ -543,8 +537,7 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
 
     // Written once, from the same numbers the caller is about to be given, so the
     // history and the report cannot disagree. A run stopped part way is ended
-    // rather than marked done: it has no totals worth freezing, and ending it
-    // also drops the scratch entry rows nothing will read again. It ends as
+    // rather than marked done: it has no totals worth freezing. It ends as
     // `stopped`, not as a fault: the operator asked for it, and what it got
     // through is cached for the run that resumes it.
     if (pending > 0) endRun(jobs, runId, 'stopped')

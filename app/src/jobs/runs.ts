@@ -8,7 +8,7 @@ import { parseTally, type Clock } from './json.js'
 // also terminal, unlike `stopping`, which is a control state a run passes
 // through on its way to either `stopped` or `done`.
 // What a run row can actually say. `running` is set at the start, `done` by
-// finishRun with its frozen totals, `stopped` by abandonRun with none.
+// finishRun with its frozen totals, `stopped` by endRun with none.
 //
 // This deliberately does NOT mirror `RunState` in run-control.ts. That one is
 // in-memory control state for the pause key, and nothing writes `paused` or
@@ -91,19 +91,6 @@ export function startRun(db: Database.Database, input: StartRunInput, now: Clock
   return Number(result.lastInsertRowid)
 }
 
-// Scratch: what this run is working on and in what order, so progress and
-// batching survive a restart. Replaced wholesale rather than merged, because a
-// re-run over an edited file has a different entry list and a merge would leave
-// rows for entries that no longer exist.
-export function recordEntries(db: Database.Database, runId: number, keys: string[]): void {
-  const write = db.transaction((): void => {
-    db.prepare('DELETE FROM entry WHERE run_id = ?').run(runId)
-    const insert = db.prepare('INSERT INTO entry (run_id, key, ord) VALUES (?, ?, ?)')
-    for (const [ord, key] of keys.entries()) insert.run(runId, key, ord)
-  })
-  write()
-}
-
 // Written once, from the same numbers the user was shown, and never
 // recalculated. Not a denormalisation to be kept in sync with anything: a
 // record of what was true at a moment, whose value comes precisely from not
@@ -115,29 +102,25 @@ export function finishRun(
   totals: RunTotals,
   now: Clock = () => Date.now(),
 ): void {
-  const write = db.transaction((): void => {
-    db.prepare(
-      `UPDATE run SET state = 'done', finished_at = ?, entries = ?, flagged = ?, repaired = ?,
-         unreviewed = ?, approvable = ?, by_category = ? WHERE id = ?`,
-    ).run(
-      now(),
-      totals.entries,
-      totals.flagged,
-      totals.repaired,
-      totals.unreviewed,
-      totals.approvable,
-      JSON.stringify(totals.byCategory),
-      runId,
-    )
-    db.prepare('DELETE FROM entry WHERE run_id = ?').run(runId)
-  })
-  write()
+  db.prepare(
+    `UPDATE run SET state = 'done', finished_at = ?, entries = ?, flagged = ?, repaired = ?,
+       unreviewed = ?, approvable = ?, by_category = ? WHERE id = ?`,
+  ).run(
+    now(),
+    totals.entries,
+    totals.flagged,
+    totals.repaired,
+    totals.unreviewed,
+    totals.approvable,
+    JSON.stringify(totals.byCategory),
+    runId,
+  )
 }
 
 // A run that ended without finishing. Terminal, unlike `stopping`, which is a
 // control state a run passes through. It freezes no totals, since a run that did
 // not look at every entry has no honest throughput or quality numbers to
-// report, but it does drop the scratch rows, which nothing will ever read.
+// report.
 //
 // `ending` is required rather than defaulted because the caller is the only
 // thing that knows, and a default would quietly file every crash as whatever
@@ -148,15 +131,7 @@ export function endRun(
   ending: RunEnding,
   now: Clock = () => Date.now(),
 ): void {
-  const write = db.transaction((): void => {
-    db.prepare(`UPDATE run SET state = 'stopped', ended = ?, finished_at = ? WHERE id = ?`).run(
-      ending,
-      now(),
-      runId,
-    )
-    db.prepare('DELETE FROM entry WHERE run_id = ?').run(runId)
-  })
-  write()
+  db.prepare(`UPDATE run SET state = 'stopped', ended = ?, finished_at = ? WHERE id = ?`).run(ending, now(), runId)
 }
 
 /**
@@ -283,11 +258,10 @@ export function liveRuns(db: Database.Database): LiveRun[] {
 /**
  * Clears run rows left at `running` by a process that no longer exists.
  *
- * `abandonRun` handles an ordinary stop. A `kill -9`, a crash, or a closed
- * terminal has no such path, so the row stays `running` for good, keeping its
- * `entry` scratch rows with it. Nothing breaks (`liveRuns` already declines to
- * treat such a row as in flight, so it blocks no build), but `stats` counts it
- * under "did not finish" forever, and the scratch rows are never read again.
+ * `endRun` handles an ordinary stop. A `kill -9`, a crash, or a closed
+ * terminal has no such path, so the row stays `running` for good. Nothing
+ * breaks (`liveRuns` already declines to treat such a row as in flight, so it
+ * blocks no build), but `stats` counts it under "did not finish" forever.
  *
  * The live set comes from `liveRuns` rather than from a second pid check, so
  * the two can never disagree. A reaper with its own notion of "alive" could
@@ -308,17 +282,13 @@ export function reapAbandonedRuns(db: Database.Database, now: Clock = () => Date
   const abandoned = running.filter((r) => !live.has(r.id)).map((r) => r.id)
   if (abandoned.length === 0) return 0
 
-  // One transaction: a row marked stopped whose entry rows survived would be
-  // the same orphan this exists to remove, just harder to spot.
   const reap = db.transaction((ids: number[]): void => {
-    // No totals, for the reason abandonRun gives: a run that did not reach
+    // No totals, for the reason endRun gives: a run that did not reach
     // every entry has no honest numbers to report.
     const stop = db.prepare(`UPDATE run SET state = 'stopped', ended = 'abandoned', finished_at = ? WHERE id = ?`)
-    const clear = db.prepare('DELETE FROM entry WHERE run_id = ?')
     const at = now()
     for (const id of ids) {
       stop.run(at, id)
-      clear.run(id)
     }
   })
   reap(abandoned)

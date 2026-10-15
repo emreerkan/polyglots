@@ -10,7 +10,6 @@ import {
   getRun,
   liveRuns,
   reapAbandonedRuns,
-  recordEntries,
   startRun,
   stopOwnRuns,
 } from '../../src/jobs/runs.js'
@@ -62,25 +61,6 @@ describe('startRun', () => {
   })
 })
 
-describe('recordEntries', () => {
-  it('keeps the order the entries were given in, so batching is reproducible', () => {
-    const id = startRun(db, input)
-    recordEntries(db, id, ['b', 'a', 'c'])
-    const rows = db
-      .prepare<[number], { key: string; ord: number }>('SELECT key, ord FROM entry WHERE run_id = ? ORDER BY ord')
-      .all(id)
-    expect(rows.map((r) => r.key)).toEqual(['b', 'a', 'c'])
-  })
-
-  it('replaces the previous list rather than appending to it', () => {
-    const id = startRun(db, input)
-    recordEntries(db, id, ['a', 'b'])
-    recordEntries(db, id, ['a'])
-    const n = db.prepare<[number], { n: number }>('SELECT COUNT(*) AS n FROM entry WHERE run_id = ?').get(id)!.n
-    expect(n).toBe(1)
-  })
-})
-
 describe('finishRun', () => {
   const totals = {
     entries: 294,
@@ -112,13 +92,6 @@ describe('finishRun', () => {
     expect(getRun(db, id)!.flagged).toBe(108)
   })
 
-  it('drops the scratch entry rows, which are worthless once the run is done', () => {
-    const id = startRun(db, input)
-    recordEntries(db, id, ['a', 'b'])
-    finishRun(db, id, totals)
-    const n = db.prepare<[number], { n: number }>('SELECT COUNT(*) AS n FROM entry WHERE run_id = ?').get(id)!.n
-    expect(n).toBe(0)
-  })
 })
 
 describe('getRun reading a row back', () => {
@@ -180,13 +153,6 @@ describe('endRun', () => {
     expect(row.approvable).toBeUndefined()
   })
 
-  it('drops the scratch entry rows, which nothing will ever read once abandoned', () => {
-    const id = startRun(db, input)
-    recordEntries(db, id, ['a', 'b'])
-    endRun(db, id, 'stopped')
-    const n = db.prepare<[number], { n: number }>('SELECT COUNT(*) AS n FROM entry WHERE run_id = ?').get(id)!.n
-    expect(n).toBe(0)
-  })
 })
 
 describe('liveRuns', () => {
@@ -241,13 +207,6 @@ describe('reapAbandonedRuns', () => {
     expect(row.finishedAt).toBe(5000)
   })
 
-  it('drops the scratch entry rows the abandoned run left behind', () => {
-    const id = startRun(db, input)
-    recordEntries(db, id, ['a', 'b', 'c'])
-    dead(id)
-    reapAbandonedRuns(db)
-    expect(db.prepare('SELECT count(*) n FROM entry WHERE run_id = ?').get(id)).toEqual({ n: 0 })
-  })
 
   it('reaps a row with no pid, which predates the column', () => {
     // This is the row the live database actually has: killed before 0.7.1 added
@@ -263,10 +222,8 @@ describe('reapAbandonedRuns', () => {
     // The whole risk of a reaper: killing the bookkeeping of a run still in
     // flight. This process is alive by definition, so its row must survive.
     const id = startRun(db, input)
-    recordEntries(db, id, ['a', 'b'])
     expect(reapAbandonedRuns(db)).toBe(0)
     expect(getRun(db, id)!.state).toBe('running')
-    expect(db.prepare('SELECT count(*) n FROM entry WHERE run_id = ?').get(id)).toEqual({ n: 2 })
   })
 
   it('reaps the dead row and spares the live one in the same pass', () => {
@@ -376,13 +333,11 @@ describe('stopOwnRuns', () => {
   it('ends the running rows this process owns as stopped, not abandoned', () => {
     const id = startRun(db, input)
     owner(id, 4242)
-    recordEntries(db, id, ['a'])
     expect(stopOwnRuns(db, 4242, () => 7000)).toBe(1)
     const row = getRun(db, id)!
     expect(row.state).toBe('stopped')
     expect(row.ending).toBe('stopped')
     expect(row.finishedAt).toBe(7000)
-    expect(db.prepare('SELECT COUNT(*) AS n FROM entry WHERE run_id = ?').get(id)).toEqual({ n: 0 })
   })
 
   it("leaves another process's runs and finished runs alone", () => {

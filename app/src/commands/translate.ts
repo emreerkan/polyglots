@@ -31,7 +31,6 @@ import {
   putDraftVerdict,
   draftSrcHash,
   engineId,
-  recordEntries,
   startRun,
   translateConfigHash,
   type DraftReview,
@@ -561,11 +560,6 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
       batchSize,
       engine: engineName,
     })
-    recordEntries(
-      jobs,
-      runId,
-      units.map((u) => u.key),
-    )
 
     const hits: ApplyResult[] = []
     const rest: TranslationUnit[] = []
