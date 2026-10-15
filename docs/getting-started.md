@@ -118,9 +118,18 @@ polyglots fetch --get waiting example-plugin another-theme
 polyglots fetch --get untranslated example-plugin
 ```
 
-Names are slugs or translate.wordpress.org URLs. A list can also be piped in,
+Names are slugs, `wp-plugins/<slug>` (with a sub-project after it if you
+want one) or `wp-themes/<slug>`, or translate.wordpress.org URLs. A list can
+also be piped in,
 one per line. The files land in `~/Downloads/polyglots` unless you pass
 `--out-dir`.
+
+A plugin brings its readme too, as a file of its own, when the readme has
+strings to get: the readme is part of what a contributor submits, and it is
+what the plugin directory shows first. Of `dev-readme` and `stable-readme`,
+the one with more strings is taken, `stable-readme` on a tie. `--no-readme`
+fetches the code only, and a URL that names one sub-project fetches only
+that one.
 
 ## Stop, pause, resume
 

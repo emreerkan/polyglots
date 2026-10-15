@@ -209,6 +209,7 @@ export const KEYS = {
   },
   fetchGet: {
     choose: { keys: '←↑↓→  space', does: 'waiting or untranslated strings', match: any(arrows, space) },
+    readme: { keys: 'r', does: "a plugin's readme too, or its code only", match: char('r') },
     check: { keys: 'enter', does: 'check the list', match: enter },
   },
   // The end of a batch: one reply, or one requester message, per reviewed
@@ -394,6 +395,7 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
       KEYS.fetchList.type,
       KEYS.fetchList.erase,
       KEYS.fetchGet.choose,
+      KEYS.fetchGet.readme,
       KEYS.fetchGet.check,
       KEYS.fetchResolved.next,
       ...FORM,

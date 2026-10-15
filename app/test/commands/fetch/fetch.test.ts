@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { defaultOutDir, fetchProjects, resolveProjects } from '../../../src/commands/fetch.js'
 import type { HttpGet } from '../../../src/wporg/http.js'
 import { exportUrl, localePageUrl, parseProjectLines } from '../../../src/wporg/projects.js'
+import { translationsUrl } from '../../../src/review/message.js'
 
 const fixture = (name: string) =>
   readFileSync(join(import.meta.dirname, '..', '..', 'fixtures', 'wporg', name), 'utf8')
@@ -106,16 +107,82 @@ describe('resolveProjects', () => {
     expect(r).toMatchObject({ branch: 'dev' })
   })
 
-  it('never picks a readme from a bare slug, but uses one a URL names', async () => {
-    const body = pluginPage('acme', {
-      dev: { untranslated: 0, waiting: 1 },
-      'dev-readme': { untranslated: 0, waiting: 90 },
+  // The readme is part of the same request: a PTE review covers everything the
+  // contributor submitted for the plugin, and the readme is what the
+  // directory shows first (#33). It comes as its own entry, so the download,
+  // the batch and the summary count it as a file of its own.
+  describe('the readme', () => {
+    const page = (rows: Record<string, number>) =>
+      serve({
+        [localePageUrl('wp-plugins', 'acme', 'tr')]: {
+          status: 200,
+          body: pluginPage('acme', Object.fromEntries(Object.entries(rows).map(([b, waiting]) => [b, { untranslated: 0, waiting }]))),
+        },
+      })
+
+    it('comes after the code as an entry of its own, named by its path', async () => {
+      const http = page({ dev: 4, stable: 1, 'dev-readme': 0, 'stable-readme': 7 })
+      const results = await resolveProjects(parseProjectLines('acme'), { ...opts, http })
+      expect(results).toEqual([
+        { input: 'acme', state: 'ready', type: 'wp-plugins', slug: 'acme', branch: 'dev', count: 4 },
+        { input: 'wp-plugins/acme/stable-readme', state: 'ready', type: 'wp-plugins', slug: 'acme', branch: 'stable-readme', count: 7 },
+      ])
     })
-    const http = serve({ [localePageUrl('wp-plugins', 'acme', 'tr')]: { status: 200, body } })
-    const [bare] = await resolveProjects([{ type: 'wp-plugins', slug: 'acme' }], { ...opts, http })
-    expect(bare).toMatchObject({ branch: 'dev' })
-    const [named] = await resolveProjects([{ type: 'wp-plugins', slug: 'acme', branch: 'dev-readme' }], { ...opts, http })
-    expect(named).toMatchObject({ branch: 'dev-readme', count: 90 })
+
+    it('is the readme with more strings in the chosen status', async () => {
+      const http = page({ dev: 4, 'dev-readme': 9, 'stable-readme': 3 })
+      const [, readme] = await resolveProjects([{ type: 'wp-plugins', slug: 'acme' }], { ...opts, http })
+      expect(readme).toMatchObject({ branch: 'dev-readme', count: 9 })
+    })
+
+    // The directory page shows the readme from the stable tag.
+    it('is stable-readme on a tie', async () => {
+      const http = page({ dev: 4, 'dev-readme': 5, 'stable-readme': 5 })
+      const [, readme] = await resolveProjects([{ type: 'wp-plugins', slug: 'acme' }], { ...opts, http })
+      expect(readme).toMatchObject({ branch: 'stable-readme' })
+    })
+
+    // An "empty" line for every plugin whose readme has nothing would be noise.
+    it('adds nothing when no readme has strings in the chosen status', async () => {
+      const http = page({ dev: 4, 'dev-readme': 0, 'stable-readme': 0 })
+      expect(await resolveProjects([{ type: 'wp-plugins', slug: 'acme' }], { ...opts, http })).toHaveLength(1)
+    })
+
+    it('is fetched even when the code has nothing to do', async () => {
+      const http = page({ dev: 0, stable: 0, 'stable-readme': 2 })
+      const results = await resolveProjects([{ type: 'wp-plugins', slug: 'acme' }], { ...opts, http })
+      expect(results.map((r) => r.state)).toEqual(['empty', 'ready'])
+      expect(results[1]).toMatchObject({ branch: 'stable-readme', count: 2 })
+    })
+
+    it('is left out when a URL names one sub-project, readme or code', async () => {
+      const http = page({ dev: 4, 'dev-readme': 9, 'stable-readme': 3 })
+      const code = await resolveProjects([{ type: 'wp-plugins', slug: 'acme', branch: 'dev' }], { ...opts, http })
+      expect(code).toEqual([expect.objectContaining({ branch: 'dev' })])
+      const named = await resolveProjects([{ type: 'wp-plugins', slug: 'acme', branch: 'stable-readme' }], { ...opts, http })
+      expect(named).toEqual([expect.objectContaining({ branch: 'stable-readme', count: 3 })])
+    })
+
+    it('is left out when the caller turns it off', async () => {
+      const http = page({ dev: 4, 'stable-readme': 7 })
+      expect(await resolveProjects([{ type: 'wp-plugins', slug: 'acme' }], { ...opts, readme: false, http })).toHaveLength(1)
+    })
+
+    // Named on its own line as well, it would otherwise be downloaded and
+    // reviewed twice, and two rows would share one input.
+    it('is not added twice when the list also names it', async () => {
+      const http = page({ dev: 4, 'stable-readme': 7 })
+      const results = await resolveProjects(
+        [{ type: 'wp-plugins', slug: 'acme' }, { type: 'wp-plugins', slug: 'acme', branch: 'stable-readme' }],
+        { ...opts, http },
+      )
+      expect(results.map((r) => r.input)).toEqual(['wp-plugins/acme', 'wp-plugins/acme/stable-readme'])
+    })
+
+    it('never applies to a theme', async () => {
+      const http = serve({ [localePageUrl('wp-themes', 'koji', 'tr')]: { status: 200, body: fixture('theme-page.html') } })
+      expect(await resolveProjects(parseProjectLines('koji'), { ...opts, http })).toHaveLength(1)
+    })
   })
 
   it('marks a project with nothing in the chosen status as empty', async () => {
@@ -165,6 +232,18 @@ describe('fetchProjects', () => {
 
   // Review writes its output elsewhere, and waiting strings keep arriving, so a
   // stale export is replaced rather than reused.
+  // The readme added beside a plugin's code (#33) goes through the same name,
+  // so its review's requester link opens the readme's own page.
+  it("saves a plugin's readme under a name that links to the readme", async () => {
+    const readme = { input: 'wp-plugins/acme/stable-readme', state: 'ready' as const, type: 'wp-plugins' as const, slug: 'acme', branch: 'stable-readme', count: 2 }
+    const http = serve({ [exportUrl('wp-plugins', 'acme', 'stable-readme', 'tr', 'waiting')]: { status: 200, body: PO } })
+    const [f] = await fetchProjects([readme], { locale: 'tr', status: 'waiting', outDir: out, http, pauseMs: 0 })
+    expect(f).toMatchObject({ state: 'fetched', file: join(out, 'wp-plugins-acme-stable-readme-tr.po') })
+    expect(translationsUrl(join(out, 'wp-plugins-acme-stable-readme-tr.po'), 'tr', 'emre')).toMatch(
+      /\/wp-plugins\/acme\/stable-readme\/tr\/default\/\?/,
+    )
+  })
+
   it('replaces an existing export for review', async () => {
     await writeFile(join(out, 'wp-themes-koji-tr.po'), 'old', 'utf8')
     const http = serve({ [exportUrl('wp-themes', 'koji', undefined, 'tr', 'waiting')]: { status: 200, body: PO } })

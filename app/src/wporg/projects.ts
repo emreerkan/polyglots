@@ -27,11 +27,22 @@ export interface ProjectRef {
 // /locale/<locale>/default/<type>/<slug>/ and /projects/<type>/<slug>[/<branch>]/<locale>/default/
 const LOCALE_URL = /\/locale\/[^/]+\/[^/]+\/(wp-themes|wp-plugins)\/([^/?#]+)/
 const PROJECT_URL = /\/projects\/(wp-themes|wp-plugins)\/([^/?#]+)(?:\/([^/?#]+))?\/[^/?#]+\/[^/?#]+/
+// wp-plugins/<slug>[/<branch>] and wp-themes/<slug>: the form the fetch tables
+// print for a line, so a row can be pasted back, and the one people write.
+const SHORT = /^(?:wp-plugins\/([^/\s]+)(?:\/([^/\s]+))?|wp-themes\/([^/\s]+))\/?$/i
 
 function parseLine(line: string): ProjectRef | undefined {
   const text = line.trim()
   if (text === '') return undefined
-  if (!/^https?:\/\//i.test(text)) return { slug: text.toLowerCase() }
+  if (!/^https?:\/\//i.test(text)) {
+    const short = SHORT.exec(text)
+    if (short?.[3]) return { type: 'wp-themes', slug: short[3].toLowerCase() }
+    if (short?.[1]) {
+      const slug = short[1].toLowerCase()
+      return short[2] ? { type: 'wp-plugins', slug, branch: short[2].toLowerCase() } : { type: 'wp-plugins', slug }
+    }
+    return { slug: text.toLowerCase() }
+  }
 
   const local = LOCALE_URL.exec(text)
   if (local) return { type: local[1] as ProjectType, slug: local[2]!.toLowerCase() }
@@ -52,7 +63,8 @@ function parseLine(line: string): ProjectRef | undefined {
 /**
  * One project per non-blank line, duplicates dropped.
  *
- * Accepts the two URL shapes a browser shows for a project, and bare slugs.
+ * Accepts the two URL shapes a browser shows for a project, the short
+ * type/slug[/branch] form, and bare slugs.
  * The locale in a URL is ignored: a list pasted from another locale's pages
  * should not quietly produce a run in that locale.
  */

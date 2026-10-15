@@ -25,6 +25,8 @@ export interface FetchFlags {
   ai?: boolean
   draftEngine?: string
   locale?: string
+  // Commander's --no-readme: true unless it was given.
+  readme?: boolean
 }
 
 export interface FetchCli extends BatchCli {
@@ -108,7 +110,7 @@ export async function runFetch(cli: FetchCli, names: string[], flags: FetchFlags
 
   cli.err(`Checking ${refs.length} ${refs.length === 1 ? 'project' : 'projects'} on translate.wordpress.org...`)
   const onWait = (ms: number) => cli.err(waitNotice(ms))
-  const resolutions = await cli.resolveProjects(refs, { locale, status, onWait })
+  const resolutions = await cli.resolveProjects(refs, { locale, status, onWait, readme: flags.readme !== false })
   for (const line of table(resolutions.map((r) => [r.input, describeResolution(r, status)]), { indent: 2 })) cli.out(line)
 
   const ends = new Map<string, ProjectEnd>()

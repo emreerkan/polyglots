@@ -58,6 +58,8 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
   const [lines, setLines] = useState<string[]>([])
   const [current, setCurrent] = useState('')
   const [status, setStatus] = useState<FetchStatus>('waiting')
+  // A plugin's readme beside its code, as --no-readme decides on the CLI.
+  const [readme, setReadme] = useState(true)
   const [resolutions, setResolutions] = useState<Resolution[]>([])
   const [resolveError, setResolveError] = useState<string | undefined>(undefined)
   // The latest backoff, shown under the checking line.
@@ -76,6 +78,7 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
       .resolveProjects(parseProjectLines(lines.join('\n')), {
         locale,
         status: chosen,
+        readme,
         onWait: (ms) => setWaiting(waitNotice(ms)),
       })
       .then(setResolutions, (err: unknown) => setResolveError(err instanceof Error ? err.message : String(err)))
@@ -161,6 +164,7 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
     },
     fetchGet: {
       choose: shown === 'get' ? () => setStatus((s) => (s === 'waiting' ? 'untranslated' : 'waiting')) : undefined,
+      readme: shown === 'get' ? () => setReadme((r) => !r) : undefined,
       check: shown === 'get' ? () => resolve(status) : undefined,
     },
     fetchResolved: {
@@ -184,7 +188,7 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
 
       {shown === 'list' && (
         <>
-          <Text>Projects, one per line: a slug or a translate.wordpress.org URL</Text>
+          <Text>Projects, one per line: {'a slug, wp-plugins/<slug>, or a translate.wordpress.org URL'}</Text>
           {lines.map((line, i) => (
             <Text key={i}>  {line}</Text>
           ))}
@@ -201,7 +205,8 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
           <Text>What to get for {plural(parseProjectLines(lines.join('\n')).length, 'project', 'projects')}:</Text>
           <Text>{status === 'waiting' ? '❯ ' : '  '}Waiting strings, to review</Text>
           <Text>{status === 'untranslated' ? '❯ ' : '  '}Untranslated strings, to translate</Text>
-          <Hint>↑↓ choose · enter check the list · esc back to menu</Hint>
+          <Text dimColor>Plugin readme: {readme ? 'also fetched' : 'not fetched, code only'}</Text>
+          <Hint>↑↓ choose · r readme · enter check the list · esc back to menu</Hint>
         </>
       )}
 

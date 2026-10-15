@@ -119,6 +119,38 @@ describe('Fetch list', () => {
   })
 })
 
+// The same choice as --no-readme (#33), asked with what to get, since both
+// decide what the check of the list looks for.
+describe('Fetch readme choice', () => {
+  function recording() {
+    const readme: Array<boolean | undefined> = []
+    const record: TuiCommands['resolveProjects'] = async (refs, opts) => {
+      readme.push(opts.readme)
+      return resolveProjects(refs, opts)
+    }
+    return { readme, record }
+  }
+
+  it("fetches a plugin's readme too unless it is turned off", async () => {
+    const { readme, record } = recording()
+    const view = mount({ resolveProjects: record })
+    await enterList(view, ['koji'])
+    expect(flat(view.lastFrame())).toMatch(/Plugin readme: also fetched/)
+    await chooseAndResolve(view, 'waiting')
+    expect(readme).toEqual([true])
+  })
+
+  it('takes the code only after r', async () => {
+    const { readme, record } = recording()
+    const view = mount({ resolveProjects: record })
+    await enterList(view, ['koji'])
+    view.stdin.write('r')
+    await waitForText(view.lastFrame, /Plugin readme: not fetched/)
+    await chooseAndResolve(view, 'waiting')
+    expect(readme).toEqual([false])
+  })
+})
+
 describe('Fetch resolution', () => {
   it('shows counts, and marks the empty and the missing', async () => {
     const view = mount()

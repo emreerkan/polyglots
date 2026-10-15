@@ -35,6 +35,24 @@ describe('parseProjectLines', () => {
     ).toEqual([{ type: 'wp-plugins', slug: 'contact-form-7', branch: 'dev-readme' }])
   })
 
+  // The short form the tables print, and the one #33's own example used: it
+  // was read as a slug with a slash in it and reported as not found.
+  it('reads the short type/slug[/branch] form', () => {
+    expect(
+      parseProjectLines(['wp-plugins/Stocktake-For-WooCommerce', 'wp-plugins/acme/stable-readme', 'wp-themes/koji'].join('\n')),
+    ).toEqual([
+      { type: 'wp-plugins', slug: 'stocktake-for-woocommerce' },
+      { type: 'wp-plugins', slug: 'acme', branch: 'stable-readme' },
+      { type: 'wp-themes', slug: 'koji' },
+    ])
+  })
+
+  // A theme has no branch, and an unknown type is no project shape at all:
+  // both are kept whole, so they are reported as not found, not dropped.
+  it('keeps a short form it cannot read as a slug of itself', () => {
+    expect(parseProjectLines('wp-themes/koji/dev\nmeta/forums')).toEqual([{ slug: 'wp-themes/koji/dev' }, { slug: 'meta/forums' }])
+  })
+
   // Pasted lists arrive with whatever line endings and padding the source had.
   it('reads a list pasted with CRLF, tabs and trailing spaces like a clean one', () => {
     expect(parseProjectLines('koji\r\n\tsydney  \r\n  \r\nloose\t')).toEqual([

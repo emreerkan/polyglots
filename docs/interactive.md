@@ -163,7 +163,8 @@ Fetch adds two stages at the front: type the projects, one per line, as
 slugs or translate.wordpress.org addresses (`enter` on an empty line, or
 `ctrl+d`, when the list is done), then choose waiting or untranslated strings
 and let it check the list. It shows which projects have work and which have
-none before anything is downloaded.
+none before anything is downloaded. A plugin's readme comes as a line of its
+own when it has strings to get; `r` on the same step turns that off.
 
 While a run is going, the go-to list will not leave its screen, and quitting
 asks first. Once you quit, the path of the last file a run wrote is printed in

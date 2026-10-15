@@ -1160,6 +1160,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .option('--parallel <n>', `Projects to run at once, 1 to 8 (default: 1)`)
     .option('--out-dir <dir>', 'Where to save the exports (default: ~/Downloads/polyglots)')
     .option('--force', 'With --get untranslated, replace a file that already exists instead of keeping it')
+    .option('--no-readme', "Fetch a plugin's code only, not its readme as well")
     .option('--locale <locale>', `Locale (${localeDefaultHelp(shown)})`)
     .option('--batch-size <n>', `Entries per batch (default: ${shown.batchSize})`)
     .option('--fresh', 'Ignore cached verdicts or drafts and ask again')
@@ -1167,7 +1168,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .option('--draft-engine <engine>', `Translate only: deepl, openai, local or none (default: ${shown.defaultDraftEngine})`)
     .addHelpText(
       'after',
-      '\nNames are slugs or translate.wordpress.org URLs, as arguments or one per line on stdin.\nA bare slug is tried as a theme first, then as a plugin.',
+      "\nNames are slugs, wp-plugins/<slug>[/<sub-project>] or wp-themes/<slug>, or translate.wordpress.org\nURLs, as arguments or one per line on stdin. A bare slug is tried as a theme first, then as a plugin. A plugin also brings its readme\nwhen it has strings to get; a URL that names one sub-project fetches only that one.",
     )
     .action(async (names: string[], flags: FetchFlags) => {
       setExitCode(

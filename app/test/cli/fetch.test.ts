@@ -270,6 +270,19 @@ describe('fetch', () => {
     expect(wporg.fetchOpts[0]).toEqual({ outDir: home, force: true })
   })
 
+  it('asks for the readme unless --no-readme says otherwise', async () => {
+    const readme: Array<boolean | undefined> = []
+    const wporg = fakeWporg()
+    const resolveProjects: CliDeps['resolveProjects'] = async (refs, opts) => {
+      readme.push(opts.readme)
+      return wporg.resolveProjects!(refs, opts)
+    }
+    const deps = { ...wporg, resolveProjects, reviewFile: async (opts: ReviewOptions) => reviewSummary(opts.file) }
+    await run(['fetch', 'koji', '--get', 'waiting', '--out-dir', home], deps)
+    await run(['fetch', 'koji', '--get', 'waiting', '--out-dir', home, '--no-readme'], deps)
+    expect(readme).toEqual([true, false])
+  })
+
   // A 45-second backoff with nothing on screen looks like a hang.
   it('says when wp.org asked it to wait, and for how long', async () => {
     const wporg = fakeWporg()

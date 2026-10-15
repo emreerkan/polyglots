@@ -105,10 +105,8 @@ type PageLookup =
  *
  * A theme has one. A plugin from a bare slug is dev or stable, whichever has
  * more strings in the chosen status, because that is where the work is; a tie
- * goes to dev, where new strings land first. The readme sub-projects are never
- * picked this way: they hold the plugin directory's marketing copy, a different
- * job from the plugin's interface, and somebody who wants them can paste the
- * URL that names one.
+ * goes to dev, where new strings land first. The readme sub-projects are left
+ * to `pickReadme`, which adds the readme as an entry of its own.
  */
 function pickRow(
   type: ProjectType,
@@ -122,6 +120,25 @@ function pickRow(
   const stable = rows.find((r) => r.branch === 'stable')
   if (!dev || !stable) return dev ?? stable
   return stable[status] > dev[status] ? stable : dev
+}
+
+/**
+ * The readme sub-project fetched beside a plugin's code (#33), or undefined
+ * when neither readme has strings in the chosen status.
+ *
+ * It used to be skipped as the plugin directory's copy rather than the
+ * interface, but a PTE review covers everything the contributor submitted for
+ * the plugin, and the readme is what users see first. One readme, not both:
+ * dev-readme and stable-readme hold largely the same text, so reviewing both
+ * would report the same problems twice. The one with more strings, because
+ * that is where the work is; stable-readme on a tie, because the directory
+ * page shows the readme from the stable tag.
+ */
+function pickReadme(rows: SubProject[], status: FetchStatus): (SubProject & { branch: string }) | undefined {
+  const dev = rows.find((r) => r.branch === 'dev-readme')
+  const stable = rows.find((r) => r.branch === 'stable-readme')
+  const pick = !dev || !stable ? (stable ?? dev) : dev[status] > stable[status] ? dev : stable
+  return pick && pick[status] > 0 ? (pick as SubProject & { branch: string }) : undefined
 }
 
 /**
@@ -151,6 +168,9 @@ export async function resolveProjects(
     pauseMs?: number
     sleep?: Sleep
     onWait?: (ms: number, url: string) => void
+    // Whether a plugin named without a sub-project also brings its readme.
+    // On unless turned off (--no-readme, or the Fetch screen's choice).
+    readme?: boolean
   },
 ): Promise<Resolution[]> {
   const sleep = opts.sleep ?? realSleep
@@ -181,12 +201,20 @@ export async function resolveProjects(
     const input = inputOf(ref)
     const types: ProjectType[] = ref.type ? [ref.type] : ['wp-themes', 'wp-plugins']
     let resolution: Resolution | undefined
+    let readme: Resolution | undefined
     for (const type of types) {
       const page = await lookup(type, ref.slug)
       if (page.kind === 'missing') continue
       if (page.kind === 'unreachable') {
         resolution = { input, state: 'unreachable', reason: page.reason }
         break
+      }
+      if (type === 'wp-plugins' && ref.branch === undefined && opts.readme !== false) {
+        const row = pickReadme(page.rows, opts.status)
+        if (row) {
+          const path = `wp-plugins/${ref.slug}/${row.branch}`
+          readme = { input: path, state: 'ready', type, slug: ref.slug, branch: row.branch, count: row[opts.status] }
+        }
       }
       const row = pickRow(type, page.rows, ref.branch, opts.status)
       if (!row) {
@@ -208,8 +236,18 @@ export async function resolveProjects(
       break
     }
     results.push(resolution ?? { input, state: 'not-found', reason: `no theme or plugin named ${ref.slug}` })
+    if (readme) results.push(readme)
   }
-  return results
+  // A readme added beside its code and also named on a line of its own would
+  // be downloaded and run twice, under one input. The first one stays.
+  const seen = new Set<string>()
+  return results.filter((r) => {
+    if (r.state !== 'ready') return true
+    const key = `${r.type}/${r.slug}/${r.branch ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /**
