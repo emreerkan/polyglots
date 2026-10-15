@@ -31,7 +31,7 @@ polyglots config set batchSize 50
 | `localModelServers` | none | Extra servers for `polyglots models` to list, comma-separated. Replaces the whole list. |
 | `localIdleTimeout` | `180` | Seconds a local server may send nothing before polyglots gives up on the reply. Raise it on slow hardware: `polyglots config set localIdleTimeout 600`. |
 | `usageStats` | off | Whether to share anonymous weekly totals for the website: `on` or `off`. See [usage statistics](usage-statistics.md). |
-| `updateCheck` | on | Whether to ask npm once a day for a newer version, and say so at the end of a command and in the app's header: `on` or `off`. |
+| `updateCheck` | on | Whether to ask npm once a day for a newer version, and say so at the end of a command and in the app's header: `on` or `off`. Also asks translate.wordpress.org once a day whether a glossary you synced has changed since. |
 
 The two context lengths are cleared with an empty value:
 `polyglots config set ollama.contextLength ""`.
@@ -100,7 +100,7 @@ Reviewing needs no key: the agent uses its own sign-in.
 | `POLYGLOTS_ASCII=1` | Plain ASCII instead of Unicode symbols and box lines. Also chosen automatically when the locale is not UTF-8, and on Windows outside Windows Terminal, VS Code and a few other terminals. `POLYGLOTS_ASCII=0` keeps Unicode in every case. |
 | `NO_COLOR` | No colour in the output. |
 | `FORCE_COLOR` | Colour even when the output is not a terminal. |
-| `NO_UPDATE_NOTIFIER=1` | Never check npm for a newer version. The check is also skipped when `CI` is set, or when the output is not a terminal. |
+| `NO_UPDATE_NOTIFIER=1` | Never check npm for a newer version, or translate.wordpress.org for a changed glossary. Both checks are also skipped when `CI` is set, or when the output is not a terminal. |
 
 ## Exit codes
 

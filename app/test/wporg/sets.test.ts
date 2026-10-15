@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { glossaryUrl } from '../../src/wporg/glossary-scraper.js'
+import { glossaryUrl } from '../../src/wporg/glossary.js'
 import { exportUrl, localePageUrl, projectFileName, readSubProjects } from '../../src/wporg/projects.js'
 import { buildConsistencyUrl } from '../../src/wporg/consistency-scraper.js'
 import { translationsUrl } from '../../src/review/message.js'

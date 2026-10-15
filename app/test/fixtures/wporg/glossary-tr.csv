@@ -1,0 +1,517 @@
+en,tr,pos,description
+"accent color","vurgu rengi",noun,"Özelleştiricide kullanılan renk paletleri için"
+access,erişmek,verb,
+accordion,akordeon,noun,
+"account recovery","hesap kurtarma",noun,
+action,eylem,noun,
+"action hook","eylem kancası",noun,"WordPress geliştirici şartları."
+activate,etkinleştir,verb,
+activated,etkinleştirildi,adjective,
+activation,etkinleştirmek,verb,
+"activation e-mail","etkinleştirme e-postası",noun,"Bir hesap açıldığında gönderilen otomatik e-posta."
+"ad policy","reklam ilkesi",noun,"Wordpress.com tarafından kullanıcı bloglarına yerleştirilebilecek reklamların politikası."
+"add email","e-posta ekle",expression,"Feature to connect email hosted with another provider. More info: http://en.support.wordpress.com/domains/add-email/"
+address,adres,verb,"Fiziksel konum adresi"
+"admin bar","yönetici araç çubuğu",noun,
+"admin panel","yönetim paneli",noun,
+administrator,yönetici,noun,"Wordpress bağlamında sitedeki en güçlü kullanıcı rolü. Ayrıntılı bilgi: http://en.support.wordpress.com/user-roles/"
+"After the Deadline","After the Deadline",noun,"Hizmet adı olduğu için çevirmeyin. 
+Dil kontrolörü (İnternet hizmeti adı). http://afterthedeadline.com/"
+again,yeniden,adverb,
+ajax,AJAX,abbreviation,"Asynchronous JavaScript And XML"
+alphanumeric,alfasayısal,noun,
+Appearance,Görünüm,noun,"Genel bağlamda ""Görünüm""
+WordPress bağlamında var olan temaların yönetildiği, özelleştirildiği ve yeni temaların kurulduğu yönetim menüsü."
+"applicable law","geçerli yasa",noun,"Kabul edilebilecek tüm kurallar."
+approve,onaylamak,verb,"approve topic, konuyu onayla"
+"arbitral decision","tahkim kararı",noun,
+archive,arşiv,noun,
+archive,arşivle,verb,
+archives,arşivler,noun,
+"are you sure you want","istediğinize emin misiniz",expression,
+argument,"bağımsız değişken",noun,
+array,dizilim,noun,"Geliştirici izinleri"
+article,makale,noun,"Temaya bağlı olarak, sayfalara ya da içeriklere değinilebilir."
+aside,ayrı,noun,
+"Aspect ratio","En-boy oranı",noun,
+"at the bottom",altta,preposition,
+attachment,"ek dosya",noun,
+attribute,öznitelik,noun,"forum attributes, forum öznitelikleri"
+audio,ses,noun,"Blogda gömülü ses dosyaları."
+audit,denetlemek,verb,
+"Authenticator app","Kimlik doğrulayıcı uygulaması",noun,
+author,yazar,noun,"Yazı ve sayfa gibi içeriklerin yazarı."
+author,geliştirici,noun,"Eklenti veya Tema yapımcısı"
+"auto renew","otomatik yenileme",noun,"Bkz. ""otomatik yenileme"""
+"automatic renewal","otomatik yenileme",noun,
+avatar,avatar,noun,"Bir kullanıcıyı temsil eden görsel ya da fotoğraf"
+background,"arka plan",noun,"Arka plan görseli veya rengi."
+"background color","arka plan rengi",noun,"Arka plan rengi "
+"background image","arka plan görüntüsü",noun,
+"background pattern","arka plan deseni",noun,"arka plan deseni"
+"backup code","yedekleme kodu",noun,
+base,temel,noun,"tag base, etiket temeli"
+Basic,Temel,noun,
+behavior,davranış,noun,
+"billing history","ödeme geçmişi",noun,
+binary,ikili,noun,
+biography,özgeçmiş,noun,
+blavatar,blavatar,noun,
+blog,blog,noun,
+"blog address","blog adresi",noun,
+"blog post","blog gönderisi",noun,
+"blog theme","blog teması",noun,
+blogger,"blog yazarı",noun,
+bookmarklet,"kod içeren yer işareti",noun,
+Border,Kenarlık,noun,"Bir HTML ögesinin kenarlık özniteliği bağlamında"
+Border,Sınır,noun,"Bir ögenin, nesnenin ya da alanın sınırları bağlamında"
+Breadcrumbs,"Gezinti bağlantıları",noun,
+"Browse Happy","Browse Happy",noun,"Özel ad. https://browsehappy.com/"
+browser,tarayıcı,noun,
+BuddyPress,BuddyPress,noun,"WordPress.org eklentisi - http://buddypress.org/"
+built-in,yerleşik,noun,
+bundle,paket,noun,
+Button,Düğme,noun,
+cache,"ön bellek",noun,
+capabilities,yetkinlikler,noun,"user capabilities, kullanıcı yetkinlikleri"
+caption,"alt yazı",noun,
+Carousel,"dönme dolap",noun,
+cart,sepet,noun,"Çevrim içi alışveriş sepeti"
+category,kategori,noun,
+"character code","karakter kodu",noun,
+"character entity reference","karakter varlık başvurusu",noun,
+"character set","karakter kümesi",noun,
+chargeback,"Kredi kartı iadesi",noun,"kredi kartı iadesi"
+checksum,sağlama,noun,
+click,tıkla,verb,tıkla
+"CNAME record","CNAME kaydı",noun,"DNS kaydı"
+collaboration,"iş birliği",noun,
+collection,derleme,noun,
+"color scheme","renk düzeni",noun,
+comment,yorum,noun,
+comment,"yorum yap",verb,
+compat,uyumluluk,noun,
+compatibility,uyumluluk,noun,
+computer,bilgisayar,noun,
+"conditional tag","koşullu etiket",noun,
+configuration,yapılandırma,noun,
+constant,sabit,noun,
+"contact form","iletişim formu",noun,
+content,içerik,noun,
+"Content Area","İçerik Alanı",noun,"Site/Blog içerik alanı "
+context,bağlam,noun,
+contributor,"katkıda bulunan",noun,
+controller,denetçi,noun,
+converter,dönüştürücü,noun,
+Cookie,"Tanımlama bilgisi",noun,"Tarayıcı çerezi"
+Cover,Manşet,noun,"Söz konusu öne çıkarılmak istenen içerik için özel oluşturulmuş alan ise ""Manşet"" kullanılmalı."
+create,oluşturmak,verb,"create topic, konu oluştur"
+"Creative Commons","Creative Commons",noun,"Yaratıcı çalışmalar için ücretsiz telif hakkı sağlayan bir kuruluştur detaylı bilgi: http://creativecommons.org/about"
+crop,kırpmak,verb,
+"Custom Colors","Özel Renkler",noun,
+"Custom CSS","Özel CSS",noun,
+"Custom Fonts","Özel Yazı Tipleri",noun,
+"custom post type","özel yazı türü",noun,
+customize,özelleştir,verb,
+Customizer,Özelleştirici,noun,
+Dashboard,"Başlangıç ekranı",noun,
+deactivate,etkisizleştir,verb,
+default,varsayılan,noun,
+"default theme","varsayılan tema",noun,
+deprecated,"kullanımdan kaldırılmış",adjective,
+developer,geliştirici,noun,
+"Digital Millennium Copyright Act","Dijital Milenyum Telif Hakkı Yasası",noun,
+direction,yönerge,noun,"talimat, tarif, doğrultu (yazıcı, sayfa)"
+directory,dizin,noun,"""index"", ""telefon rehberi"", ""eklenti listesi"" bağlamında kullanıldığında"
+directory,klasör,noun,"Dosya sistemi bağlamında kullanıldığında, ""folder"""
+disable,etkisizleştir,verb,
+disclaimer,"sorumluluk reddi",noun,Feragat
+"Distraction Free Writing","Odaklanmış yazma",noun,"Dikkat dağıtmayı önleyici tam ekran yazma modu"
+Documentation,Belgeler,noun,
+domain,"etki alanı",noun,
+"domain name","alan adı",noun,
+download,indir,expression,
+draft,taslak,noun,
+E-mail,E-posta,noun,
+editor,düzenleyici,noun,"Düzenleme aracı (örneğin; zengin metin düzenleyici, eklenti düzenleyici, tema düzenleyici)"
+editor,editör,noun,"Kullanıcı rolü"
+element,eleman,noun,
+email,e-posta,noun,
+"email address","e-posta adresi",noun,
+embed,göm,verb,
+embed,gömülü,adjective,
+emoji,emoji,noun,
+emoticon,ifade,noun,
+enable,etkinleştir,expression,
+entry,kayıt,noun,
+"entry title","kayıt başlığı",noun,"Bir kaydın başlığı (yazı ya da sayfa)"
+error,hata,noun,"Kodlamada veya internet üzerinde oluşan bir yanlış iş/işlem"
+excerpt,özet,noun,
+exclude,katılmasın,expression,
+extra,ek,noun,
+"extra storage","ek depolama alanı",noun,
+Facebook,Facebook,noun,
+favicon,"site simgesi",noun,
+favorite,beğen,verb,"favorite topic -> konuyu beğen"
+favorite,beğeni,noun,"my favorites, beğenilerim"
+feature,"öne çıkar",verb,
+feature,özellik,noun,"forum features, forum özellikleri"
+featured,"öne çıkarılmış",noun,
+"featured Image","öne çıkarılmış görsel",noun,
+"featured post","öne çıkarılmış yazı",noun,
+feed,akış,noun,"Örnek: (Takip edilen) Haber akışı. "
+"Field Guide","Alan Rehberi",noun,"Geliştiricilerin değişiklikler hakkında ayrıntılı bilgi verdiği rehber"
+file,dosya,noun,
+filter,süzgeç,noun,"Görüntülenmesi istenenlerin belirtildiği durum/aralık."
+filter,süz,expression,
+"filter hook","süzgeç kancası",noun,"WordPress geliştirme terimi"
+Firehose,Firehose,noun,
+fix,düzeltme,noun,
+fix,düzeltmek,verb,
+flip,çevir,verb,
+folder,klasör,noun,"Klasör: Dosya sisteminde
+Dosya klasörü: Dosyalamak bağlamında kullanıldığında "
+Follow,"Takip Et",verb,
+Follower,Takipçi,noun,
+Following,"Takip ediliyor",verb,
+Font,"Yazı tipi",noun,
+footer,"alt kısım",noun,"Bir yazının ya da sayfanın alt bölümündeki içerik. Genellikle yayın hakkı uyarısı, konu (tema) ve yayınlama bilgisini içerir."
+Format,Biçim,noun,
+Forum,Forum,noun,
+"free trial","Ücretsiz deneme",noun,
+"Freshly Pressed","Yeni Çıktı",noun,
+"front end","ara yüz",noun,
+gallery,galeri,noun,"Bir yazıya iliştirilmiş resim grubu. Genellikle bir dizi pulresimlerin (thumbnails) yeraldığı bir yazı veya sayfadaki resimler kadar, ayrıca bir Medya Kütüphanesi'indeki bir grubu/koleksiyonu da ifade eder."
+Gravatar,Gravatar,noun,"Gravatar hizmetinin adı, çevirmeyin"
+"Gravatar Profile","Gravatar profili",noun,
+"Guided Transfer","Rehberli aktarım",noun,
+Ham,"İstenmeyen Değil",noun,
+Hammiest,"En az istenmeyen içeren",adjective,
+handle,tanıtıcı,noun,
+"Happiness Engineer","Mutluluk Mühendisi",noun,
+header,başlık,noun,"H1, H2 ya da table header bağlamlarında başlık"
+header,"üst kısım",noun,"Header / Footer bağlamında üst kısım / alt kısım"
+headers,"üst bilgiler",noun,
+"Help Center","Yardım Merkezi",noun,
+hierarchy,hiyerarşi,noun,
+home,giriş,noun,
+host,barındır,verb,
+host,sunucu,noun,
+"hosting provider","barındırma hizmeti sağlayıcı",noun,
+hover,vurgu,noun,"Fare ile üzerine geldiğinde değişen öznitelik, bağlantının vurgu rengi gibi"
+hover,vurgu,adjective,
+hover,"üzerine gelmek",verb,"hover over the area, fare ile alan üzerine gelmek
+"
+hovercard,"bilgi kartı",noun,
+howdy,merhaba,expression,
+"human readable","insanlar tarafından okunabilir",expression,
+human-readable,"insan tarafından okunabilen",noun,
+icon,simge,noun,
+id,kimlik,noun,"Eşsiz belirteç, identity"
+identifier,belirteç,noun,
+ignore,"yok say",verb,
+image,görsel,noun,
+image,görsel,noun,
+improve,iyileştir,verb,
+improved,iyileştirildi,verb,
+include,katılsın,expression,
+inconsistent,tutarsız,noun,
+index,dizin,noun,
+Insights,"Tek Bakışta",noun,
+install,kur,verb,
+"instant comment email","anında yorum e-postası",noun,
+"instant post email","anında yazı e-postası",noun,
+"integration ",bütünleştirme,noun,
+internet,internet,noun,
+"Internet Corporation for Assigned Names and Numbers (ICANN)","Internet Corporation for Assigned Names and Numbers (ICANN)",noun,
+invalid,geçersiz,adjective,
+"IP address","IP adresi",noun,
+issue,sorun,noun,
+item,öge,noun,"Bknz: https://sozluk.gov.tr/?ara=%C3%B6ge"
+Jetpack,Jetpack,noun,"WordPress eklentisi -> http://jetpack.me/"
+"Jetpack Monitor","Jetpack İzleyici",noun,
+key,anahtar,noun,"Anahtar, private key > kişisel anahtar"
+key,tuş,noun,"Klavye tuşu. Press Enter key."
+Keyboard,klavye,noun,"Tam Türkçesi tuş takımı ancak yaygın değil."
+keyword,"anahtar sözcük",noun,
+"Late Renewal Fee","Gecikmiş Yenileme Bedeli",noun,
+layout,yerleşim,noun,"görünüm, düzen"
+level,düzey,noun,
+library,kütüphane,noun,
+lightbox,"üste açılan kutu",noun,
+Like,Beğeni,noun,
+like,beğen,verb,
+like,gibi,preposition,
+Likes,Beğeniler,noun,
+Link,Bağlantı,noun,
+link,bağlantı,noun,
+"link hover","bağlantı vurgusu",noun,"Fare ile bağlantı üzerine gelindiğinde değişen öznitelik, metin rengi gibi."
+"live chat","canlı sohbet",noun,
+"live chat support","canlı sohbet ile destek",noun,
+location,konum,noun,
+"log in","oturum aç",noun,
+"log out","oturumu kapat",noun,
+"logged in","oturum açıldı",adjective,
+"logged out","oturum kapatıldı",adjective,
+login,giriş,verb,"oturum açmak"
+logout,çıkış,verb,"oturumu kapatmak"
+"mapped domain","yönlendirilmiş etki alanı",noun,
+Media,Ortam,noun,
+"media file","ortam dosyası",noun,
+"media item","ortam ögesi",noun,
+"Media Uploader","Ortam yükleyici",noun,
+member,üye,noun,
+members,üyeler,noun,
+menu,menü,noun,
+"menu item","menü ögesi",noun,
+"menu location","menü konumu",noun,
+message,ileti,noun,
+meta,"üst veri",noun,
+"minimalist theme","minimalist tema",noun,
+"mobile device","mobil cihaz",noun,"iPhone, iPad, Android, Windows Phone, Samsung tablet, ya da BlackBerry gibi..."
+mode,kip,noun,"""Maintenance mode"" -> ""Bakım kipi"" gibi"
+moderate,denetle,verb,"Yorumlarınızı denetleyin, örneğin onay bekleyen ya da spam olarak işaretlenmiş gibi..."
+moderation,denetim,noun,"Belirli bir veri ya da işin kontrol edilmesi, denetlenmesi işinin tanımı"
+moderator,denetçi,noun,"Denetleme işini yapan görevli/sorumlu kişi için kullanılır"
+"modern design","modern tasarım",noun,
+multisite,"çoklu site",noun,
+name,ad,noun,
+namespace,"adlandırma alanı",noun,
+navigation,gezinme,noun,
+"next post","sonraki yazı",noun,
+Nickname,"Takma ad",noun,
+nonce,geçici,noun,
+normal,normal,noun,standart
+normalize,normalleştirmek,verb,standartlaştırmak
+"not sticky",sabitlenmemiş,adjective,"Sabitlenmiş yazı durumu için."
+notification,bildirim,noun,
+offline,"çevrim dışı",noun,
+"older post","daha eski yazı",noun,
+online,"çevrim içi",noun,
+option,seçenek,noun,
+orientation,doğrultu,noun,
+original,özgün,noun,orijinal
+overlay,kaplama,noun,
+override,değiştirme,noun,
+padding,dolgu,noun,
+Page,Sayfa,noun,
+"Page Builder","Sayfa oluşturucu",noun,
+pagination,sayfalama,noun,
+panel,pano,noun,
+parameter,parametre,noun,
+parent,üst,noun,"Üst öge, parent item, üst kategori, üst tema gibi"
+password,parola,noun,"""şifre"" (cipher) değil"
+pattern,model,noun,
+pause,duraklat,expression,
+pending,bekleyen,verb,"pending topics, bekleyen konular"
+performance,başarım,noun,
+permalink,"kalıcı bağlantı",noun,
+permission,izin,noun,"""yetki"""
+"permission denied","izin verilmedi",expression,
+"personal blog","kişisel blog",noun,
+"personal blogger","kişisel blog yazarı",noun,
+photoblogger,"fotoğraf blogu yazarı",noun,
+ping,"geri bağlantı",noun,"WordPress bağlamında kullanım"
+pingback,"geri bağlantı",noun,
+placeholder,"yer belirtici",noun,
+plugin,eklenti,noun,
+policy,"ilke, politika",noun,"Genellikle ""ilke"" ancak bazı durumlarda ""politika"" olarak da kullanılabilir"
+poll,anket,noun,
+Polldaddy,Polldaddy,noun,
+popular,beğenilen,noun,
+"Portfolio Page","Portföy Sayfası",noun,
+"portfolio theme","portföy teması",noun,
+Post,Yazı,noun,
+post,gönder,verb,
+post,yazı,noun,
+"Post Carousel","Yazı dönme dolabı",noun,
+"post format","yazı biçimi",noun,
+"Post List","Yazı Listesi",noun,
+"post meta","yazı üst verileri",noun,
+"post status","yazı durumu",noun,
+"post thumbnail","yazı küçük görseli",noun,
+"post type","yazı türü",noun,
+"posting goal","yazı hedefi",noun,
+"premium theme","ücretli tema",noun,
+"premium upgrade","ücretli yükseltme",noun,
+"Press This","Press This",noun,"WordPress özelliği"
+preview,"ön izle",verb,
+preview,"ön izleme",noun,
+"previous post","önceki yazı",noun,
+"primary domain","birincil etki alanı",noun,
+privacy,gizlilik,noun,
+private,"kişisel, gizli, özel",noun,
+"private key","kişisel anahtar",noun,
+problem,sorun,noun,
+profile,profil,noun,
+public,"herkese açık",noun,
+"public key","herkese açık anahtar",noun,
+Publicize,Publicize,noun,"Araç adı"
+publish,yayınla,expression,
+"publishing platform","yayın platformu",noun,
+query,sorgu,noun,
+"Quick Post","Hızlı Yazı",noun,
+Quiz,Test,noun,
+rating,puan,noun,
+reader,okuyucu,noun,
+Reblog,Reblogla,verb,
+Reblog,Reblog,noun,
+Redirect,yönlendirme,noun,"""Yeniden Yönlendirme"" ifadesi teknik işlemi birebir anlatıyor. İşlevsel olarak ""yönlendirme"" kullanılabilir"
+reference,başvuru,noun,
+referrer,yönlendiren,noun,
+refine,daraltmak,verb,"refine the list, listeyi daraltmak"
+"refund policy","iade ilkesi",noun,
+register,"hesap aç, kayıt",verb,
+registrar,"kayıt kuruluşu",noun,
+"related posts","benzer yazılar",noun,
+relative,göreli,adjective,
+release,dağıtım,noun,
+reply,yanıtla,verb,"reply to topic, konuyu yanıtla"
+reply,yanıt,noun,
+required,gerekli,noun,"""zorunlu"""
+responsive,uyumlu,adjective,"Görüntüleme aygıtının ekran boyutları ile uyumluluk bağlamında"
+restore,"geri yükle",expression,
+resume,sürdür,expression,
+retry,"yeniden dene",expression,
+"return value","geri dönüş değeri",noun,
+revision,sürüm,noun,
+revoke,"geçersiz kıl",expression,
+"ribbon ",şerit,noun,
+role,rol,noun,"user role, kullanıcı rolü"
+root,kök,noun,"forum root, forum kökü"
+RSS,RSS,noun,
+schedule,zamanla,verb,
+scheme,düzen,noun,
+screen,ekran,noun,"edit screen, düzenleme ekranı"
+script,betik,noun,
+search,ara,verb,
+self-hosted,"kullanıcı tarafından barındırılan",adjective,
+server,sunucu,noun,
+setting,ayar,noun,
+share,paylaşım,noun,
+share,paylaş,expression,
+sharing,paylaşılıyor,verb,
+"sharing button","paylaşım düğmesi",noun,
+"sharing settings","paylaşım ayarları",noun,
+shortcode,"kısa kod",noun,
+shortcut,kısayol,noun,
+Showcase,Vitrin,noun,
+sidebar,"kenar çubuğu",noun,"""yan çubuk"""
+"sign on","oturum aç",verb,
+"sign out","oturumu kapat",verb,
+"sign up","hesap aç",verb,
+sign-in,"giriş yap",verb,"""oturum açın"""
+Simplenote,Simplenote,noun,
+"single post","tekil yazı",noun,
+"Single Sign-On","Tek hesapla oturum açma",noun,
+site,site,noun,
+"Site Builder","Site oluşturucu",noun,
+"Site Redirect","Site Yönlendirme",noun,
+Slider,"Slayt Gösterisi Aracı",noun,
+slideshow,"slayt gösterisi",noun,
+slug,"adres son eki",noun,"kısa ad, kısaltma, category slug, alias, kategori kısa adı"
+"Social Media","Sosyal Medya",noun,"Twitter, Facebook, Pinterest ve diğerleri gibi sosyal ağ siteleri"
+"Space Upgrade","Depolama alanı yükseltmesi",noun,
+spam,istenmeyen,noun,
+Spammiest,"En çok istenmeyen içeren",adjective,"Bir zaman diliminde en çok spam alınması"
+span,süreklilik,noun,
+speculation,kurgu,noun,
+spotlight,"sahne ışığı",noun,
+"SRV record","SRV kaydı",noun,"DNS kaydı türü"
+"staging site","prova sitesi",noun,
+status,durum,noun,
+stick,sabitle,verb,"Listenin en üstünde ya da ekran kaydırılsa da konumu sabit kalan."
+stick,çubuk,noun,
+sticky,sabit,adjective,"Listenin en üstünde ya da ekran kaydırılsa da konumu sabit kalan."
+"Sticky Post","Sabit yazı",noun,"Listenin en üstünde ya da ekran kaydırılsa da konumu sabit kalan."
+store,mağaza,noun,
+string,dizge,noun,
+style,stil,noun,
+subpanel,"alt panel",noun,"""alt pano"""
+subscribe,"abone olmak",verb,
+subscription,abonelik,noun,
+"subscription dashboard","abonelik panosu",noun,"Kullanıcının abonelikleri görebileceği ve düzenleyebileceği abonelik sayfası."
+subtitle,"alt yazı",noun,
+Subversion,Subversion,noun,"Sürüm denetimi sistemi adı, çevirmeyin."
+"summary emails","özet e-postaları",noun,"Bir zaman aralığında birkaç yazı içeren blog abonelerine gönderilen e-postalar (anlık yazı e-postalarının aksine )"
+super-charge,"süper yükseltme",verb,"Ek özellikler alınan yükseltme; ücretli yükseltmeyi tanımlamak için de kullanılır. "
+"support guide","destek rehberi",noun,"Destek rehberi sayfa/yazı"
+"support page","destek sayfası",noun,
+"support team","destek ekibi",noun,
+survey,anket,noun,
+swag,"destekleme ürünleri",noun,
+"synced patterns","eşitlenen modeller",noun,
+synchronization,eşitlemek,noun,
+tab,sekme,noun,
+tag,etiket,noun,"Sınıflandırma için ""etiket"". Örnek: label, tag cloud gibi"
+tag,"kod imi",noun,"Markup dilleri için ""kod imi"". Örnek <title> HTML tag, <title> HTML kod imi"
+tagline,slogan,noun,
+taxonomy,sınıflandırma,noun,
+template,şablon,noun,"""kalıp"""
+"template hierarchy","şablon hiyerarşisi",noun,"""kalıp sınıflandırması"""
+term,terim,noun,
+"terms and conditions","hüküm ve koşullar",noun,"Hizmet hüküm ve koşullar metni"
+"terms of service","hizmet koşulları",noun,
+testimonial,deneyim,noun,
+"text editor","metin düzenleyici",noun,
+theme,tema,noun,
+"Theme Showcase","Tema Vitrini",noun,
+thumbnail,"küçük görsel",noun,
+"time stamp","zaman damgası",noun,
+timestamp,"zaman damgası",noun,
+timezone,"saat dilimi",noun,
+token,belirteç,noun,"Programlama ile ilgili kullanımlarda, örneğin API token vb."
+tolerance,"hata payı",noun,
+tool,araç,noun,
+Toolbar,"Araç çubuğu",noun,
+topic,konu,noun,
+trackback,"geri izleme",noun,
+traffic,trafik,noun,
+"Transfer Code","Aktarım Kodu",noun,
+Transient,Geçici,noun,
+translate,çevir,expression,
+translation,"çeviri ",noun,
+"trial period","deneme süresi",noun,
+trophy,kupa,noun,
+troubleshooting,"sorun giderme",noun,
+Twitter,Twitter,noun,"Sosyal medya hizmeti - http://twitter.com/"
+"two factor authentication","iki adımlı doğrulama",noun,
+type,tür,noun,
+type,yazmak,verb,
+typography,"yazı görünümü",noun,
+"unapprove ",reddetmek,verb,"unapprove reply, yanıtı reddet"
+Unfollow,"Takip Etmeyi Bırak",verb,
+unique,eşsiz,noun,
+"Unlimited Storage","Sınırsız Depolama Alanı",noun,
+"Unlimited Themes","Sınırsız Tema",noun,
+unmute,"sesi aç",verb,
+unstick,"sabitlemeyi kaldır",expression,"unstick topic, konuyu ayır,"
+update,güncelle,verb,
+update,güncelleme,noun,
+upgrade,yükseltme,noun,
+upgrade,yükselt,verb,
+"Upgrades page","Yükseltmeler sayfası",noun,
+upload,yükle,expression,"Sunucuya (karşıya) yükleme"
+uploader,yükleyici,noun,
+URI,URI,noun,"""adres"", ""İnternet adresi"""
+url,adres,noun,"İnternet adresi"
+user,kullanıcı,noun,
+users,kullanıcılar,noun,
+valid,geçerli,adjective,
+variant,çeşit,noun,
+various,çeşitli,noun,
+"verification code","doğrulama kodu",noun,
+video,video,noun,"""görüntü"", ""audio & video"" -> ""ses ve görüntü"""
+view,görüntüle,verb,
+"Visual Editor","Görsel düzenleyici",noun,
+"web server","site sunucusu",noun,
+website,site,noun,
+widget,bileşen,noun,
+widgets,bileşenler,noun,
+word,sözcük,noun,
+WordCamp,WordCamp,noun,"WordPress topluluğu - http://wordcamp.org/"
+WordPress,WordPress,noun,
+"WordPress Dashboard","WordPress Başlangıç ekranı",noun,
+X,X,noun,"Eski Twitter sosyal medya hizmeti"
+XML-RPC,XML-RPC,noun,"Ayrıntılı bilgi için: http://codex.wordpress.org/XML-RPC_Support"
+"Yummy Pie","Pasta Grafik",noun,

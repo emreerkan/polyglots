@@ -7,13 +7,16 @@ import { VERSION } from '../version.js'
 export const USER_AGENT = `polyglots/${VERSION} (+https://github.com/emreerkan/polyglots)`
 const TIMEOUT_MS = 20_000
 
-export async function fetchHtml(url: string): Promise<string> {
+// The Accept header is the caller's: a page asks for HTML, the glossary export
+// for CSV. wp.org serves either way today, but saying what is wanted costs
+// nothing and keeps a content-negotiating proxy from guessing.
+export async function fetchHtml(url: string, accept = 'text/html'): Promise<string> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
     const res = await fetch(url, {
       method: 'GET',
-      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html' },
+      headers: { 'User-Agent': USER_AGENT, Accept: accept },
       signal: controller.signal,
     })
     if (!res.ok) {

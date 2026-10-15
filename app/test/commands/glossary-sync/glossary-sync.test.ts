@@ -8,7 +8,8 @@ import type Database from 'better-sqlite3'
 import { syncGlossary } from '../../../src/commands/glossary-sync.js'
 import { dataDir, dbFile } from '../../../src/paths.js'
 import { lookupGlossary, openDb, replaceGlossary } from '../../../src/storage/index.js'
-import { glossaryUrl } from '../../../src/wporg/glossary-scraper.js'
+import { glossarySyncTimes } from '../../../src/storage/glossary.js'
+import { glossaryExportUrl, glossaryUrl } from '../../../src/wporg/glossary.js'
 
 type Storage = typeof import('../../../src/storage/index.js')
 
@@ -18,7 +19,7 @@ vi.mock('../../../src/storage/index.js', async (importOriginal) => {
 })
 
 const fixture = readFileSync(
-  fileURLToPath(new URL('../../fixtures/wporg/glossary-tr.html', import.meta.url)),
+  fileURLToPath(new URL('../../fixtures/wporg/glossary-tr.csv', import.meta.url)),
   'utf8',
 )
 
@@ -58,13 +59,24 @@ describe('syncGlossary', () => {
     await rm(home, { recursive: true, force: true })
   })
 
-  it('stores the scraped glossary and makes terms discoverable', async () => {
+  it('stores the exported glossary and makes terms discoverable', async () => {
     const result = await syncGlossary({ locale: 'tr', db, fetch: fixtureFetch })
 
     expect(result.entries).toBeGreaterThan(400)
     expect(countRows(db, 'tr')).toBe(result.entries)
     expect(lookupGlossary(db, 'plugin', 'tr')[0]).toMatchObject({ sourceTerm: 'plugin', translation: 'eklenti' })
     expect(lookupGlossary(db, 'permalink', 'tr')[0]).toMatchObject({ translation: 'kalıcı bağlantı' })
+  })
+
+  // The freshness check reads the sync time from the rows, so a sync must
+  // stamp them all with the moment it ran.
+  it('records when each locale was synced', async () => {
+    const before = Date.now()
+    await syncGlossary({ locale: 'tr', db, fetch: fixtureFetch })
+    const times = glossarySyncTimes(db)
+    expect(times.map((t) => t.locale)).toEqual(['tr'])
+    expect(times[0]!.syncedAt).toBeGreaterThanOrEqual(before)
+    expect(times[0]!.syncedAt).toBeLessThanOrEqual(Date.now())
   })
 
   it('replaces stale rows of the synced locale on re-sync', async () => {
@@ -97,7 +109,7 @@ describe('syncGlossary', () => {
     expect(countRows(db, 'tr')).toBe(1)
   })
 
-  it('rejects when the scrape yields no entries and keeps previously stored rows', async () => {
+  it('rejects when the export yields no entries and keeps previously stored rows', async () => {
     replaceGlossary(db, 'tr', [{ locale: 'tr', sourceTerm: 'keep-me', translation: 'sakla' }])
     vi.mocked(replaceGlossary).mockClear()
 
@@ -119,7 +131,7 @@ describe('syncGlossary', () => {
 
     const result = await syncGlossary({ locale: 'de', db, fetch: fetchPage })
 
-    expect(calls).toEqual([glossaryUrl('de')])
+    expect(calls).toEqual([glossaryExportUrl('de')])
     expect(result.entries).toBeGreaterThan(400)
     expect(lookupGlossary(db, 'plugin', 'de')[0]).toMatchObject({ locale: 'de', sourceTerm: 'plugin', translation: 'eklenti' })
     expect(countRows(db, 'tr')).toBe(0)

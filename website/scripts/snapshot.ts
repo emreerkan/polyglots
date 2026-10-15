@@ -79,6 +79,7 @@ const INJECTABLE = {
   raiseSignal: true,
   sendUsage: true,
   checkUpdate: true,
+  checkGlossary: true,
   makePot: true,
 } satisfies Record<Exclude<keyof CliDeps, 'streams' | 'env'>, true>
 

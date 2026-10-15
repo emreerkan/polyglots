@@ -7,13 +7,13 @@ import { translateFile } from '../../src/commands/translate.js'
 import { writeMcpConfig } from '../../src/mcp/config.js'
 import { dataDir, dbFile } from '../../src/paths.js'
 import type { GlossaryEntry, TmMatch } from '../../src/types.js'
-import { glossaryUrl } from '../../src/wporg/glossary-scraper.js'
+import { glossaryUrl } from '../../src/wporg/glossary.js'
 import {
   callJson,
   connectMcp,
   fakeClaude,
   fakeEngine,
-  glossaryHtml,
+  glossaryCsv,
   makeWorkspace,
   snapshotEnv,
   writeTmx,
@@ -40,7 +40,7 @@ afterEach(async () => {
 
 async function fixtureFetch(url: string): Promise<string> {
   if (!url.startsWith(glossaryUrl('tr'))) throw new Error(`unexpected url ${url}`)
-  return readFile(glossaryHtml, 'utf8')
+  return readFile(glossaryCsv, 'utf8')
 }
 
 describe('E. the MCP server the review subprocess launches reads the same DB the commands write', () => {
@@ -89,7 +89,7 @@ describe('E. the MCP server the review subprocess launches reads the same DB the
   })
 
   it('launches from the mcp.json translateFile hands to claude, with tool defaults following the run locale', async () => {
-    const anyLocaleFetch = async (): Promise<string> => readFile(glossaryHtml, 'utf8')
+    const anyLocaleFetch = async (): Promise<string> => readFile(glossaryCsv, 'utf8')
     await syncGlossary({ locale: 'de', fetch: anyLocaleFetch })
     const argsOut = join(ws.home, 'claude-args.json')
     process.env.FAKE_CLAUDE_ARGS_OUT = argsOut

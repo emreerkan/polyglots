@@ -15,7 +15,7 @@ const here = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url
 export const samplePo = here('../fixtures/po/sample.po')
 export const hooksPo = here('../fixtures/integration/hooks.po')
 export const fakeClaude = here('../fixtures/fake-claude/claude')
-export const glossaryHtml = here('../fixtures/wporg/glossary-tr.html')
+export const glossaryCsv = here('../fixtures/wporg/glossary-tr.csv')
 export const cliEntry = here('../../src/cli.ts')
 export const tsxCli = createRequire(import.meta.url).resolve('tsx/cli')
 

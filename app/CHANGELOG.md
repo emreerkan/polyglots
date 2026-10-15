@@ -10,6 +10,14 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Added
+
+- The end of a command says when a synced glossary has changed on translate.wordpress.org since, is over a month old when wp.org cannot say, or is over three months old.
+
+### Changed
+
+- `polyglots glossary sync` downloads the glossary's CSV export instead of reading its web pages.
+
 ## [0.30.0] - 2026-10-14
 
 ### Added

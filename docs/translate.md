@@ -86,6 +86,13 @@ translate.wordpress.org. Both commands use it, and review refuses to run
 without it. `polyglots glossary export glossary.csv` writes it as a CSV with
 Term, Translation and Notes columns, the layout Poedit imports.
 
+Once a day polyglots asks translate.wordpress.org when each glossary you
+synced last changed. If it changed after your copy, the end of the next
+command says so and names the `polyglots glossary sync` command to run. When
+wp.org cannot say, a copy older than a month gets the same reminder, and
+any copy older than three months gets it whatever wp.org says. The
+`updateCheck` setting turns this off together with the update check.
+
 ## Splitting a large file
 
 A file of several thousand strings is easier to review, and to submit, in

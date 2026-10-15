@@ -77,6 +77,7 @@ import type { DraftEngineChoice, Locale, PolyglotsConfig } from './types.js'
 import { VERSION } from './version.js'
 import { previewUsagePayload, resetUsageState, sendUsageInBackground, usageStatus, usageStateFile } from './usage/index.js'
 import { checkForUpdate, updateCheckEnabled, updateNotice } from './update/index.js'
+import { checkGlossaries, glossaryNotice, type StaleGlossary } from './glossary/freshness.js'
 
 const EXIT_OK = 0
 const EXIT_ERROR = 1
@@ -124,6 +125,9 @@ export interface CliDeps {
   // Resolves with the newer version npm holds, or undefined (src/update).
   // Injected so no test, and no website demo, asks the registry.
   checkUpdate?: () => Promise<string | undefined>
+  // Resolves with the synced glossaries that are out of date (src/glossary).
+  // Injected so no test, and no website demo, asks translate.wordpress.org.
+  checkGlossary?: () => Promise<StaleGlossary[]>
   // Turns a plugin or theme folder into a .pot (src/lint/make-pot.ts).
   // Injected so no test, and no website demo, runs WP-CLI or downloads it.
   makePot?: typeof makePot
@@ -1593,6 +1597,37 @@ interface UpdateCheck {
   latest?: string | undefined
 }
 
+/**
+ * Starts the daily glossary freshness check under the same conditions as the
+ * update check, and the same switch: both only ask a server whether there is
+ * news, and a second setting would be one more thing to find.
+ */
+function startGlossaryCheck(cli: Cli, argv: string[], deps: CliDeps): GlossaryCheck | undefined {
+  try {
+    if (!startsUsageSend(argv) || cli.streams.stderr.isTTY !== true) return undefined
+    if (!updateCheckEnabled(cli.config(), deps.env ?? process.env)) return undefined
+    const check: GlossaryCheck = {}
+    ;(deps.checkGlossary ?? checkGlossaries)().then(
+      (stale) => (check.stale = stale),
+      () => undefined,
+    )
+    return check
+  } catch {
+    return undefined
+  }
+}
+
+interface GlossaryCheck {
+  // Set once the check has answered; read at the end without waiting.
+  stale?: StaleGlossary[]
+}
+
+function sayGlossary(cli: Cli, check: GlossaryCheck | undefined): void {
+  for (const stale of check?.stale ?? []) {
+    cli.err(cli.ui.err.paint('warn', `${cli.ui.err.glyphs.warn} ${glossaryNotice(stale)}`))
+  }
+}
+
 function sayUpdate(cli: Cli, check: UpdateCheck | undefined): void {
   if (check?.latest === undefined) return
   // Yellow throughout, not only the glyph as messages.ts does elsewhere: this
@@ -1604,6 +1639,7 @@ export async function main(argv: string[], deps: CliDeps = {}): Promise<number> 
   const cli = createCli(deps)
   let exitCode = EXIT_OK
   const update = startUpdateCheck(cli, argv, deps)
+  const glossary = startGlossaryCheck(cli, argv, deps)
   // Started, never awaited: it reads the setting itself and does nothing when
   // off, and a request still out when the command ends dies with the process.
   if (startsUsageSend(argv)) {
@@ -1618,14 +1654,17 @@ export async function main(argv: string[], deps: CliDeps = {}): Promise<number> 
     if (argv.length === 0) {
       await cli.runTui(update === undefined ? {} : { update: update.promise })
       sayUpdate(cli, update)
+      sayGlossary(cli, glossary)
       return EXIT_OK
     }
     await buildProgram(cli, (code) => (exitCode = code)).parseAsync(argv, { from: 'user' })
     sayUpdate(cli, update)
+    sayGlossary(cli, glossary)
     return exitCode
   } catch (error) {
     const code = exitCodeFor(cli, error)
     sayUpdate(cli, update)
+    sayGlossary(cli, glossary)
     return code
   }
 }

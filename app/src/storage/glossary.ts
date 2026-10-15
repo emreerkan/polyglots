@@ -63,3 +63,17 @@ export function lookupGlossary(db: Database.Database, term: string, locale: Loca
     .all(locale, `%${escapeLike(trimmed)}%`, trimmed)
   return [...exact, ...partial].map(toEntry)
 }
+
+/**
+ * When each locale's glossary was last synced, as epoch milliseconds. A sync
+ * replaces every row of the locale with one timestamp, so the newest row is
+ * the sync. The freshness check compares it with wp.org's Last-Modified, and
+ * needs no table of its own in a database that cannot be regenerated.
+ */
+export function glossarySyncTimes(db: Database.Database): Array<{ locale: string; syncedAt: number }> {
+  return db
+    .prepare<[], { locale: string; synced: string }>('SELECT locale, max(updated_at) AS synced FROM glossary GROUP BY locale')
+    .all()
+    .map((r) => ({ locale: r.locale, syncedAt: Date.parse(r.synced) }))
+    .filter((r) => Number.isFinite(r.syncedAt))
+}

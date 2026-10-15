@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
 import type { GlossaryEntry, Locale } from '../types.js'
 import { openDb, replaceGlossary } from '../storage/index.js'
-import { fetchGlossary, type FetchPage } from '../wporg/glossary-scraper.js'
+import { fetchGlossary, type FetchPage } from '../wporg/glossary.js'
 
 export interface SyncGlossaryOptions {
   locale: Locale
