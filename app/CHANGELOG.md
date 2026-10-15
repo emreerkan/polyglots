@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-10-15
+
 ### Removed
 
 - Runs no longer write the unused `entry` table in `jobs.db`; an existing one is left in place for older versions still running.
