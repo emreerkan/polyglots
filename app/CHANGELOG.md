@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-10-15
+
 ### Added
 
 - The end of a command says when a synced glossary has changed on translate.wordpress.org since, is over a month old when wp.org cannot say, or is over three months old.
