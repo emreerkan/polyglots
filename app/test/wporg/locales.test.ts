@@ -27,6 +27,14 @@ describe('parseStats', () => {
       { wp: 'tr_TR', slug: 'tr', set: 'default' },
     ])
   })
+
+  // The slug and set are written between single quotes into a TypeScript
+  // source file, so a quote in either would break it or add code to it.
+  it('skips a row whose slug or set is not a plain slug', () => {
+    const row = (slug: string, set: string, wp: string) => `<tr><td><a href="/locale/${slug}/${set}/">${wp}</a></td></tr>`
+    const html = [row("tr'x", 'default', 'tr_TR'), row('nl', "formal'+x", 'nl_NL'), row('de', 'default', 'de_DE')].join('')
+    expect(parseStats(html)).toEqual([{ wp: 'de_DE', slug: 'de', set: 'default' }])
+  })
 })
 
 describe('the shipped table', () => {

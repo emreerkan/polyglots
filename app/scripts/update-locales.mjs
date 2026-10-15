@@ -34,6 +34,10 @@ export function parseStats(html) {
     if (!link) continue
     const wp = link[3].replace(/<[^>]+>/g, '').trim()
     if (!/^[a-z]{2,3}(?:_[A-Za-z0-9]+)*$/.test(wp)) continue
+    // All three are written between quotes into a TypeScript source file, so
+    // the slug and set are held to the same standard as the code: a page that
+    // changed shape, or was tampered with, must not put a quote there.
+    if (!/^[a-z0-9-]+$/.test(link[1]) || !/^[a-z0-9-]+$/.test(link[2])) continue
     byCode.set(wp, { wp, slug: link[1], set: link[2] })
   }
   return [...byCode.values()].sort((a, b) => a.wp.localeCompare(b.wp))
