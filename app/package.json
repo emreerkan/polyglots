@@ -1,6 +1,6 @@
 {
   "name": "polyglots",
-  "version": "0.31.0",
+  "version": "0.32.0",
   "description": "Translate and review WordPress .po files with machine drafts and AI review",
   "keywords": [
     "wordpress",

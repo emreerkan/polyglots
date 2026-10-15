@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-10-15
+
 ### Added
 
 - `polyglots fetch` and the Fetch screen also download a plugin's readme strings, as a file of their own; `--no-readme` or `r` turns it off.
