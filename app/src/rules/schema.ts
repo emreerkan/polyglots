@@ -98,7 +98,15 @@ const regex = z
   .min(1)
   .max(SENTENCE_REGEX_LIMIT, { message: `is longer than ${SENTENCE_REGEX_LIMIT} characters` })
   .refine(compiles, { message: 'is not a valid regular expression' })
-const registerLine = z.string().min(1).max(REGISTER_LIMIT, { message: `is longer than ${REGISTER_LIMIT} characters` })
+// min(1) counts spaces, and these two are not trimmed the way guidance is: a
+// register of three spaces would replace the default register line with a
+// blank one and move the fingerprint, and nothing would say so. Refused with
+// a message that names the key instead.
+const notBlank = (s: string) => s.trim().length > 0
+const registerLine = z
+  .string()
+  .refine(notBlank, { message: 'is empty' })
+  .max(REGISTER_LIMIT, { message: `is longer than ${REGISTER_LIMIT} characters` })
 
 const mistake = z
   .object({
@@ -155,7 +163,7 @@ export const localeRulesSchema = z
     schema: z.number().int().min(1).max(MAX_SCHEMA).optional(),
     capitalization: z
       .string()
-      .min(1)
+      .refine(notBlank, { message: 'is empty' })
       .max(CAPITALIZATION_LIMIT, { message: `is longer than ${CAPITALIZATION_LIMIT} characters` })
       .optional(),
     register: z

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseLocaleRules, RulesFileError } from '../../src/rules/load.js'
-import { rulesFingerprint } from '../../src/rules/load.js'
+import { parseLocaleRules, RulesFileError, rulesFingerprint } from '../../src/rules/load.js'
 
 const parse = (text: string) => parseLocaleRules(text, '/x/tr_TR.yaml')
 const error = (text: string) => {
@@ -37,6 +36,15 @@ describe('schema 2 keys', () => {
   })
   it('limits capitalization to 2500 characters', () => {
     expect(error(`schema: 2\ncapitalization: '${'x'.repeat(2501)}'`).message).toContain('longer than 2500')
+  })
+  // A blank line is not an absent one: it would replace the default register
+  // line with nothing and move the fingerprint, with nothing said.
+  it.each([
+    ["register: '   '", 'register is empty'],
+    ["register: { audit: '  ' }", 'register.audit is empty'],
+    ["capitalization: \"  \\n\"", 'capitalization is empty'],
+  ])('refuses a blank %s', (line, message) => {
+    expect(error(`schema: 2\n${line}`).message).toContain(message)
   })
   it('takes register as one string for both prompts', () => {
     expect(parse('schema: 2\nregister: "- du"').register).toEqual({ audit: '- du', translate: '- du' })
