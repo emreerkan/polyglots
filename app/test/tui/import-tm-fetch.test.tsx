@@ -40,6 +40,16 @@ function mount(overrides: Partial<TuiCommands> = {}, onBack: () => void = () => 
   return { ...view, commands }
 }
 
+// The menu draws before the manifest answers, with the file highlighted,
+// and the highlight stays there when the fetch is listed above it; one key
+// up reaches the fetch.
+async function chooseFetch(view: ReturnType<typeof mount>) {
+  await waitForText(view.lastFrame, 'Fetch from polyglots-data')
+  view.stdin.write(keys.up)
+  await tick()
+  view.stdin.write(keys.enter)
+}
+
 const listed = () => ({ manifest: vi.fn(async () => manifestWith({ tm: [tmEntry()] })), download: vi.fn() })
 
 describe('ImportTm: fetch from polyglots-data', () => {
@@ -61,6 +71,22 @@ describe('ImportTm: fetch from polyglots-data', () => {
     const view = mount({ dataClient: listed() })
     await waitForText(view.lastFrame, 'Fetch from polyglots-data')
     expect(flat(view.lastFrame())).toContain('locale tr')
+  })
+
+  // The fetch is put first when the manifest answers, which happens while
+  // the menu is on screen; the highlight has to stay on what it was on,
+  // or enter pressed a moment later starts a download nobody chose.
+  it('keeps the highlight on the file when fetch is added above it', async () => {
+    let answer: (m: ReturnType<typeof manifestWith>) => void = () => undefined
+    const manifest = vi.fn(() => new Promise<ReturnType<typeof manifestWith>>((resolve) => (answer = resolve)))
+    const view = mount({ dataClient: { manifest, download: vi.fn() } })
+    await waitForText(view.lastFrame, 'Checking polyglots-data')
+    expect(flat(view.lastFrame())).toMatch(/[›>] Import a file/)
+    answer(manifestWith({ tm: [tmEntry()] }))
+    await waitForText(view.lastFrame, 'Fetch from polyglots-data')
+    const frame = flat(view.lastFrame())
+    expect(frame).toMatch(/[›>] Import a file/)
+    expect(frame).not.toMatch(/[›>] Fetch from polyglots-data/)
   })
 
   it('hides fetch when the manifest has no entry for the locale', async () => {
@@ -88,8 +114,7 @@ describe('ImportTm: fetch from polyglots-data', () => {
   it('opens the file picker from the menu', async () => {
     const view = mount({ dataClient: listed() })
     await waitForText(view.lastFrame, 'Fetch from polyglots-data')
-    view.stdin.write(keys.down)
-    await tick()
+    // The highlight is still on the file, where it was before the fetch was listed.
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, 'poedit.tmx')
   })
@@ -100,8 +125,7 @@ describe('ImportTm: fetch from polyglots-data', () => {
   it('esc from the fetch summary returns to the menu', async () => {
     let back = 0
     const view = mount({ dataClient: listed(), planTmFetch: vi.fn(async () => plan()) }, () => back++)
-    await waitForText(view.lastFrame, 'Fetch from polyglots-data')
-    view.stdin.write(keys.enter)
+    await chooseFetch(view)
     await waitForText(view.lastFrame, 'Turkish (tr): 1,002 strings')
     view.stdin.write(keys.esc)
     await tick(ESC_DELAY)
@@ -114,8 +138,7 @@ describe('ImportTm: fetch from polyglots-data', () => {
     let back = 0
     const view = mount({ dataClient: listed() }, () => back++)
     await waitForText(view.lastFrame, 'Fetch from polyglots-data')
-    view.stdin.write(keys.down)
-    await tick()
+    // The highlight is still on the file, where it was before the fetch was listed.
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, 'poedit.tmx')
     view.stdin.write(keys.esc)
@@ -141,8 +164,7 @@ describe('ImportTm: fetch from polyglots-data', () => {
     const planTmFetch = vi.fn(async () => plan())
     let back = 0
     const view = mount({ dataClient: listed(), planTmFetch, runTmFetch }, () => back++)
-    await waitForText(view.lastFrame, 'Fetch from polyglots-data')
-    view.stdin.write(keys.enter)
+    await chooseFetch(view)
     await waitForText(view.lastFrame, 'Turkish (tr): 1,002 strings')
     expect(flat(view.lastFrame())).toContain('Your memory has no tr strings yet.')
     expect(runTmFetch).not.toHaveBeenCalled()
@@ -169,8 +191,7 @@ describe('ImportTm: fetch from polyglots-data', () => {
       return new Promise<never>(() => {})
     })
     const view = mount({ dataClient: listed(), planTmFetch: vi.fn(async () => plan()), runTmFetch })
-    await waitForText(view.lastFrame, 'Fetch from polyglots-data')
-    view.stdin.write(keys.enter)
+    await chooseFetch(view)
     await waitForText(view.lastFrame, '1,002 strings')
     view.stdin.write('y')
     await waitForText(view.lastFrame, 'Downloading')
@@ -183,8 +204,7 @@ describe('ImportTm: fetch from polyglots-data', () => {
         throw new Error('The polyglots-data memory for tr claims more than 200 MiB; refusing it.')
       }),
     })
-    await waitForText(view.lastFrame, 'Fetch from polyglots-data')
-    view.stdin.write(keys.enter)
+    await chooseFetch(view)
     await waitForText(view.lastFrame, 'claims more than 200 MiB')
     view.stdin.write('y')
     await tick()

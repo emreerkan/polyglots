@@ -59,14 +59,19 @@ function ImportTmInLocale({ cwd, onBack, locale }: ImportTmProps & { locale: Loc
   const glyphs = useGlyphs()
   const listing = useTmListing(locale)
   const [chosen, setChosen] = useState<Choice>()
-  const [at, setAt] = useState(0)
+  // The highlighted option by id, not by row: the fetch is put above the
+  // file when the manifest answers, which happens while the menu is on
+  // screen, and a row index would move the highlight onto it under the
+  // person's finger. It starts on whatever is first when the menu is drawn,
+  // which is the file until the manifest has answered, and stays there.
+  const [selected, setSelected] = useState<Choice>(() => (listing.status === 'listed' ? 'fetch' : 'file'))
   const options: { id: Choice; label: string; detail: string }[] = [
     ...(listing.status === 'listed'
       ? [{ id: 'fetch' as const, label: 'Fetch from polyglots-data', detail: "the locale's published memory, checked against its sha512" }]
       : []),
     { id: 'file', label: 'Import a file…', detail: '.tmx or .po, from PoEdit or translate.wordpress.org' },
   ]
-  const cursor = Math.min(at, options.length - 1)
+  const cursor = Math.max(0, options.findIndex((o) => o.id === selected))
   const choosing = chosen === undefined
   // Esc before anything is imported goes back one step. With two ways in that
   // is the choice between them, so someone who opened the fetch to read its
@@ -78,7 +83,9 @@ function ImportTmInLocale({ cwd, onBack, locale }: ImportTmProps & { locale: Loc
   useBackKeys(onBack, { enabled: choosing })
   useKeys({
     importChoice: {
-      move: choosing ? (_input, key) => setAt(key.upArrow ? Math.max(0, cursor - 1) : Math.min(options.length - 1, cursor + 1)) : undefined,
+      move: choosing
+        ? (_input, key) => setSelected(options[key.upArrow ? Math.max(0, cursor - 1) : Math.min(options.length - 1, cursor + 1)]!.id)
+        : undefined,
       choose: choosing ? () => setChosen(options[cursor]!.id) : undefined,
     },
   })
