@@ -75,7 +75,7 @@ it works over SSH too. The app's Locale rules screen has the same link.
   shown in full in the last step. Download it, or copy it.
 - A tester runs your mistakes and patterns on a sample source and
   translation, and says which ones fire. Like a review, it stops a regular
-  expression after 100 ms and leaves it out.
+  expression after about 100 ms and leaves it out.
 - Nothing leaves your browser unless you share the file. Your work is kept
   in the browser, so a reload does not lose it.
 
@@ -204,9 +204,9 @@ It reports a mistake with the line it is on, and summarises what the file
 sets. A review refuses to run on a file that does not parse, rather than run
 on rules you believe are in force.
 
-Each regular expression may take at most 100 ms on one translation. Some
+Each regular expression may take about 100 ms on one translation. Some
 expressions, such as `^(a+)+$`, can take minutes on the wrong text. A review
-stops such an expression after 100 ms and does not use it again. The entry
+stops such an expression after about 100 ms and does not use it again. The entry
 where it stopped gets a finding that names the expression, and the summary
 names it once. `rules check` runs each expression on a few test strings first,
 and reports one that takes too long as an error on its line.
