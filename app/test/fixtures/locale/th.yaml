@@ -17,4 +17,4 @@ schema: 2
 
 sentenceEnd:
   unmarked: true
-  notEnding: '\p{Script=Thai}\p{M}*\.\s*$'
+  notEnding: '(?:(?!\p{M})\p{Script=Thai})\p{M}*\.\s*$'
