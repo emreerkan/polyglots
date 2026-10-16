@@ -34,6 +34,7 @@ Entries say what changed. For why and how, read the commit.
 ### Removed
 
 - The Turkish reply starters; existing templates are kept.
+- The no-locale refusal no longer suggests tr to people with earlier Turkish work; set a locale with `polyglots config set defaultLocale`.
 
 ### Fixed
 
