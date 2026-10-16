@@ -180,6 +180,15 @@ describe('createTemplate and deleteTemplate', () => {
     expect(await readFile(file, 'utf8')).toBe('mine')
   })
 
+  // A tr_TR manager's approved.txt may be the reply that used to be built in
+  // here, and dropping that text from the code must not reach the file.
+  it('never rewrites a template that exists, whatever the starter now says', async () => {
+    const file = saveTemplate('tr', 'approved', 'mine')
+    expect(() => createTemplate('tr', 'approved')).toThrow(/already exists/)
+    expect(listTemplates('tr')).toEqual(['approved'])
+    expect(await readFile(file, 'utf8')).toBe('mine')
+  })
+
   it('refuses a name that is not a plain file name', () => {
     expect(() => createTemplate('tr', '../escape')).toThrow(/not a valid template name/)
     expect(() => deleteTemplate('tr', '../escape')).toThrow(/not a valid template name/)
@@ -221,58 +230,48 @@ describe('chooseTemplate', () => {
 })
 
 describe('starterTemplate', () => {
-  it('starts tr from the locale manager’s own reply', () => {
-    const text = starterTemplate('tr', 'approved')
-    expect(text).toContain('Hello @{username},')
-    expect(text).toContain('{There were no problems.|There were a few problems, and I fixed them.}')
-    expect(text).toContain('{results}')
-    expect(text).toContain('#tr_TR translation team')
-    expect(text).toContain('<a href="https://www.wp-tr.org/slack/">local slack</a>')
+  // The starters are the app's, not any locale's: a team's own wording is
+  // its template file, which the app never writes over. tr_TR once had its
+  // locale manager's reply baked in here; that text now lives only in the
+  // files already on that manager's disk.
+  it('offers the generic starter for tr_TR', () => {
+    expect(starterTemplate('tr', 'approved')).toBe(starterTemplate('de', 'approved'))
+    expect(starterTemplate('tr', 'declined')).toBe(starterTemplate('de', 'declined'))
+    expect(starterTemplate('tr', 'custom')).toBe(starterTemplate('de', 'approved'))
   })
 
-  it('starts any other locale from a neutral reply with the same placeholders', () => {
-    for (const name of ['approved', 'declined', 'custom']) {
-      const text = starterTemplate('de', name)
-      expect(text).toContain('{username}')
-      expect(text).toContain('{results}')
-      expect(text).toMatch(/\{[^{}|]+\|[^{}|]+\}/)
-      expect(text).not.toContain('wp-tr.org')
+  it('starts every locale from a neutral reply with the same placeholders', () => {
+    for (const locale of ['de', 'tr']) {
+      for (const name of ['approved', 'declined', 'custom']) {
+        const text = starterTemplate(locale, name)
+        expect(text).toContain('{username}')
+        expect(text).toContain('{results}')
+        expect(text).toMatch(/\{[^{}|]+\|[^{}|]+\}/)
+        expect(text).not.toContain('wp-tr.org')
+        expect(text).not.toContain('#tr_TR')
+      }
     }
   })
 
   // A clean run drops the results line, so a sentence that points at it
-  // would point at the team guidelines instead. Every starter written here
-  // keeps that pointer inside a choice; tr approved is the one exception,
-  // because it is the locale manager's own text, carried word for word.
+  // would point at the team guidelines instead. Every starter keeps that
+  // pointer inside a choice with an empty first branch.
   it('does not point below at results a clean run does not have', () => {
     const results = 'I fixed 3 entries, which you can see <a href="">here</a>.'
-    const starters: Array<[string, string]> = [
-      ['de', 'approved'],
-      ['de', 'declined'],
-      ['de', 'custom'],
-      ['tr', 'declined'],
-    ]
-    for (const [locale, name] of starters) {
-      const text = starterTemplate(locale, name)
+    for (const name of ['approved', 'declined', 'custom']) {
+      const text = starterTemplate('de', name)
       const clean = fillTemplate(text, { username: 'ayse', repaired: 0, flagged: 0, results: '' })
       for (const paragraph of clean.split(/\n\s*\n/)) {
-        expect(paragraph.trimEnd(), `${locale} ${name}`).not.toMatch(/below:$/)
+        expect(paragraph.trimEnd(), name).not.toMatch(/below:$/)
       }
       const repaired = fillTemplate(text, { username: 'ayse', repaired: 3, flagged: 0, results })
-      expect(repaired, `${locale} ${name}`).toContain(`Please see below:\n\n${results}`)
+      expect(repaired, name).toContain(`Please see below:\n\n${results}`)
     }
-  })
-
-  it('keeps the tr approved reply word for word, pointer and all', () => {
-    expect(starterTemplate('tr', 'approved')).toContain(
-      'I have reviewed your translations. {There were no problems.|There were a few problems, and I fixed them.} I have granted you PTE rights. Please see below:',
-    )
   })
 
   it('says PTE was approved in one and not yet in the other', () => {
     expect(starterTemplate('de', 'approved')).toMatch(/granted you PTE/)
     expect(starterTemplate('de', 'declined')).toMatch(/not .*PTE.* yet/i)
-    expect(starterTemplate('tr', 'declined')).toMatch(/not .*PTE.* yet/i)
   })
 })
 

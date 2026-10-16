@@ -65,9 +65,8 @@ it only appears when there is something below it:
 I have granted you PTE rights.{| Please see below:}
 ```
 
-The neutral starters already do this. The tr_TR approved starter is the locale
-manager's own text, kept word for word, so make that edit yourself if you want
-it.
+The starters already do this. A template you wrote, or one an earlier version
+created, keeps its own wording until you edit it.
 
 ## After a review
 

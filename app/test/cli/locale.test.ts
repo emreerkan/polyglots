@@ -194,30 +194,26 @@ describe('no default locale', () => {
   })
 })
 
+// Earlier versions fell back to tr, and for a while the refusal named that
+// fallback to anyone with tr work on disk. The hint was one locale's data in
+// the code, and the people it was for have long since set a locale.
 describe('earlier Turkish work', () => {
-  const HINT = 'Earlier versions fell back to tr (Turkish) when no locale was set. To carry on as before: polyglots config set defaultLocale tr'
-
-  it('adds how to keep Turkish when jobs.db holds tr runs', async () => {
+  it('says nothing about Turkish even when jobs.db holds tr runs', async () => {
     await mkdir(join(home, 'data'), { recursive: true })
     const db = new Database(join(home, 'data', 'jobs.db'))
     db.exec("CREATE TABLE run (id INTEGER PRIMARY KEY, locale TEXT NOT NULL); INSERT INTO run (locale) VALUES ('tr')")
     db.close()
     expect(await run(['glossary', 'sync'])).toBe(2)
     expect(stderr.text).toContain(NO_LOCALE)
-    expect(stderr.text).toContain(HINT)
+    expect(stderr.text).not.toContain('Turkish')
   })
 
-  it('adds it when the memory holds a tr glossary', async () => {
+  it('says nothing about Turkish when the memory holds a tr glossary', async () => {
     await mkdir(join(home, 'data'), { recursive: true })
     const db = new Database(join(home, 'data', 'polyglots.db'))
     db.exec("CREATE TABLE glossary (term TEXT, locale TEXT); INSERT INTO glossary VALUES ('post', 'tr')")
     db.close()
     expect(await run(['tm', 'export'])).toBe(2)
-    expect(stderr.text).toContain(HINT)
-  })
-
-  it('says nothing about Turkish to a new install', async () => {
-    expect(await run(['glossary', 'sync'])).toBe(2)
     expect(stderr.text).not.toContain('Turkish')
   })
 })

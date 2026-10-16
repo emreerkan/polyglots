@@ -239,39 +239,6 @@ export function fillBatchReply(
   })
 }
 
-// The tr_TR team's reply, as its locale manager wrote it. It is carried word
-// for word, so its "Please see below:" stays outside a choice even though a
-// clean run has nothing below to see. The starters written here instead put
-// that pointer in a choice with an empty first branch, which says nothing when
-// the review repaired nothing; the docs show the same edit for this one.
-// Rewriting the manager's own sentence on their behalf was the alternative,
-// and it is theirs to change, not ours.
-const TR_APPROVED = `Hello @{username},
-
-I have reviewed your translations. {There were no problems.|There were a few problems, and I fixed them.} I have granted you PTE rights. Please see below:
-
-{results}
-
-As the #tr_TR translation team, we follow certain guidelines for carrying out translations, making corrections, getting help, etc. We expect the same from our new contributors.
-
-Please join our <a href="https://www.wp-tr.org/slack/">local slack</a> and the #ceviri channel so we can meet, guide you to improve your translations, and keep in touch.
-
-Cheers!
-`
-
-const TR_DECLINED = `Hello @{username},
-
-I have reviewed your translations. {There were no problems.|There were some problems, and I fixed them.} I am not granting you PTE rights yet: I would like to see more of your translations first.{| Please see below:}
-
-{results}
-
-As the #tr_TR translation team, we follow certain guidelines for carrying out translations, making corrections, getting help, etc. We expect the same from our new contributors.
-
-Please join our <a href="https://www.wp-tr.org/slack/">local slack</a> and the #ceviri channel so we can meet, guide you to improve your translations, and keep in touch.
-
-Cheers!
-`
-
 const APPROVED = `Hello @{username},
 
 I have reviewed your translations. {There were no problems.|There were a few problems, and I fixed them.} I have granted you PTE rights.{| Please see below:}
@@ -302,11 +269,16 @@ Thank you!
  * into a contributor's thread the first time somebody forgot to delete it.
  * The docs explain them instead. A name other than the two starters begins
  * from approved, as something to edit rather than an empty file.
+ *
+ * The same text for every locale. tr_TR once started from its locale
+ * manager's own reply, carried here word for word, but a team's wording is
+ * locale data and belongs in its template file, which this never writes over:
+ * createTemplate refuses an existing name, so a file holding that reply keeps
+ * it. The locale stays in the signature because callers name the template by
+ * it, and a starter that varies by locale again should not need them changed.
  */
-export function starterTemplate(locale: Locale, name: string): string {
-  const tr = wpCodeOf(locale) === 'tr_TR'
-  if (name === 'declined') return tr ? TR_DECLINED : DECLINED
-  return tr ? TR_APPROVED : APPROVED
+export function starterTemplate(_locale: Locale, name: string): string {
+  return name === 'declined' ? DECLINED : APPROVED
 }
 
 /**
