@@ -28,11 +28,13 @@ export function localeSupport(locale: Locale): LocaleSupport {
  * a passed check. Undefined otherwise. Never a refusal: the universal checks
  * are worth running on their own.
  *
- * It points at rules fetch, as rules check does: most locales that have rules
- * have them from their team's published file, and writing one by hand is for
- * the locale whose team has published none.
+ * It names both ways out, as rules check does, fetch first: most locales that
+ * have rules have them from their team's published file. It once named only
+ * the fetch, and for a locale whose team has published no file that is a
+ * command that fails, leaving the reader with no way forward but rules edit,
+ * which the notice no longer mentioned.
  */
 export function supportNotice(locale: Locale): string | undefined {
   if (!isUniversalOnly(profileFor(locale))) return undefined
-  return `No locale rules for ${locale}; only the universal checks run. Fetch your locale team's file with: polyglots rules fetch ${locale}`
+  return `No locale rules for ${locale}; only the universal checks run. Fetch your locale team's file with: polyglots rules fetch ${locale}, or start one with: polyglots rules edit ${locale}`
 }

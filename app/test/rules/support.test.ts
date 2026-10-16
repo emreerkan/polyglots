@@ -27,7 +27,7 @@ describe('supportNotice', () => {
   // Bare text, so each surface marks it its own way (the CLI with a warning
   // glyph) instead of every caller stripping a prefix it did not want.
   it('speaks up for a universal-only locale', () => {
-    expect(supportNotice('de')).toBe("No locale rules for de; only the universal checks run. Fetch your locale team's file with: polyglots rules fetch de")
+    expect(supportNotice('de')).toBe("No locale rules for de; only the universal checks run. Fetch your locale team's file with: polyglots rules fetch de, or start one with: polyglots rules edit de")
   })
 
   describe('with their rules files', () => {
@@ -42,6 +42,6 @@ describe('supportNotice', () => {
   // What a Turkish reviewer who never fetched the rules is told: nothing
   // Turkish ships in the code any more.
   it('speaks up for Turkish without its rules file', () => {
-    expect(supportNotice('tr')).toBe("No locale rules for tr; only the universal checks run. Fetch your locale team's file with: polyglots rules fetch tr")
+    expect(supportNotice('tr')).toBe("No locale rules for tr; only the universal checks run. Fetch your locale team's file with: polyglots rules fetch tr, or start one with: polyglots rules edit tr")
   })
 })
