@@ -84,6 +84,17 @@ describe('review with a runaway locale pattern', () => {
     expect(out.match(/locale rule skipped/g)).toHaveLength(1)
   })
 
+  // The summary names a pattern by its note, and two patterns may share one.
+  // Named twice, the line repeats and the TUI renders two rows under one key.
+  it('names two runaway patterns that share a note once', async () => {
+    await writeFile(
+      localeRulesFile('tr'),
+      "schema: 1\npatterns:\n  - find: '^(a+)+$'\n    level: hint\n    note: nested repetition\n  - find: '^((a+))+$'\n    level: hint\n    note: nested repetition\n",
+    )
+    const summary = await reviewFile({ file, locale: 'tr', db, jobsDb, noAi: true })
+    expect(summary.skippedRules).toEqual(['nested repetition'])
+  })
+
   it('leaves skippedRules out of a run that skipped nothing', async () => {
     await writeFile(localeRulesFile('tr'), "schema: 1\npatterns:\n  - find: 'zzz'\n    level: hint\n")
     const summary = await reviewFile({ file, locale: 'tr', db, jobsDb, noAi: true })

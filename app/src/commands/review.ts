@@ -578,7 +578,8 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
   // failed notification is not a failed review.
   // Each runaway pattern once per run, however many entries it would have
   // run on: the entry where it hung carries the finding, this the summary line.
-  const skippedRules = takeSkipped().map((s) => s.label)
+  // Named by label, and two patterns can share a note, so the same line once.
+  const skippedRules = [...new Set(takeSkipped().map((s) => s.label))]
   if (skippedRules.length > 0) summary.skippedRules = skippedRules
   emit({ type: 'done', summary })
   return summary

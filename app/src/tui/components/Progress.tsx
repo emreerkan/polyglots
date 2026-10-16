@@ -249,8 +249,8 @@ export function Progress({ events }: { events: TranslateEvent[] }) {
           {state.summary.stopped && <Text color="red">Stopped: {state.summary.stopped}</Text>}
           <Text bold>{formatSummary(state.summary)}</Text>
           {state.summary.fixedByRules !== undefined && <Text>fixed by locale rules {state.summary.fixedByRules}</Text>}
-          {(state.summary.skippedRules ?? []).map((label) => (
-            <Text key={label} color="yellow">
+          {(state.summary.skippedRules ?? []).map((label, i) => (
+            <Text key={i} color="yellow">
               {skippedRuleText(label)}
             </Text>
           ))}

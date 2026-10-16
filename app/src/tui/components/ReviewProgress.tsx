@@ -387,8 +387,8 @@ export function ReviewProgress({ events, wporgUsername = '', templates = [], req
               Stopped early with {summary.pending} entries not reviewed. Run it again to carry on.
             </Text>
           )}
-          {(summary.skippedRules ?? []).map((label) => (
-            <Text key={label} color="yellow">
+          {(summary.skippedRules ?? []).map((label, i) => (
+            <Text key={i} color="yellow">
               {skippedRuleText(label)}
             </Text>
           ))}
