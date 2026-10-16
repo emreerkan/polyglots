@@ -65,7 +65,10 @@ describe('LocaleRules: picking a locale', () => {
     const view = mount()
     await openLocale(view)
     expect(flat(view.lastFrame())).toMatch(/tr_TR \(tr\)/)
-    expect(flat(view.lastFrame())).toMatch(/built-in defaults/)
+    // polyglots ships no locale data, so a locale with no file gets the
+    // universal checks and nothing more, as rules check says.
+    expect(flat(view.lastFrame())).toContain('No file yet: only the universal checks run.')
+    expect(flat(view.lastFrame())).not.toMatch(/built-in defaults/)
   })
 
   it('accepts any spelling of a locale', async () => {

@@ -377,8 +377,14 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
         </>
       )}
 
+      {/* Worded as rules check words it: polyglots ships no locale data, so
+          "built-in defaults" promised a locale more than it gets. */}
       {draft && stage !== 'pick' && (
-        <Text dimColor>{draft.exists ? draft.path : `No file yet: built-in defaults apply. s saves them as ${basename(draft.path)}, which completes this setup step.`}</Text>
+        <Text dimColor>
+          {draft.exists
+            ? draft.path
+            : `No file yet: only the universal checks run. s saves these rules as ${basename(draft.path)}, which completes this setup step.`}
+        </Text>
       )}
 
       {draft && (stage === 'overview' || stage === 'leave') && (
