@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import React from 'react'
 import { saveConfig } from '../../src/config.js'
-import type { RulesFetchPlan } from '../../src/commands/rules-fetch.js'
+import { RulesFileChangedError, type RulesFetchPlan } from '../../src/commands/rules-fetch.js'
 import { localeRulesFile } from '../../src/rules/load.js'
 import { CommandsProvider, type TuiCommands } from '../../src/tui/commands.js'
 import { LocaleRules } from '../../src/tui/screens/LocaleRules.js'
@@ -131,6 +131,33 @@ describe('LocaleRules: fetch from polyglots-data', () => {
     view.stdin.write('y')
     await tick()
     expect(view.commands.writeRulesFetch).not.toHaveBeenCalled()
+  })
+
+  // The write refuses when the file changed while the summary was on screen.
+  // The summary is then about a file that is gone, and y bound to it would
+  // refuse again on every press, so the screen plans again and the next y
+  // writes against what is on disk now.
+  it('plans again after the file changed under the summary', async () => {
+    const first = plan({ summary: ['guidance changed:', '  first summary'] })
+    const second = plan({ summary: ['guidance changed:', '  second summary'] })
+    const planRulesFetch = vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+    const writeRulesFetch = vi
+      .fn(async (p: RulesFetchPlan) => {
+        await mkdir(dirname(p.path), { recursive: true })
+        await writeFile(p.path, p.text)
+      })
+      .mockRejectedValueOnce(new RulesFileChangedError(first.path))
+    const view = mount({ planRulesFetch, writeRulesFetch })
+    await openFetch(view)
+    await waitForText(view.lastFrame, 'first summary')
+    view.stdin.write('y')
+    await waitForText(view.lastFrame, 'second summary')
+    expect(flat(view.lastFrame())).toContain('changed since the summary')
+    expect(planRulesFetch).toHaveBeenCalledTimes(2)
+    view.stdin.write('y')
+    await waitForText(view.lastFrame, 'Wrote')
+    expect(writeRulesFetch).toHaveBeenCalledTimes(2)
+    expect(writeRulesFetch.mock.calls[1]![0]).toBe(second)
   })
 
   // The fetched file replaces the one on disk, and the edits on screen were

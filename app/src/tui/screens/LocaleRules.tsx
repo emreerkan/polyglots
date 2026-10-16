@@ -8,7 +8,7 @@ import { GUIDANCE_LIMIT } from '../../rules/schema.js'
 import { resolveLocale, wpCodeOf } from '../../wporg/locales.js'
 import { rulesBuilderUrl } from '../../rules/builder-url.js'
 import { RulesFileError } from '../../rules/parse.js'
-import type { RulesFetchPlan } from '../../commands/rules-fetch.js'
+import { RulesFileChangedError, type RulesFetchPlan } from '../../commands/rules-fetch.js'
 import { useCommands, useConfig } from '../commands.js'
 import { Hint } from '../components/Hint.js'
 import { ListEditor } from '../components/ListEditor.js'
@@ -285,7 +285,16 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
       setNotice(`Wrote ${basename(plan.path)}.`)
       setStage('overview')
     } catch (err) {
-      setWriteError(errorText(err))
+      // The file changed while the summary was on screen. The summary is
+      // about a file that is gone, and y left bound to it refused again on
+      // every press with the CLI's "run rules fetch again". The screen can do
+      // that itself: plan against the file as it is now and say why the
+      // summary changed under the person's eyes.
+      if (err instanceof RulesFileChangedError) {
+        setFetchTop(0)
+        setWriteError(`${basename(plan.path)} changed since the summary; nothing was written. Below is what writing does now.`)
+        fetchTask.run(() => commands.planRulesFetch(id, commands.dataClient))
+      } else setWriteError(errorText(err))
     } finally {
       setWriting(false)
     }

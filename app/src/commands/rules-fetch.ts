@@ -98,6 +98,19 @@ export async function planRulesFetch(locale: Locale, client: DataClient): Promis
 }
 
 /**
+ * The write's refusal when the file on disk is no longer the one the summary
+ * described. Its own class so the app can tell it from a failed write: the
+ * cure there is a new summary, which the screen can fetch itself, where the
+ * CLI can only tell the person to run the command again.
+ */
+export class RulesFileChangedError extends DataError {
+  override name = 'RulesFileChangedError'
+  constructor(path: string) {
+    super(`${path} changed since the summary; nothing was written. Run rules fetch again.`)
+  }
+}
+
+/**
  * Writes the planned file exactly as downloaded, so its sha512 still matches
  * the manifest. Temp file and rename in the same folder, as saveTemplate
  * does: a review reading the rules part way through a write sees the old
@@ -119,7 +132,7 @@ export async function writeRulesFetch(plan: RulesFetchPlan): Promise<void> {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
   }
   const unchanged = now === undefined ? plan.local === undefined : plan.local !== undefined && now.equals(plan.local)
-  if (!unchanged) throw new DataError(`${plan.path} changed since the summary; nothing was written. Run rules fetch again.`)
+  if (!unchanged) throw new RulesFileChangedError(plan.path)
   await mkdir(dirname(plan.path), { recursive: true })
   const temp = `${plan.path}.tmp-${randomUUID()}`
   try {
