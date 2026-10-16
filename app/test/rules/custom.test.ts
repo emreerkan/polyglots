@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildRuleContext, runRules } from '../../src/audit/rules/index.js'
 import { applyFixPatterns, customFindings } from '../../src/rules/custom.js'
 import { localeRulesFile } from '../../src/rules/load.js'
+import { resetSandbox } from '../../src/rules/sandbox.js'
 import type { CustomPattern } from '../../src/rules/schema.js'
 
 const mistake = (wrong: string, right?: string, note?: string): CustomPattern => ({
@@ -211,5 +212,21 @@ describe('through the rule engine', () => {
     const e = { key: 'k', msgid: 'Preview', msgstr: ['Önizleme'], comments: [], references: [] }
     const ctx = buildRuleContext({ locale: 'tr', glossary: [], nplurals: 2, entries: [e as never] })
     expect(runRules(e as never, ctx).filter((f) => f.rule === 'custom')).toHaveLength(1)
+  })
+})
+
+// A skip belongs to the regex that ran away, and the flags are part of it. A
+// rules file edited in a TUI session to turn ignoreCase on compiles a new
+// regex, and the old skip must not keep it silent for the rest of the process.
+describe('a pattern skipped as a runaway', () => {
+  beforeEach(() => resetSandbox())
+  afterEach(() => resetSandbox())
+
+  it('is not skipped once its ignoreCase changes', () => {
+    const runaway: CustomPattern = { kind: 'pattern', find: '^(a+)+$', level: 'hint', ignoreCase: false, note: 'nested repetition' }
+    const first = customFindings(entry('Save', 'a'.repeat(30) + 'b'), [runaway], 'tr')
+    expect(first.map((f) => f.message)).toEqual(['locale rule skipped: nested repetition took longer than 100 ms'])
+    const edited: CustomPattern = { ...runaway, ignoreCase: true }
+    expect(customFindings(entry('Save', 'AAA'), [edited], 'tr').map((f) => f.message)).toEqual(['nested repetition'])
   })
 })

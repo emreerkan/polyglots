@@ -114,10 +114,15 @@ function message(p: CustomPattern, matched: string): string {
   return p.note ?? `matches "${matched}"`
 }
 
-// A pattern's id in the sandbox: its place in the file and its text, so two
-// patterns with the same text stay apart and a pattern skipped as a runaway is
-// the same one on every entry. The label is what the person reads.
-const patternId = (p: CustomPattern, index: number) => `${index}:${p.find ?? p.text}`
+// A pattern's id in the sandbox: its place in the file and the regex it
+// compiled to, so two patterns with the same text stay apart and a pattern
+// skipped as a runaway is the same one on every entry. The compiled regex
+// rather than the text as written, because the skip belongs to what ran: a
+// literal compiles to a different regex for each locale's casing, and a find
+// edited to turn ignoreCase on in a TUI session is a new regex, which the old
+// skip would otherwise keep silent for the rest of the process. The index
+// stays first, where labelsOf reads it. The label is what the person reads.
+const patternId = (index: number, re: RegExp) => `${index}:${re.flags}:${re.source}`
 const patternLabel = (p: CustomPattern) => p.note ?? p.find ?? p.text ?? ''
 
 const SKIP_PREFIX = 'locale rule skipped: '
@@ -168,8 +173,8 @@ export function customFindings(entry: Text, patterns: readonly CustomPattern[], 
   const forms = entry.msgstr.filter(translated)
   patterns.forEach((p, index) => {
     if (p.level === 'fix' || !applies(p, entry.msgid, locale) || forms.length === 0) return
-    const id = patternId(p, index)
     const re = regexOf(p, locale)
+    const id = patternId(index, re)
     asked.push({ p, id, wasSkipped: skippedFor(id) })
     for (const text of forms) {
       ops.push({ kind: 'exec', id, source: re.source, flags: re.flags, text })
@@ -220,8 +225,8 @@ export function applyFixPatterns(
   const label = labelsOf(patterns)
   patterns.forEach((p, index) => {
     if (p.level !== 'fix' || p.replace === undefined || !applies(p, entry.msgid, locale)) return
-    const id = patternId(p, index)
     const re = regexOf(p, locale)
+    const id = patternId(index, re)
     const at = forms.flatMap((form, i) => (translated(form) ? [i] : []))
     if (at.length === 0) return
     const ops: RegexOp[] = at.map((i) => ({
