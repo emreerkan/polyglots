@@ -92,12 +92,22 @@ function readTu(tu: Node, headerSrc: string | undefined, target: string, opts: T
   let sourceNode = src ? claim((lang) => lang === src) : undefined
   targetNode ??= claim((lang) => localeMatches(target, lang))
   if (src) sourceNode ??= claim((lang) => localeMatches(src, lang))
-  // Without a srclang the source is a tuv in another language. Only when
-  // none exists, and the target was found by its exact tag, is a sibling of
-  // the same language (en beside en-GB) taken as the source. Found by
-  // language alone, a second tuv of that language is a duplicate of the
-  // target, and a tu of tr and tr-TR has no source at all.
-  else sourceNode = claim((lang) => !localeMatches(target, lang)) ?? (targetExact ? claim(() => true) : undefined)
+  // Without a srclang the source is a tuv in another language, and for
+  // every target but English that means another language, not merely a tag
+  // localeMatches keeps apart: pt-PT is not the target pt-BR, but it is no
+  // source of it either. Every WordPress source is English, so en is the one
+  // language whose own sibling can be a source: when no other language is
+  // there and the target was found by its exact tag, en beside en-GB is
+  // taken. For any other target a second tuv of its language is a duplicate,
+  // and a tu of tr and tr-TR has no source at all, whichever of the two is
+  // the target. Taking it anyway files a tr→tr row in a memory that cannot be
+  // regenerated.
+  else {
+    const language = (lang: string) => lang.split('-')[0]
+    const english = language(targetBase) === 'en'
+    const other = claim((lang) => (english ? !localeMatches(target, lang) : language(lang) !== language(targetBase)))
+    sourceNode = other ?? (english && targetExact ? claim(() => true) : undefined)
+  }
   const targetSeg = targetNode && segText(targetNode)
   const sourceSeg = sourceNode && segText(sourceNode)
 

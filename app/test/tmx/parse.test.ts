@@ -240,6 +240,21 @@ describe('parseTmx locale normalization', () => {
     expect(parseTmx(xml, { targetLocale: 'tr' })).toEqual([{ source: 'Yes', target: 'Evet', locale: 'tr' }])
   })
 
+  // polyglots.db cannot be regenerated, so a tr→tr row imported here stays
+  // until someone finds and deletes it by hand. Without English beside them,
+  // tr and tr-TR are two translations and no source, whichever is the target.
+  it.each(['tr', 'tr_TR'])('skips a tu of tr and tr-TR with no other language when srclang is absent (target %s)', (target) => {
+    const xml = `<tmx version="1.4"><header creationtool="x"/><body><tu><tuv xml:lang="tr"><seg>Evet</seg></tuv><tuv xml:lang="tr-TR"><seg>Tamam</seg></tuv></tu></body></tmx>`
+    expect(parseTmx(xml, { targetLocale: target })).toEqual([])
+  })
+
+  // The same holds for two regions that localeMatches keeps apart: pt-PT is
+  // not the target pt-BR, but it is not a source of it either.
+  it('skips a tu of pt-BR and pt-PT with no other language when srclang is absent', () => {
+    const xml = `<tmx version="1.4"><header creationtool="x"/><body><tu><tuv xml:lang="pt-PT"><seg>Ecrã</seg></tuv><tuv xml:lang="pt-BR"><seg>Tela</seg></tuv></tu></body></tmx>`
+    expect(parseTmx(xml, { targetLocale: 'pt-br' })).toEqual([])
+  })
+
   it('falls back to the first non-target tuv when srclang is absent', () => {
     const xml = `<tmx version="1.4"><header creationtool="x"/><body>${tu('Yes', 'Evet')}</body></tmx>`
     expect(parseTmx(xml, { targetLocale: 'tr' })).toEqual([{ source: 'Yes', target: 'Evet', locale: 'tr' }])
