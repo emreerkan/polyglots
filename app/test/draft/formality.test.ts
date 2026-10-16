@@ -64,8 +64,12 @@ describe('draftSystemPrompt and formality', () => {
     expect(lines[hint + 1]).toBe('- Address the reader formally.')
   })
 
+  // Guidance stands in for any other key: the draft prompt does not render it,
+  // so a file that sets it must leave every cached draft where it was.
   it('moves the draft cache key only when formality is set', async () => {
     const plain = draftConfigHash('es')
+    await writeRules('es', 'schema: 2\nguidance: x')
+    expect(draftConfigHash('es')).toBe(plain)
     await writeRules('es', 'schema: 2\nformality: formal')
     expect(draftConfigHash('es')).not.toBe(plain)
   })
