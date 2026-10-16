@@ -3,12 +3,39 @@
 All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
-uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While the version stays below
-1.0, a minor bump may carry a breaking change.
+uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0, a minor bump could
+carry a breaking change.
 
 Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
+
+### Added
+
+- `polyglots rules fetch` downloads a locale's rules file from polyglots-data after showing what it changes.
+- `polyglots tm fetch` imports a locale's published translation memory; the setup wizard offers it.
+- The app's Locale rules and Import TM screens fetch from polyglots-data too.
+- Rules files take `schema`, `capitalization`, `register`, `formality` and `sentenceEnd`.
+- A rules pattern's `when.notSource` makes it fire only when the source lacks a text.
+- `rules check --file <path> --json` checks any rules file.
+- Translate notes each draft a locale rule changed, and counts them.
+- Memory from long-text projects (readmes, release notes) ranks below the rest and alone raises no conflict.
+
+### Changed
+
+- polyglots ships no locale data: Turkish and Swedish rules now come from their rules files.
+- Every rules regex runs with a 100 ms limit; a pattern over it is skipped and reported.
+- Locales without `register` get a neutral register line; their cached verdicts are reviewed again once.
+- A locale that adds `formality` has its cached drafts made again once.
+- The app asks polyglots-data once at launch while your locale has no memory and the setup step is not skipped.
+
+### Removed
+
+- The Turkish reply starters; existing templates are kept.
+
+### Fixed
+
+- `tm import --locale` stores memory under the wp.org slug, so `tr_TR` no longer files it where nothing reads it.
 
 ## [0.33.0] - 2026-10-15
 
