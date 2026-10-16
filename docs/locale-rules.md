@@ -231,7 +231,7 @@ A rules file that works for your team is worth sharing. Locale files live in
 [polyglots-data](https://github.com/emreerkan/polyglots-data); its
 contributing guide says how to propose one for your locale.
 
-The rules builder can also send your file to the polyglots team. Give a
-Slack or GitHub username, or an email, so the maintainer can reach you; a
+The rules builder can also send your file to the app maintainers. Give a
+Slack or GitHub username, or an email, so they can reach you; a
 WordPress.org username alone is not enough. What you send is saved by the
-team and emailed to the maintainer, and is deleted on request on Slack.
+app maintainers and is deleted on request on Slack.

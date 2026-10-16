@@ -1,4 +1,4 @@
-// Sending a finished rules file to the polyglots team. The endpoint is
+// Sending a finished rules file to the app maintainers. The endpoint is
 // polyglots-admin's, behind the same LiteSpeed proxy as the site, and answers
 // no CORS preflight: it is posted same-origin by a relative path, which also
 // means the Astro dev server, on another origin, cannot send at all. That is
