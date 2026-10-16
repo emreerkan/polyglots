@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { main, type CliDeps } from '../../src/cli.js'
+import { renderRulesReport, rulesReport } from '../../src/cli/rules.js'
 import { localeRulesFile } from '../../src/rules/load.js'
 
 function sink() {
@@ -184,5 +185,18 @@ describe('rules check: no rules file', () => {
     const r = await run(['rules', 'check', 'de'])
     expect(r.stdout).not.toMatch(/pack/i)
     expect(r.stdout).toMatch(/^✓ \S+ is valid\.$/m)
+  })
+})
+
+describe('rulesReport: a path that cannot be read', () => {
+  it('names the errno, and the rendered line names the path once', async () => {
+    // A directory reads as EISDIR on every platform the tool runs on, and,
+    // unlike a chmod-ed file, still fails when the tests run as root.
+    const dir = join(home, 'a-directory')
+    await mkdir(dir)
+    const report = rulesReport(dir)
+    expect(report).toEqual({ valid: false, path: dir, error: 'cannot be read (EISDIR)' })
+    const [line] = renderRulesReport(report)
+    expect(line!.split(dir).length - 1).toBe(1)
   })
 })

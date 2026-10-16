@@ -81,15 +81,19 @@ export function summariseRules(rules: LocaleRules, path: string): RulesReport & 
  * Reads and checks the rules file at `path`, any path: the locale's file in
  * the config folder, or one a locale team is about to publish. Needs no
  * config, so it works on a machine that has never run polyglots. Never
- * throws; a file that cannot be read or does not parse is a report too.
+ * throws for a file that cannot be read or does not parse: either is a
+ * report too.
  */
 export function rulesReport(path: string): RulesReport {
   let text: string
   try {
     text = readFileSync(path, 'utf8')
   } catch (error) {
+    // Node's own message for EACCES already names the path, and the rendered
+    // report puts the path first, so the line read it twice. The errno alone
+    // is what the person needs beside a path they can see.
     const code = (error as NodeJS.ErrnoException).code
-    return { valid: false, path, error: code === 'ENOENT' ? NO_SUCH_FILE : (error as Error).message }
+    return { valid: false, path, error: code === 'ENOENT' ? NO_SUCH_FILE : `cannot be read (${code ?? (error as Error).message})` }
   }
   try {
     return summariseRules(parseLocaleRules(text, path, { probe: true }), path)
