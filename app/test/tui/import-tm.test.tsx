@@ -5,7 +5,7 @@ import React from 'react'
 import { saveConfig } from '../../src/config.js'
 import { CommandsProvider } from '../../src/tui/commands.js'
 import { ImportTm } from '../../src/tui/screens/ImportTm.js'
-import { fakeCommands, keys, makeHome, tick, waitForText, render, cleanup, type Home } from './helpers.js'
+import { ESC_DELAY, fakeCommands, keys, makeHome, tick, waitForText, render, cleanup, type Home } from './helpers.js'
 
 let home: Home
 let cwd: string
@@ -74,6 +74,18 @@ describe('ImportTm', () => {
 
     stdin.write(keys.enter)
     await tick()
+    expect(back).toBe(1)
+  })
+
+  // A menu of one is passed through, so esc from the picker leaves the
+  // screen as it did before the fetch was added.
+  it('esc from the picker leaves the screen when the file is the only way in', async () => {
+    let back = 0
+    const view = mount(fakeCommands(), () => back++)
+    await openPicker(view)
+    await waitForText(view.lastFrame, 'poedit.tmx')
+    view.stdin.write(keys.esc)
+    await tick(ESC_DELAY)
     expect(back).toBe(1)
   })
 

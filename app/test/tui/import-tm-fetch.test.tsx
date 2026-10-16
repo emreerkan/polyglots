@@ -6,7 +6,7 @@ import { saveConfig } from '../../src/config.js'
 import type { TmFetchPlan, TmFetchProgress } from '../../src/commands/tm-fetch.js'
 import { CommandsProvider, type TuiCommands } from '../../src/tui/commands.js'
 import { ImportTm } from '../../src/tui/screens/ImportTm.js'
-import { cleanup, fakeCommands, flat, keys, makeHome, manifestWith, render, tick, tmEntry, waitFor, waitForText, type Home } from './helpers.js'
+import { ESC_DELAY, cleanup, fakeCommands, flat, keys, makeHome, manifestWith, render, tick, tmEntry, waitFor, waitForText, type Home } from './helpers.js'
 
 let home: Home
 let cwd: string
@@ -92,6 +92,38 @@ describe('ImportTm: fetch from polyglots-data', () => {
     await tick()
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, 'poedit.tmx')
+  })
+
+  // With two ways in, esc from either goes back to the choice between them,
+  // not past it: someone who opened the fetch to read its summary and wants
+  // their own file instead should not have to reopen the screen.
+  it('esc from the fetch summary returns to the menu', async () => {
+    let back = 0
+    const view = mount({ dataClient: listed(), planTmFetch: vi.fn(async () => plan()) }, () => back++)
+    await waitForText(view.lastFrame, 'Fetch from polyglots-data')
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, 'Turkish (tr): 1,002 strings')
+    view.stdin.write(keys.esc)
+    await tick(ESC_DELAY)
+    await waitForText(view.lastFrame, 'Import a file')
+    expect(flat(view.lastFrame())).toContain('Fetch from polyglots-data')
+    expect(back).toBe(0)
+  })
+
+  it('esc from the file picker returns to the menu', async () => {
+    let back = 0
+    const view = mount({ dataClient: listed() }, () => back++)
+    await waitForText(view.lastFrame, 'Fetch from polyglots-data')
+    view.stdin.write(keys.down)
+    await tick()
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, 'poedit.tmx')
+    view.stdin.write(keys.esc)
+    await tick(ESC_DELAY)
+    await waitForText(view.lastFrame, 'Fetch from polyglots-data')
+    expect(flat(view.lastFrame())).toContain('Import a file')
+    expect(flat(view.lastFrame())).not.toContain('poedit.tmx')
+    expect(back).toBe(0)
   })
 
   it('shows the summary, imports on y with progress, then the result', async () => {

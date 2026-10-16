@@ -68,6 +68,12 @@ function ImportTmInLocale({ cwd, onBack, locale }: ImportTmProps & { locale: Loc
   ]
   const cursor = Math.min(at, options.length - 1)
   const choosing = chosen === undefined
+  // Esc before anything is imported goes back one step. With two ways in that
+  // is the choice between them, so someone who opened the fetch to read its
+  // summary can take their own file instead without reopening the screen; a
+  // menu of one was never shown as a choice, and esc leaves as it always did.
+  // Once an import has run, every way out leaves (onDone).
+  const back = options.length > 1 ? () => setChosen(undefined) : onBack
 
   useBackKeys(onBack, { enabled: choosing })
   useKeys({
@@ -94,13 +100,13 @@ function ImportTmInLocale({ cwd, onBack, locale }: ImportTmProps & { locale: Loc
           <Hint>{`↑↓ move · enter choose · ${BACK_HINT}`}</Hint>
         </>
       )}
-      {chosen === 'fetch' && listing.status === 'listed' && <TmFetch locale={locale} client={listing.client} onBack={onBack} onDone={onBack} />}
-      {chosen === 'file' && <ImportFile cwd={cwd} locale={locale} onBack={onBack} />}
+      {chosen === 'fetch' && listing.status === 'listed' && <TmFetch locale={locale} client={listing.client} onBack={back} onDone={onBack} />}
+      {chosen === 'file' && <ImportFile cwd={cwd} locale={locale} onBack={back} onDone={onBack} />}
     </Box>
   )
 }
 
-function ImportFile({ cwd, locale, onBack }: { cwd: string; locale: Locale; onBack: () => void }) {
+function ImportFile({ cwd, locale, onBack, onDone }: { cwd: string; locale: Locale; onBack: () => void; onDone: () => void }) {
   const commands = useCommands()
   const [file, setFile] = useState<string>()
   const [progress, setProgress] = useState<TmImportProgress[]>([])
@@ -109,8 +115,8 @@ function ImportFile({ cwd, locale, onBack }: { cwd: string; locale: Locale; onBa
   const running = task.state.status === 'running'
   const finished = task.state.status === 'done' || task.state.status === 'error'
 
-  useBackKeys(onBack, { enabled: !running })
-  useKeys({ finished: { close: finished ? onBack : undefined } })
+  useBackKeys(finished ? onDone : onBack, { enabled: !running })
+  useKeys({ finished: { close: finished ? onDone : undefined } })
 
   const pick = (path: string) => {
     setFile(path)
