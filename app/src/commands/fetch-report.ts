@@ -69,7 +69,8 @@ export function endOfJob(outcome: ProjectOutcome<BatchSummary>, wporgUsername: s
       review: { locale: s.locale, repaired: s.repaired, flagged: s.needsReview + s.unreviewed },
     }
   }
-  const counts = `${s.translated} translated, ${s.fuzzy} fuzzy, ${s.fromTm} from TM`
+  const fixed = s.fixedByRules === undefined ? '' : `, ${s.fixedByRules} fixed by locale rules`
+  const counts = `${s.translated} translated, ${s.fuzzy} fuzzy, ${s.fromTm} from TM${fixed}`
   return s.stopped ? { tally: 'stopped', detail: `${counts}, stopped: ${s.stopped}` } : { tally: 'done', detail: counts }
 }
 
