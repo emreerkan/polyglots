@@ -111,7 +111,10 @@ function toPo(rows: Row[], locale: Locale): string {
  *
  * TMX carries the memory whole. A `.po` cannot: it keys its entries by source
  * and context, so a source with several approved wordings loses all but one.
- * The most recently updated is kept, and `dropped` counts the rest, because an
+ * The one kept is the one findExactTm would hand translate: normal weight
+ * before long-text, then the most recently updated. Keeping the newest alone
+ * let a readme wording that translate never picks stand in for the source.
+ * `dropped` counts the rest, because an
  * export that quietly holds less than it was asked for is worse than one that
  * says so.
  */
@@ -124,7 +127,7 @@ export async function exportTm(opts: ExportTmOptions): Promise<ExportTmResult> {
       .prepare<[string], Row>(
         `SELECT source, target, context, project, weight, updated_at FROM tm
          WHERE locale = ?
-         ORDER BY source, context, updated_at DESC, id DESC`,
+         ORDER BY source, context, weight DESC, updated_at DESC, id DESC`,
       )
       .all(opts.locale)
 
@@ -141,7 +144,7 @@ export async function exportTm(opts: ExportTmOptions): Promise<ExportTmResult> {
 }
 
 // One row per source and context, in the order the query already sorted them,
-// so the survivor is the most recently updated.
+// so the survivor is the newest of the highest weight.
 function first(rows: Row[]): Row[] {
   const seen = new Set<string>()
   return rows.filter((row) => {

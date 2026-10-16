@@ -68,6 +68,25 @@ describe('exportTm', () => {
     expect(text).toContain('msgctxt "post status"')
   })
 
+  /**
+   * The wording a .po keeps should be the one translate would pick, and
+   * findExactTm puts normal rows before low ones whatever their age. Keeping
+   * the newest instead let a readme wording that translate never offers stand
+   * in for the source.
+   */
+  it('keeps the normal wording for .po over a newer long-text one', async () => {
+    upsertTm(db, [
+      { source: 'Settings', target: 'Ayarlar', locale: 'tr' },
+      { source: 'Settings', target: 'Ayarlar (benioku)', locale: 'tr', weight: 'low' },
+    ])
+    db.prepare(`UPDATE tm SET updated_at = ? WHERE source = 'Settings' AND weight = 1`).run('2020-01-01T00:00:00.000Z')
+    db.prepare(`UPDATE tm SET updated_at = ? WHERE source = 'Settings' AND weight = 0`).run('2026-01-01T00:00:00.000Z')
+
+    const result = await exportTm({ locale: 'tr', format: 'po', db })
+    expect(result.text).toContain('msgstr "Ayarlar"')
+    expect(result.text).not.toContain('Ayarlar (benioku)')
+  })
+
   it('takes the format from the file name, and an explicit one wins', async () => {
     const asPo = join(home, 'named.po')
     await exportTm({ locale: 'tr', file: asPo, db })
