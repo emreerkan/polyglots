@@ -112,11 +112,16 @@ const rulesEntry = z.object({
 // cannot be patched, and the producer would have had to bump the manifest
 // schema to recover from a typo. The spec's order of checks judges the
 // requested entry, so that is the entry that is judged.
+//
+// A list left out reads as an empty one. rules fetch needs nothing from tm[]
+// and tm fetch nothing from rules[], so a manifest published before one of
+// them exists answers "lists none" for that command alone, rather than
+// refusing both. A list that is present but not an array still refuses.
 const manifestShape = z.object({
   schema: z.number().int().positive(),
   generated: z.string(),
-  tm: z.array(z.unknown()),
-  rules: z.array(z.unknown()),
+  tm: z.array(z.unknown()).default([]),
+  rules: z.array(z.unknown()).default([]),
 })
 
 export function parseManifest(json: unknown): Manifest {

@@ -76,6 +76,21 @@ describe('parseManifest', () => {
   })
 })
 
+// rules fetch reads only schema, generated and rules[]; a manifest that
+// publishes no tm list yet (or one that drops it) must not refuse it.
+describe('parseManifest: a list left out', () => {
+  it('reads a manifest with no tm list as one listing no memory', () => {
+    const m = parseManifest({ schema: 1, generated: '', rules: [rulesEntry] })
+    expect(findRulesEntry(m, 'tr')).toEqual(rulesEntry)
+    expect(() => findTmEntry(m, 'tr')).toThrow('No polyglots-data entry for tr; the manifest lists none.')
+  })
+
+  it('reads a manifest with no rules list as one listing no rules', () => {
+    const m = parseManifest({ schema: 1, generated: '', tm: [] })
+    expect(() => findRulesEntry(m, 'tr')).toThrow('No polyglots-data entry for tr; the manifest lists none.')
+  })
+})
+
 describe('findRulesEntry and findTmEntry', () => {
   const manifest = (rules: unknown[], tm: unknown[] = []) => parseManifest({ schema: 1, generated: '', tm, rules })
 
