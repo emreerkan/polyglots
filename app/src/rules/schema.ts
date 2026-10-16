@@ -233,20 +233,26 @@ export function normalise(raw: RawLocaleRules): LocaleRules {
       : raw.capitalization.endsWith('\n')
         ? raw.capitalization
         : `${raw.capitalization}\n`
+  // An object that sets neither side, or no part of sentenceEnd, is read as
+  // the key left out. The file is still valid, and refusing it would fail a
+  // file for saying nothing; but kept as {}, it counted as set, so a file that
+  // changes nothing had a fingerprint and re-reviewed the locale once, and
+  // the punctuation rule built a sentence-end style that did nothing.
+  const someKey = <T extends object>(o: T | undefined) => (o !== undefined && Object.keys(o).length > 0 ? o : undefined)
   const register =
     raw.register === undefined
       ? undefined
       : typeof raw.register === 'string'
         ? { audit: raw.register, translate: raw.register }
-        : {
+        : someKey({
             ...(raw.register.audit === undefined ? {} : { audit: raw.register.audit }),
             ...(raw.register.translate === undefined ? {} : { translate: raw.register.translate }),
-          }
+          })
   const sentenceEnd =
     raw.sentenceEnd === undefined
       ? undefined
-      : {
-          ...(raw.sentenceEnd.answers === undefined
+      : someKey({
+          ...(raw.sentenceEnd.answers === undefined || raw.sentenceEnd.answers.length === 0
             ? {}
             : {
                 answers: raw.sentenceEnd.answers.map((a) => ({
@@ -256,7 +262,7 @@ export function normalise(raw: RawLocaleRules): LocaleRules {
               }),
           ...(raw.sentenceEnd.unmarked === undefined ? {} : { unmarked: raw.sentenceEnd.unmarked }),
           ...(raw.sentenceEnd.notEnding === undefined ? {} : { notEnding: raw.sentenceEnd.notEnding }),
-        }
+        })
   return {
     schema: raw.schema ?? 1,
     ...(raw.rules === undefined ? {} : { rules: raw.rules }),

@@ -67,6 +67,14 @@ describe('schema 2 keys', () => {
   it('does not fingerprint the schema number', () => {
     expect(rulesFingerprint(parse('guidance: x'))).toBe(rulesFingerprint(parse('schema: 2\nguidance: x')))
   })
+  // An empty object sets nothing, so it must not count as set: a file that
+  // changes nothing would otherwise move configHash and re-review a locale.
+  it.each(['register: {}', 'sentenceEnd: {}', 'sentenceEnd: { answers: [] }'])('reads %s as absent', (line) => {
+    const rules = parse(`schema: 2\n${line}`)
+    expect(rules).not.toHaveProperty('register')
+    expect(rules).not.toHaveProperty('sentenceEnd')
+    expect(rulesFingerprint(rules)).toBe('')
+  })
   it('treats a file with only a schema-2 key as not empty', () => {
     expect(rulesFingerprint(parse('schema: 2\nformality: formal'))).not.toBe('')
   })
