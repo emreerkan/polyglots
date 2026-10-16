@@ -2,6 +2,7 @@ import { emitRulesYaml, emptyBuilderState, stateFromRules, type BuilderState } f
 import { BUILT_IN_RULES, UNIVERSAL_RULES, findingLabel } from '../../../../app/src/rules/names.js';
 import { RulesFileError, parseRulesText } from '../../../../app/src/rules/parse.js';
 import { intlTag, localeDisplayName, resolveLocale } from '../../../../app/src/wporg/locales.js';
+import { debounce } from './debounce.js';
 import { checksFor, type Check } from './match.js';
 import { RULE_EXAMPLES } from './rule-copy.js';
 import { emptyShare, sendRules, shareBlocker, type ShareFields } from './share.js';
@@ -502,6 +503,7 @@ export function start(): void {
     showShare();
   };
   $(root, '[data-download]').addEventListener('click', () => {
+    pending.flush();
     const url = URL.createObjectURL(new Blob([yaml], { type: 'text/yaml;charset=utf-8' }));
     const a = el('a', { href: url, download: fileName() });
     document.body.append(a);
@@ -511,6 +513,7 @@ export function start(): void {
   });
   const copyLabel = $(root, '[data-copy-label]');
   $(root, '[data-copy-yaml]').addEventListener('click', async () => {
+    pending.flush();
     try {
       await navigator.clipboard.writeText(yaml);
       copyLabel.textContent = 'Copied';
@@ -552,6 +555,7 @@ export function start(): void {
     showShare();
   });
   sendButton.addEventListener('click', async () => {
+    pending.flush();
     if (shareBlocker(share, { locale: state.locale, error: fileError }) !== undefined) return;
     sending = true;
     showShare();
@@ -584,13 +588,12 @@ export function start(): void {
   next.addEventListener('click', () => show(step + 1, true));
 
   // ---- Change propagation ------------------------------------------------------
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  const pending = debounce(() => {
+    refreshFile();
+    void runTester();
+  }, 150);
   function schedule() {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      refreshFile();
-      void runTester();
-    }, 150);
+    pending.schedule();
   }
   function changed() {
     persist();

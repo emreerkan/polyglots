@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { emptyBuilderState, type BuilderPattern } from '../../app/src/rules/emit.js'
+import { debounce } from '../src/components/rules-builder/debounce.js'
 import { checksFor, literalSource } from '../src/components/rules-builder/match.js'
 import { emptyShare, sendRules, shareBlocker, type ShareFields } from '../src/components/rules-builder/share.js'
 import { restoreSaved } from '../src/components/rules-builder/store.js'
@@ -174,4 +175,28 @@ test('tester: an empty translation runs nothing', () => {
 test('tester: a pattern is named by its note when it has one', () => {
   const state = { ...emptyBuilderState('es_ES'), patterns: [pattern({ mode: 'find', value: '\\s{2,}', note: ' One space ' })] }
   assert.equal(checksFor(state, 'a', 'b', 'es')[0]!.label, 'One space')
+})
+
+// Download, Copy and Send read the file the last refresh built. A click
+// inside the debounce after an edit must not ship the file from before it.
+test('debounce: flush runs a pending refresh now, and only once', async () => {
+  let runs = 0
+  const refresh = debounce(() => runs++, 20)
+  refresh.schedule()
+  refresh.flush()
+  assert.equal(runs, 1)
+  await new Promise((resolve) => setTimeout(resolve, 40))
+  assert.equal(runs, 1)
+  refresh.flush()
+  assert.equal(runs, 1)
+})
+
+test('debounce: a schedule with no flush runs once after the wait', async () => {
+  let runs = 0
+  const refresh = debounce(() => runs++, 10)
+  refresh.schedule()
+  refresh.schedule()
+  assert.equal(runs, 0)
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  assert.equal(runs, 1)
 })
