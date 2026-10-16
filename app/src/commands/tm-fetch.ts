@@ -11,7 +11,7 @@ import { readOnly } from '../storage/read-only.js'
 import { insertTmIfAbsent } from '../storage/tm.js'
 import { decodeXml, parseTmx } from '../tmx/parse.js'
 import type { Locale } from '../types.js'
-import { localeDisplayName } from '../wporg/locales.js'
+import { localeDisplayName, splitLocale } from '../wporg/locales.js'
 
 // A sanity ceiling, not a budget: real locales are tens of MiB. The whole
 // decompressed file is held in memory to be parsed, so an entry claiming more
@@ -110,9 +110,27 @@ export async function runTmFetch(
     await rm(temp, { force: true }).catch(() => undefined)
   }
 
-  // targetLocale is the slug, so rows land where every reader looks for
-  // them, never under the WP code the file's xml:lang carries.
-  const rows = parseTmx(decodeXml(xml), { targetLocale: locale }).map((e) => (e.project ? e : { ...e, project: VAULT_PROJECT }))
+  // The target <tuv> is found by the language the file writes, and the row
+  // is filed under the slug, where every reader looks for it. They are not
+  // the same string. The slug is a translate.wordpress.org label, and for
+  // Burmese (mya), Valencian (ca-val), Breton (bre/br) and a few others it
+  // is not even a prefix of the xml:lang the vault writes (my-MM,
+  // ca-valencia), so matching by the slug found no target, imported nothing
+  // and still exited 0. The vault writes the WP code without its set, since
+  // a TMX cannot name one (nl-NL for nl_NL_formal), and that is rebuilt here
+  // from the code the manifest names, which findTmEntry has already checked
+  // against the slug.
+  const rows = parseTmx(decodeXml(xml), { targetLocale: targetLang(entry.locale, locale) }).map((e) => ({
+    ...e,
+    locale,
+    project: e.project || VAULT_PROJECT,
+  }))
+  // An entry that promises units and yields none is a file this client cannot
+  // read the way the producer wrote it, not an empty memory; saying "0 new
+  // strings" would read as success.
+  if (entry.units > 0 && rows.length === 0) {
+    throw new DataError(`The polyglots-data memory for ${locale} has no ${entry.locale} units; nothing was imported.`)
+  }
 
   const db = opts.db ?? openDb()
   try {
@@ -128,6 +146,15 @@ export async function runTmFetch(
   } finally {
     if (opts.db === undefined) db.close()
   }
+}
+
+// The producer's rule for the target's xml:lang (contract point 4): the WP
+// code with the set suffix taken off, nl_NL_formal as nl-NL. parseTmx
+// normalises case and separators, so only the suffix needs handling here.
+function targetLang(code: string, locale: Locale): string {
+  const { set } = splitLocale(locale)
+  const suffix = `_${set}`
+  return set !== 'default' && code.toLowerCase().endsWith(suffix.toLowerCase()) ? code.slice(0, -suffix.length) : code
 }
 
 async function gunzipCapped(path: string, limit: number): Promise<Buffer> {

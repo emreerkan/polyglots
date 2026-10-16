@@ -53,10 +53,10 @@ async function publish(patch: Record<string, unknown> = {}, gz?: Buffer) {
 
 // A served TMX of the caller's own units, with a manifest entry that
 // describes it truthfully.
-async function publishTmx(units: string) {
+async function publishTmx(units: string, patch: Record<string, unknown> = {}) {
   const xml = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?><tmx version="1.4"><header srclang="en"/><body>${units}</body></tmx>`)
   const gz = gzipSync(xml)
-  await publish({ bytes: gz.length, bytesUncompressed: xml.length, sha512: sha512(gz), units: 2 }, gz)
+  await publish({ bytes: gz.length, bytesUncompressed: xml.length, sha512: sha512(gz), units: 2, ...patch }, gz)
 }
 
 const count = (where = '1 = 1') => (db.prepare(`SELECT COUNT(*) n FROM tm WHERE ${where}`).get() as { n: number }).n
@@ -86,6 +86,43 @@ describe('tm fetch', () => {
       { source: 'Bare', project: 'polyglots-data' },
       { source: 'Two', project: 'wp/dev' },
     ])
+  })
+
+  // The slug is a label, not a language tag: Burmese is mya, Valencian
+  // ca-val, and neither prefixes the xml:lang the vault writes (my-MM,
+  // ca-valencia). The target is found by the WP code the manifest names.
+  it.each([
+    ['mya', 'my_MM', 'my-MM'],
+    ['ca-val', 'ca_valencia', 'ca-valencia'],
+  ])('finds the target of %s by its WP code, and files it under the slug', async (slug, wp, lang) => {
+    await publishTmx(`<tu><tuv xml:lang="en"><seg>Save</seg></tuv><tuv xml:lang="${lang}"><seg>T</seg></tuv></tu>`, { slug, locale: wp, units: 1 })
+    const r = await runTmFetch(await planTmFetch(slug, dataClient, db), dataClient, { db })
+    expect(r.added).toBe(1)
+    expect(db.prepare('SELECT source, target, locale FROM tm').all()).toEqual([{ source: 'Save', target: 'T', locale: slug }])
+  })
+
+  // A TMX cannot name a set, so nl_NL_formal is written as nl-NL; the set
+  // suffix has to come off the WP code before it is compared.
+  it('finds the target of a set locale by its WP code without the set', async () => {
+    await publishTmx('<tu><tuv xml:lang="en"><seg>Save</seg></tuv><tuv xml:lang="nl-NL"><seg>Opslaan</seg></tuv></tu>', {
+      slug: 'nl/formal',
+      locale: 'nl_NL_formal',
+      units: 1,
+    })
+    const r = await runTmFetch(await planTmFetch('nl/formal', dataClient, db), dataClient, { db })
+    expect(r.added).toBe(1)
+    expect(db.prepare('SELECT locale FROM tm').all()).toEqual([{ locale: 'nl/formal' }])
+  })
+
+  it('refuses a file with no units in the locale, rather than reporting nothing imported', async () => {
+    await publishTmx('<tu><tuv xml:lang="en"><seg>Save</seg></tuv><tuv xml:lang="de-DE"><seg>Speichern</seg></tuv></tu>', { units: 1 })
+    upsertTm(db, [{ source: 'Save', target: 'Kaydet', locale: 'tr' }])
+    const before = db.prepare('SELECT * FROM tm').all()
+    const attempt = planTmFetch('tr', dataClient, db).then((plan) => runTmFetch(plan, dataClient, { db }))
+    await expect(attempt).rejects.toThrow(DataError)
+    await expect(attempt).rejects.toThrow('has no tr_TR units')
+    expect(db.prepare('SELECT * FROM tm').all()).toEqual(before)
+    expect(await leftovers()).toEqual([])
   })
 
   it('adds nothing on a second fetch', async () => {
