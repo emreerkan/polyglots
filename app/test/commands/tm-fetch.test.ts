@@ -196,8 +196,45 @@ describe('tm fetch', () => {
     expect(plan.summary).toEqual([
       'Turkish (tr): 1,002 strings, 26.5 KiB download, built 2026-10-16',
       '4 projects, 1 not refreshed in this build (oldest 2026-10-09)',
+      '1 long-text project (readmes, release notes); its strings rank below the rest.',
       'Your memory has no tr strings yet.',
     ])
     expect(server!.requests.map((r) => r.path)).toEqual(['/index.json'])
+  })
+
+  // polyglots-data marks a unit low only when every project it came from is
+  // long text. The fixture's two units shared by debug-bar's dev and readme
+  // projects came from a project that is not, so they keep normal weight.
+  it('imports 60 low rows from the fixture', async () => {
+    await publish()
+    await runTmFetch(await planTmFetch('tr', dataClient, db), dataClient, { db })
+    expect(count('weight = 0')).toBe(60)
+    expect(count('weight = 1')).toBe(942)
+    const shared = db
+      .prepare("SELECT source, weight, project FROM tm WHERE source IN ('Debug Bar', ?) ORDER BY source")
+      .all('Adds a debug menu to the admin bar that shows query, cache, and other helpful debugging information.')
+    expect(shared).toEqual([
+      expect.objectContaining({ weight: 1, project: 'wp-plugins/debug-bar/dev' }),
+      expect.objectContaining({ weight: 1, project: 'wp-plugins/debug-bar/dev' }),
+    ])
+  })
+
+  it('says how many projects are long text', async () => {
+    await publish({
+      projects: [
+        { path: 'wp/dev', units: 1 },
+        { path: 'wp/dev-readme', units: 1, kind: 'long-text' },
+        { path: 'wp/release-notes', units: 1, kind: 'long-text' },
+        { path: 'wp/other', units: 1, kind: 'something-new' },
+      ],
+    })
+    const plan = await planTmFetch('tr', dataClient, db)
+    expect(plan.summary).toContain('2 long-text projects (readmes, release notes); their strings rank below the rest.')
+  })
+
+  it('says nothing about long text when no project is', async () => {
+    await publish({ projects: [{ path: 'wp/dev', units: 1 }, { path: 'wp/other', units: 1, kind: 'something-new' }] })
+    const plan = await planTmFetch('tr', dataClient, db)
+    expect(plan.summary.join('\n')).not.toContain('long-text')
   })
 })

@@ -495,6 +495,66 @@ msgstr "Ayrıntıları Gizle"
 })
 
 /**
+ * Memory rows taken only from readmes and release notes are a hint, never a
+ * conflict: the prompt still lists them, after the rows chosen for an
+ * interface, and tm-conflict stays quiet when they are all a source has.
+ */
+describe('reviewFile with long-text memory', () => {
+  const PO_SCROLL = `msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\\n"
+"Language: tr\\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\\n"
+
+msgid "Scroll to Top"
+msgstr "Başa dön"
+`
+  let home: string
+  let file: string
+  let db: Database.Database
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'polyglots-review-weight-'))
+    file = join(home, 'plugin-tr.po')
+    await writeFile(file, PO_SCROLL, 'utf8')
+    db = openDb(join(home, 'polyglots.db'))
+    replaceGlossary(db, 'tr', [{ locale: 'tr', sourceTerm: 'sidebar', translation: 'kenar çubuğu', partOfSpeech: 'noun' }])
+  })
+
+  afterEach(async () => {
+    db.close()
+    await rm(home, { recursive: true, force: true })
+  })
+
+  async function sent() {
+    const adjudicate = vi.fn(async (batch: { id: number }[]) =>
+      batch.map((c) => ({ id: c.id, problem: false, categories: [] as never[], reason: 'ok' })),
+    )
+    await reviewFile({ file, locale: 'tr', db, adjudicate })
+    const [candidate] = adjudicate.mock.calls.flatMap(([batch]) => batch) as unknown as {
+      hints: { rule: string }[]
+      memory?: string[]
+    }[]
+    return candidate!
+  }
+
+  it('reports no conflict when every memory row is long text, and still shows them', async () => {
+    upsertTm(db, [{ source: 'Scroll to Top', target: 'Yukarı kaydır', locale: 'tr', weight: 'low' }])
+    const candidate = await sent()
+    expect(candidate.hints.map((h) => h.rule)).not.toContain('tm-conflict')
+    expect(candidate.memory).toEqual(['Yukarı kaydır'])
+  })
+
+  it('reports the conflict when a normal row exists, normal rows listed first', async () => {
+    upsertTm(db, [{ source: 'Scroll to Top', target: 'Tepeye kaydır', locale: 'tr' }])
+    upsertTm(db, [{ source: 'Scroll to Top', target: 'Yukarı kaydır', locale: 'tr', weight: 'low' }])
+    const candidate = await sent()
+    expect(candidate.hints.map((h) => h.rule)).toContain('tm-conflict')
+    expect(candidate.memory).toEqual(['Tepeye kaydır', 'Yukarı kaydır'])
+  })
+})
+
+/**
  * What the run screens list as each batch lands. One event per batch rather
  * than one per entry: a seven-thousand-entry run is then a few hundred events,
  * not seven thousand re-renders.

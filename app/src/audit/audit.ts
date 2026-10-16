@@ -77,6 +77,9 @@ export interface AuditOptions extends Partial<AgentRunOptions> {
   // matches because they are a fair hint in a prompt; only these may settle an
   // entry without a model. Absent means none may.
   memoryExact?: ReadonlySet<string>
+  // The keys in `tm` whose every row is long text, which the tm-conflict rule
+  // does not hold a submission to. Absent means none.
+  tmWeak?: ReadonlySet<string>
   noAi?: boolean
   batchSize?: number
   // Lets a caller park or end the run at a batch boundary. A subscription that
@@ -144,6 +147,7 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
     entries: opts.entries,
     ...(opts.properNouns ? { properNouns: opts.properNouns } : {}),
     ...(opts.tm ? { tm: opts.tm } : {}),
+    ...(opts.tmWeak ? { tmWeak: opts.tmWeak } : {}),
   })
 
   const verdicts = new Map<string, Verdict>()

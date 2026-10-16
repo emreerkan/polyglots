@@ -243,4 +243,83 @@ describe('tm', () => {
       expect(insertTmIfAbsent(db, [], 't')).toEqual({ added: 0, present: 0 })
     })
   })
+
+  /**
+   * A string taken only from readmes and release notes is a wording someone
+   * chose for prose, and an interface label should not inherit it ahead of
+   * one chosen for an interface. Low rows stay in every answer, after the rest.
+   */
+  describe('weight', () => {
+    const weightOf = (target: string) =>
+      (db.prepare('SELECT weight FROM tm WHERE target = ?').get(target) as { weight: number }).weight
+    const age = (target: string, updatedAt: string) =>
+      db.prepare('UPDATE tm SET updated_at = ? WHERE target = ?').run(updatedAt, target)
+
+    it('findMemory lists normal rows before low rows, newer low rows included', () => {
+      upsertTm(db, [{ source: 'Plugin', target: 'Eklenti', locale: 'tr' }])
+      upsertTm(db, [{ source: 'Plugin', target: 'Eklentisi', locale: 'tr', weight: 'low' }])
+      age('Eklenti', '2020-01-01T00:00:00.000Z')
+      age('Eklentisi', '2026-01-01T00:00:00.000Z')
+      const hits = findMemory(db, 'Plugin', 'tr')
+      expect(hits.map((h) => h.target)).toEqual(['Eklenti', 'Eklentisi'])
+      expect(hits[0]).not.toHaveProperty('weight')
+      expect(hits[1]?.weight).toBe('low')
+    })
+
+    it('findExactTm prefers the normal row', () => {
+      insertTmIfAbsent(db, [{ source: 'Plugin', target: 'Eklentisi', locale: 'tr', weight: 'low' }], '2026-10-16T03:00:00Z')
+      insertTmIfAbsent(db, [{ source: 'Plugin', target: 'Eklenti', locale: 'tr' }], '2020-01-01T00:00:00Z')
+      expect(findExactTm(db, 'Plugin', 'tr')?.target).toBe('Eklenti')
+    })
+
+    it('still answers from a low row when it is all there is', () => {
+      insertTmIfAbsent(db, [{ source: 'Plugin', target: 'Eklentisi', locale: 'tr', weight: 'low' }], 't')
+      expect(findExactTm(db, 'Plugin', 'tr')).toMatchObject({ target: 'Eklentisi', weight: 'low' })
+    })
+
+    it('searchTm ranks low below normal at equal score', () => {
+      insertTmIfAbsent(db, [{ source: 'Save the draft', target: 'Taslağı kaydet (readme)', locale: 'tr', weight: 'low' }], 't')
+      insertTmIfAbsent(db, [{ source: 'Save the draft', target: 'Taslağı kaydet', locale: 'tr' }], 't')
+      const hits = searchTm(db, 'Save the draft', 'tr')
+      expect(hits.map((h) => [h.target, h.score])).toEqual([
+        ['Taslağı kaydet', 1],
+        ['Taslağı kaydet (readme)', 1],
+      ])
+    })
+
+    it('searchTm still puts a better low match above a worse normal one', () => {
+      insertTmIfAbsent(db, [{ source: 'Save the draft', target: 'Taslağı kaydet', locale: 'tr', weight: 'low' }], 't')
+      insertTmIfAbsent(db, [{ source: 'Save the draft now please', target: 'Şimdi kaydet', locale: 'tr' }], 't')
+      expect(searchTm(db, 'Save the draft', 'tr')[0]?.target).toBe('Taslağı kaydet')
+    })
+
+    it('insertTmIfAbsent never changes the weight of a row already present', () => {
+      upsertTm(db, [{ source: 'Plugin', target: 'Eklenti', locale: 'tr' }])
+      upsertTm(db, [{ source: 'Theme', target: 'Tema', locale: 'tr', weight: 'low' }])
+      insertTmIfAbsent(
+        db,
+        [
+          { source: 'Plugin', target: 'Eklenti', locale: 'tr', weight: 'low' },
+          { source: 'Theme', target: 'Tema', locale: 'tr' },
+          { source: 'Readme', target: 'Benioku', locale: 'tr', weight: 'low' },
+          { source: 'Label', target: 'Etiket', locale: 'tr' },
+        ],
+        't',
+      )
+      expect([weightOf('Eklenti'), weightOf('Tema'), weightOf('Benioku'), weightOf('Etiket')]).toEqual([1, 0, 0, 1])
+    })
+
+    it('upsertTm writes the weight on insert and on update', () => {
+      upsertTm(db, [
+        { source: 'Plugin', target: 'Eklenti', locale: 'tr', weight: 'low' },
+        { source: 'Theme', target: 'Tema', locale: 'tr' },
+      ])
+      expect([weightOf('Eklenti'), weightOf('Tema')]).toEqual([0, 1])
+      upsertTm(db, [
+        { source: 'Plugin', target: 'Eklenti', locale: 'tr' },
+        { source: 'Theme', target: 'Tema', locale: 'tr', weight: 'low' },
+      ])
+      expect([weightOf('Eklenti'), weightOf('Tema')]).toEqual([1, 0])
+    })
+  })
 })

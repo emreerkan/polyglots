@@ -108,7 +108,17 @@ function readTu(tu: Node, headerSrc: string | undefined, target: string, opts: T
   if (context) entry.context = context
   const project = opts.project || readProject(tuChildren)
   if (project) entry.project = project
+  if (readWeight(tuChildren) === 'low') entry.weight = 'low'
   return entry
+}
+
+// polyglots-data writes x-weight low on a unit only when every project it
+// came from is long text: a readme, release notes. Any other value, or none,
+// is normal, so a weight the producer adds later is read as normal rather
+// than as low by accident. The first prop decides, as with x-project.
+function readWeight(tuChildren: Node[]): string | undefined {
+  const prop = tuChildren.find((child) => 'prop' in child && attrs(child)['type'] === 'x-weight')
+  return prop ? textOf(children(prop, 'prop')).trim() : undefined
 }
 
 // polyglots-data tags each unit with every project it was taken from, the

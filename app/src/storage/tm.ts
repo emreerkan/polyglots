@@ -7,23 +7,30 @@ interface TmRow {
   locale: string
   context: string
   project: string | null
+  weight: number
 }
+
+// 1 is normal and 0 low, stored as a number so that ORDER BY weight DESC puts
+// normal rows first without a CASE, and so a later finer weight has room.
+const weightOf = (e: TmEntry): number => (e.weight === 'low' ? 0 : 1)
 
 function toEntry(row: TmRow): TmEntry {
   const entry: TmEntry = { source: row.source, target: row.target, locale: row.locale }
   if (row.context !== '') entry.context = row.context
   if (row.project !== null) entry.project = row.project
+  if (row.weight === 0) entry.weight = 'low'
   return entry
 }
 
 export function upsertTm(db: Database.Database, entries: TmEntry[]): number {
   if (entries.length === 0) return 0
   const stmt = db.prepare(`
-    INSERT INTO tm (source, target, locale, context, project, updated_at)
-    VALUES (@source, @target, @locale, @context, @project, @updatedAt)
+    INSERT INTO tm (source, target, locale, context, project, updated_at, weight)
+    VALUES (@source, @target, @locale, @context, @project, @updatedAt, @weight)
     ON CONFLICT (source, locale, context, target) DO UPDATE SET
       project = excluded.project,
-      updated_at = excluded.updated_at
+      updated_at = excluded.updated_at,
+      weight = excluded.weight
   `)
   const updatedAt = new Date().toISOString()
   const run = db.transaction((batch: TmEntry[]) => {
@@ -35,6 +42,7 @@ export function upsertTm(db: Database.Database, entries: TmEntry[]): number {
         context: e.context ?? '',
         project: e.project ?? null,
         updatedAt,
+        weight: weightOf(e),
       })
     }
     return batch.length
@@ -54,6 +62,10 @@ export function upsertTm(db: Database.Database, entries: TmEntry[]): number {
  * build time of the vault, so a vault wording does not outrank the person's
  * own alternatives merely because it arrived later.
  *
+ * The weight is written for a new row and, like everything else, left alone
+ * on a row already present: a vault that later re-marks a string does not
+ * re-rank what the person holds. Re-weighting is deliberately out of scope.
+ *
  * One transaction per chunk rather than one for the lot, so a review writing
  * to the same database waits for one chunk at most, inside SQLite's busy
  * timeout, instead of for the whole import.
@@ -65,8 +77,8 @@ export function insertTmIfAbsent(
   chunk = 5000,
 ): { added: number; present: number } {
   const stmt = db.prepare(`
-    INSERT INTO tm (source, target, locale, context, project, updated_at)
-    VALUES (@source, @target, @locale, @context, @project, @updatedAt)
+    INSERT INTO tm (source, target, locale, context, project, updated_at, weight)
+    VALUES (@source, @target, @locale, @context, @project, @updatedAt, @weight)
     ON CONFLICT (source, locale, context, target) DO NOTHING
   `)
   const run = db.transaction((batch: TmEntry[]) => {
@@ -79,6 +91,7 @@ export function insertTmIfAbsent(
         context: e.context ?? '',
         project: e.project ?? null,
         updatedAt,
+        weight: weightOf(e),
       }).changes
     }
     return added
@@ -89,8 +102,8 @@ export function insertTmIfAbsent(
 }
 
 /**
- * Every translation the locale approved for this exact source, most recently
- * updated first.
+ * Every translation the locale approved for this exact source: rows of normal
+ * weight first, then long-text ones, each most recently updated first.
  *
  * The memory holds alternatives rather than one answer per source. A real
  * export had 6,480 sources with more than one approved wording, most of them
@@ -102,12 +115,17 @@ export function insertTmIfAbsent(
  * different things. The fallback to the context-less rows when the scoped
  * context holds nothing is unchanged, and callers that act without a model
  * still have to know which of the two they got.
+ *
+ * Weight is the first key, not a tiebreak, so a readme wording imported later
+ * never outranks an interface wording imported earlier. Recency decides only
+ * among rows of the same weight. The low rows are still returned: a source
+ * known only from a readme is better known than not at all.
  */
 export function findMemory(db: Database.Database, source: string, locale: Locale, context?: string): TmEntry[] {
   const stmt = db.prepare<[string, string, string], TmRow>(
-    `SELECT source, target, locale, context, project FROM tm
+    `SELECT source, target, locale, context, project, weight FROM tm
      WHERE source = ? AND locale = ? AND context = ?
-     ORDER BY updated_at DESC, id DESC`,
+     ORDER BY weight DESC, updated_at DESC, id DESC`,
   )
   if (context) {
     const scoped = stmt.all(source, locale, context)
@@ -118,10 +136,10 @@ export function findMemory(db: Database.Database, source: string, locale: Locale
 
 /**
  * The one alternative to use where only one will do, such as filling an
- * untranslated entry on a translate run. The most recently updated wins, which
- * is a choice rather than a verdict: see `findMemory` for why there can be
- * several, and mark the result for a human when it came from a source that has
- * more than one.
+ * untranslated entry on a translate run. A row of normal weight beats a
+ * long-text one, then the most recently updated wins, which is a choice rather
+ * than a verdict: see `findMemory` for why there can be several, and mark the
+ * result for a human when it came from a source that has more than one.
  */
 export function findExactTm(
   db: Database.Database,
@@ -155,7 +173,7 @@ export function searchTm(db: Database.Database, text: string, locale: Locale, li
   const match = queryTokens.map((t) => `"${t}"`).join(' OR ')
   const rows = db
     .prepare<[string, string, number], TmRow>(
-      `SELECT tm.source, tm.target, tm.locale, tm.context, tm.project
+      `SELECT tm.source, tm.target, tm.locale, tm.context, tm.project, tm.weight
        FROM tm_fts
        JOIN tm ON tm.id = tm_fts.rowid
        WHERE tm_fts MATCH ? AND tm.locale = ?
@@ -169,5 +187,7 @@ export function searchTm(db: Database.Database, text: string, locale: Locale, li
       ...toEntry(row),
       score: row.source.trim().toLowerCase() === normalized ? 1 : overlapScore(queryTokens, tokens(row.source)),
     }))
-    .sort((a, b) => b.score - a.score)
+    // Weight only breaks a tie: a closer long-text match is still the more
+    // useful hint than a distant one chosen for an interface.
+    .sort((a, b) => b.score - a.score || weightOf(b) - weightOf(a))
 }

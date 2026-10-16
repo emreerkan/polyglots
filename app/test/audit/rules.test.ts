@@ -471,6 +471,39 @@ describe('tm-conflict with alternatives', () => {
 })
 
 /**
+ * A source whose every memory row came from readmes and release notes has no
+ * wording chosen for an interface, so a submission differing from it is not
+ * evidence of anything. Such rows still settle agreement: matching one is the
+ * contributor picking a wording the locale approved somewhere.
+ */
+describe('tm-conflict with long-text rows', () => {
+  const key = tmKey('Scroll to Top')
+  const ctxWith = (tm: Map<string, string[]>, tmWeak?: Set<string>) =>
+    buildRuleContext({ locale: 'tr', glossary: [], nplurals: 2, entries: [], tm, ...(tmWeak ? { tmWeak } : {}) })
+  const entry = (msgid: string, msgstr: string) => ({
+    key: msgid, msgid, msgstr: [msgstr], comments: [], references: [], fuzzy: false,
+  })
+  const conflicts = (msgstr: string, tm: Map<string, string[]>, tmWeak?: Set<string>) =>
+    runRules(entry('Scroll to Top', msgstr), ctxWith(tm, tmWeak)).filter((f) => f.rule === 'tm-conflict')
+
+  it('tm-conflict stays quiet when every memory row is low', () => {
+    expect(conflicts('Başa dön', new Map([[key, ['Tepeye kaydır', 'Yukarı kaydır']]]), new Set([key]))).toEqual([])
+  })
+
+  it('tm-conflict still fires when a normal row exists and the submission matches none', () => {
+    // The caller marks a key weak only when every row is low; one normal row
+    // keeps it out of the set, and the rule reports as before.
+    expect(conflicts('Başa dön', new Map([[key, ['Tepeye kaydır', 'Yukarı kaydır']]]), new Set())).toHaveLength(1)
+    expect(conflicts('Başa dön', new Map([[key, ['Tepeye kaydır']]]), new Set([tmKey('Other')]))).toHaveLength(1)
+  })
+
+  it('a submission matching a low row is no conflict', () => {
+    expect(conflicts('Yukarı kaydır', new Map([[key, ['Tepeye kaydır', 'Yukarı kaydır']]]), new Set())).toEqual([])
+    expect(conflicts('Yukarı kaydır', new Map([[key, ['Yukarı kaydır']]]), new Set([key]))).toEqual([])
+  })
+})
+
+/**
  * A trailing full stop is not a disagreement in any script, so the danda, the
  * Urdu ۔ and the ideographic 。 have to be read like the Latin "." that the
  * rule already ignored. The pairs are approved WooCommerce translations checked

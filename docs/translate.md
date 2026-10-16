@@ -114,6 +114,14 @@ not rank above your own alternatives only because they arrived later. So:
 - A string that polyglots-data removes stays in your memory. Removals never
   reach a memory that already holds the string.
 
+Some polyglots-data projects are long text: plugin readmes and release notes.
+A string that comes only from those projects ranks below the rest. When a
+source has several translations, the others come first, both for translate's
+fill and in the list a review shows the model. A review does not report a
+submission as a conflict when every translation in the memory is long text.
+The summary before the download says how many projects are long text.
+`polyglots tm import` reads the same mark from a polyglots-data TMX.
+
 `POLYGLOTS_DATA_URL` points the command at another manifest, as for
 `polyglots rules fetch`.
 

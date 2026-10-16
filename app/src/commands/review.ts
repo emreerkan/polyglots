@@ -122,26 +122,32 @@ function readGlossary(locale: Locale, injected?: Database.Database) {
  * source is ambiguous and deciding from a row that ignored it would be deciding
  * the ambiguous case blind. An entry with no msgctxt is only ever looked up
  * without one, so its match is exact by construction.
+ *
+ * `weak` holds the keys whose every row is long text. findMemory has already
+ * put normal rows first, so the prompt lists those ahead of the readme
+ * wordings without being told which is which; only tm-conflict needs the set.
  */
 function readMemory(
   entries: AuditEntry[],
   locale: Locale,
   injected?: Database.Database,
-): { memory: Map<string, readonly string[]>; exact: Set<string> } {
+): { memory: Map<string, readonly string[]>; exact: Set<string>; weak: Set<string> } {
   const db = injected ?? openDb()
   try {
     const memory = new Map<string, readonly string[]>()
     const exact = new Set<string>()
+    const weak = new Set<string>()
     for (const entry of entries) {
       const hits = findMemory(db, entry.msgid, locale, entry.msgctxt)
       if (hits.length === 0) continue
       const key = tmKey(entry.msgid, entry.msgctxt)
       memory.set(key, hits.map((h) => h.target))
+      if (hits.every((h) => h.weight === 'low')) weak.add(key)
       // Every alternative comes from one lookup, so they share a context and
       // the first answers for all of them.
       if (!entry.msgctxt || hits[0]!.context === entry.msgctxt) exact.add(key)
     }
-    return { memory, exact }
+    return { memory, exact, weak }
   } finally {
     if (!injected) db.close()
   }
@@ -431,6 +437,7 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
       entries: reviewable,
       tm: remembered.memory,
       memoryExact: remembered.exact,
+      ...(remembered.weak.size > 0 ? { tmWeak: remembered.weak } : {}),
       locale: opts.locale,
       nplurals: po.nplurals,
       ...(pluralForms === undefined ? {} : { pluralForms }),

@@ -53,6 +53,17 @@ describe('parseTmx with the PoEdit-style fixture', () => {
     expect(parseTmx(tmx(tu('A', 'B')), { targetLocale: 'tr' })[0]?.project).toBeUndefined()
   })
 
+  // polyglots-data marks a unit low only when every project it came from is
+  // long text; absent, or any other value, is normal.
+  it('reads x-weight low; any other value is normal', () => {
+    const weighted = (value: string) =>
+      tu('A', 'B', 'en', 'tr', `<prop type="x-project">wp/dev-readme</prop><prop type="x-weight">${value}</prop>`)
+    expect(parseTmx(tmx(weighted('low')), { targetLocale: 'tr' })[0]?.weight).toBe('low')
+    expect(parseTmx(tmx(weighted(' low ')), { targetLocale: 'tr' })[0]?.weight).toBe('low')
+    expect(parseTmx(tmx(weighted('high')), { targetLocale: 'tr' })[0]).not.toHaveProperty('weight')
+    expect(parseTmx(tmx(tu('A', 'B')), { targetLocale: 'tr' })[0]).not.toHaveProperty('weight')
+  })
+
   it('prefers the project option to an x-project', () => {
     const body = tu('A', 'B', 'en', 'tr', '<prop type="x-project">wp/dev</prop>')
     expect(parseTmx(tmx(body), { targetLocale: 'tr', project: 'mine' })[0]?.project).toBe('mine')

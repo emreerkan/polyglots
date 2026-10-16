@@ -41,6 +41,10 @@ export interface RuleContext {
   // Resolved by the caller because the rules read no database. Absent when
   // the caller did not look, which is not the same as the memory being empty.
   tm?: Map<string, readonly string[]>
+  // The keys in tm whose every row is long text (readmes, release notes).
+  // Their wordings were chosen for prose, so a submission that differs is no
+  // conflict, though matching one still counts as agreement.
+  tmWeak?: ReadonlySet<string>
   // Mistakes and patterns from the locale's rules file. Resolved once here
   // rather than read per entry; absent when the locale has no file.
   customPatterns?: readonly CustomPattern[]
@@ -59,6 +63,7 @@ export interface BuildRuleContextOptions {
   // people, institutions, historical events. Entries may be multi-word.
   properNouns?: string[]
   tm?: Map<string, readonly string[]>
+  tmWeak?: ReadonlySet<string>
 }
 
 const DEFAULT_BRANDS = [
@@ -166,6 +171,7 @@ export function buildRuleContext(opts: BuildRuleContextOptions): RuleContext {
     profile: profileFor(opts.locale),
     namePhrases,
     ...(opts.tm ? { tm: opts.tm } : {}),
+    ...(opts.tmWeak ? { tmWeak: opts.tmWeak } : {}),
     translationsByMsgid,
     ...(customPatterns && customPatterns.length > 0 ? { customPatterns } : {}),
     ...(sentenceEnd ? { sentenceEnd } : {}),
@@ -785,8 +791,14 @@ const tmConflict: Rule = (entry, ctx) => {
   if (!ctx.tm) return []
   const text = entry.msgstr.find(Boolean)
   if (!text) return []
-  const approved = ctx.tm.get(tmKey(entry.msgid, entry.msgctxt))
+  const key = tmKey(entry.msgid, entry.msgctxt)
+  const approved = ctx.tm.get(key)
   if (!approved || approved.length === 0) return []
+  // Every row is from a readme or release notes: a wording chosen for prose
+  // is no authority over an interface string, and on the vault's long-text
+  // projects it differs often and for good reason. Matching such a row is
+  // already silent below, so only the disagreement is dropped.
+  if (ctx.tmWeak?.has(key)) return []
   if (approved.some((a) => sameWording(text, a, ctx.locale))) return []
   const named = approved.length === 1 ? JSON.stringify(approved[0]) : approved.map((a) => JSON.stringify(a)).join(', ')
   return [

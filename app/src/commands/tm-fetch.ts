@@ -74,9 +74,15 @@ export async function planTmFetch(locale: Locale, client: DataClient, db?: Datab
   const existing = db ? countRows(db) : readOnly(dbFile(), countRows, 0)
 
   const stale = entry.projects.flatMap((p) => (p.stale === undefined ? [] : [p.stale])).sort()
+  // Any other kind, including one the producer adds later, is normal here, as
+  // it is for the x-weight it would come with.
+  const longText = entry.projects.filter((p) => p.kind === 'long-text').length
   const summary = [
     `${localeDisplayName(locale)} (${locale}): ${plural(entry.units, 'string')}, ${formatBytes(entry.bytes)} download, built ${entry.built.slice(0, 10)}`,
     `${plural(entry.projects.length, 'project')}${stale.length > 0 ? `, ${stale.length} not refreshed in this build (oldest ${stale[0]!.slice(0, 10)})` : ''}`,
+    ...(longText > 0
+      ? [`${plural(longText, 'long-text project')} (readmes, release notes); ${longText === 1 ? 'its' : 'their'} strings rank below the rest.`]
+      : []),
     existing > 0
       ? `You already have ${plural(existing, 'string')} for ${locale}. This adds what is new; it never changes or deletes your rows.`
       : `Your memory has no ${locale} strings yet.`,

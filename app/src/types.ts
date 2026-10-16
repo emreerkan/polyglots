@@ -76,6 +76,11 @@ export interface TmEntry {
   locale: Locale
   context?: string
   project?: string
+  // Set only when every project the string came from is long text (readmes,
+  // release notes), where polyglots-data marks the unit x-weight low. Such a
+  // wording was chosen for prose, so it answers after the rows chosen for an
+  // interface rather than beside them. Absent means normal.
+  weight?: 'low'
 }
 
 export interface TmMatch extends TmEntry {

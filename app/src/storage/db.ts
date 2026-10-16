@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS tm (
   context TEXT NOT NULL DEFAULT '',
   project TEXT,
   updated_at TEXT NOT NULL,
+  weight INTEGER NOT NULL DEFAULT 1,
   UNIQUE (source, locale, context, target)
 );
 
@@ -103,6 +104,25 @@ function widenTmUniqueness(db: Database.Database): void {
   `)
 }
 
+/**
+ * Gives a memory written before long-text weight its weight column, every row
+ * normal.
+ *
+ * Additive only, unlike the widening above: polyglots.db holds months of
+ * imports and cannot be regenerated, so no row is copied or rewritten, and
+ * ADD COLUMN with a constant default fills the old rows without touching them.
+ * An older build still running against the same file keeps working, because
+ * every insert it makes names its columns and the new one has a default.
+ * Checked through table_info rather than caught from a failed ALTER, so a
+ * second open is a read and nothing else.
+ */
+function ensureTmWeight(db: Database.Database): void {
+  const columns = db.pragma('table_info(tm)') as Array<{ name: string }>
+  if (!columns.some((c) => c.name === 'weight')) {
+    db.exec('ALTER TABLE tm ADD COLUMN weight INTEGER NOT NULL DEFAULT 1;')
+  }
+}
+
 export function openDb(path: string = dbFile()): Database.Database {
   mkdirSync(dirname(path), { recursive: true })
   const db = new Database(path)
@@ -111,6 +131,9 @@ export function openDb(path: string = dbFile()): Database.Database {
   const widened = needsWidening(db)
   if (widened) widenTmUniqueness(db)
   db.exec(MIGRATIONS)
+  // After the widening, whose rebuilt table has no weight, and after
+  // MIGRATIONS, which is a no-op on a table that already exists.
+  ensureTmWeight(db)
   // After the triggers exist again, so the index and the table agree.
   if (widened) db.exec("INSERT INTO tm_fts(tm_fts) VALUES('rebuild');")
   return db
