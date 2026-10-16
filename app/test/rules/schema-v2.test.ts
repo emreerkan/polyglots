@@ -34,6 +34,22 @@ describe('schema 2 keys', () => {
     expect(a.capitalization).toBe('- line one\n')
     expect(b.capitalization).toBe('- line one\n')
   })
+  // |+ keeps every trailing newline. The prompt only needs the one, so the
+  // three block styles must read, render and hash as the same text.
+  it('reads |, |- and |+ capitalization the same', () => {
+    const [a, b, c] = ['|', '|-', '|+'].map((style) => parse(`schema: 2\ncapitalization: ${style}\n  - line one\n\n\n`))
+    expect(a!.capitalization).toBe('- line one\n')
+    expect(b!.capitalization).toBe('- line one\n')
+    expect(c!.capitalization).toBe('- line one\n')
+    expect(rulesFingerprint(c)).toBe(rulesFingerprint(a))
+    expect(rulesFingerprint(c)).toBe(rulesFingerprint(b))
+  })
+  // The limit is on the text, not on how many newlines its block style kept,
+  // so it agrees with rules check, which counts the text without the newline.
+  it('counts the capitalization limit without trailing newlines', () => {
+    expect(parse(`schema: 2\ncapitalization: |\n  ${'x'.repeat(2500)}\n`).capitalization).toBe(`${'x'.repeat(2500)}\n`)
+    expect(error(`schema: 2\ncapitalization: |-\n  ${'x'.repeat(2501)}\n`).message).toContain('capitalization is longer than 2500')
+  })
   it('limits capitalization to 2500 characters', () => {
     expect(error(`schema: 2\ncapitalization: '${'x'.repeat(2501)}'`).message).toContain('longer than 2500')
   })

@@ -164,7 +164,13 @@ export const localeRulesSchema = z
     capitalization: z
       .string()
       .refine(notBlank, { message: 'is empty' })
-      .max(CAPITALIZATION_LIMIT, { message: `is longer than ${CAPITALIZATION_LIMIT} characters` })
+      // Measured as normalisation will leave it, less the final newline. On
+      // the raw string a | block's kept newline counted, so 2500 characters
+      // under | were refused and the same text under |- was not, and rules
+      // check, which counts without the newline, disagreed with both.
+      .refine((s) => s.trimEnd().length <= CAPITALIZATION_LIMIT, {
+        message: `is longer than ${CAPITALIZATION_LIMIT} characters`,
+      })
       .optional(),
     register: z
       .union([registerLine, z.object({ audit: registerLine.optional(), translate: registerLine.optional() }).strict()])
@@ -224,15 +230,12 @@ export function normalise(raw: RawLocaleRules): LocaleRules {
     })),
   ]
   const guidance = raw.guidance?.trim()
-  // A | block keeps the final newline and a |- block drops it. The prompt is
-  // built as though the text always ends in one, as the packs' text did, so
-  // the two spellings must not render different prompts or hash differently.
-  const capitalization =
-    raw.capitalization === undefined
-      ? undefined
-      : raw.capitalization.endsWith('\n')
-        ? raw.capitalization
-        : `${raw.capitalization}\n`
+  // A | block keeps the final newline, a |- block drops it and a |+ block
+  // keeps every trailing newline. The prompt is built as though the text ends
+  // in exactly one, as the packs' text did, so the three spellings must not
+  // render different prompts or hash differently. Trailing spaces on the last
+  // line go too, as the rules builder already drops them.
+  const capitalization = raw.capitalization === undefined ? undefined : `${raw.capitalization.trimEnd()}\n`
   // An object that sets neither side, or no part of sentenceEnd, is read as
   // the key left out. The file is still valid, and refusing it would fail a
   // file for saying nothing; but kept as {}, it counted as set, so a file that
