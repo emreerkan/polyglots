@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -189,14 +189,27 @@ describe('rules check: no rules file', () => {
 })
 
 describe('rulesReport: a path that cannot be read', () => {
-  it('names the errno, and the rendered line names the path once', async () => {
+  it('names the errno', async () => {
     // A directory reads as EISDIR on every platform the tool runs on, and,
     // unlike a chmod-ed file, still fails when the tests run as root.
     const dir = join(home, 'a-directory')
     await mkdir(dir)
-    const report = rulesReport(dir)
-    expect(report).toEqual({ valid: false, path: dir, error: 'cannot be read (EISDIR)' })
-    const [line] = renderRulesReport(report)
-    expect(line!.split(dir).length - 1).toBe(1)
+    expect(rulesReport(dir)).toEqual({ valid: false, path: dir, error: 'cannot be read (EISDIR)' })
+  })
+
+  // EACCES, because its message from Node names the path, which the rendered
+  // line already leads with; EISDIR's message on macOS does not, so a
+  // directory could not show the path doubled. Root reads a chmod 000 file,
+  // so the case says nothing there and is skipped.
+  it.skipIf(process.getuid?.() === 0)('names the path once in the rendered line', async () => {
+    const file = join(home, 'unreadable.yaml')
+    await writeFile(file, 'schema: 2\n')
+    await chmod(file, 0o000)
+    try {
+      const [line] = renderRulesReport(rulesReport(file))
+      expect(line!.split(file).length - 1).toBe(1)
+    } finally {
+      await chmod(file, 0o600)
+    }
   })
 })
