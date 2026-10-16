@@ -197,6 +197,38 @@ describe('parseTmx locale normalization', () => {
     expect(parseTmx(xml, { targetLocale: 'tr' })).toEqual([{ source: 'Oui', target: 'Evet', locale: 'tr' }])
   })
 
+  // en_GB and its siblings share a language with the source. A bare "en"
+  // matches any English region, so a first-match scan took the source tuv as
+  // the target and filed every unit reversed, with nothing to say so.
+  it.each([
+    ['en_GB', 'en-GB', 'en-gb'],
+    ['en-gb', 'en-GB', 'en-gb'],
+    ['en_AU', 'en-AU', 'en-au'],
+  ])('keeps source and target apart for %s when the source is bare en', (target, tuvLang, emitted) => {
+    const xml = tmx(tu('Color', 'Colour', 'en', tuvLang))
+    expect(parseTmx(xml, { targetLocale: target })).toEqual([{ source: 'Color', target: 'Colour', locale: emitted }])
+  })
+
+  it('keeps source and target apart for en_GB when the target tuv comes first', () => {
+    const xml = tmx('<tu><tuv xml:lang="en-GB"><seg>Colour</seg></tuv><tuv xml:lang="en"><seg>Color</seg></tuv></tu>')
+    expect(parseTmx(xml, { targetLocale: 'en_GB' })).toEqual([{ source: 'Color', target: 'Colour', locale: 'en-gb' }])
+  })
+
+  it('keeps source and target apart for en_GB when the source is en-US', () => {
+    const xml = tmx(tu('Color', 'Colour', 'en-US', 'en-GB'), 'en-US')
+    expect(parseTmx(xml, { targetLocale: 'en_GB' })).toEqual([{ source: 'Color', target: 'Colour', locale: 'en-gb' }])
+  })
+
+  it('takes a bare en as the source of en_GB when srclang is absent', () => {
+    const xml = `<tmx version="1.4"><header creationtool="x"/><body>${tu('Color', 'Colour', 'en', 'en-GB')}</body></tmx>`
+    expect(parseTmx(xml, { targetLocale: 'en_GB' })).toEqual([{ source: 'Color', target: 'Colour', locale: 'en-gb' }])
+  })
+
+  it('prefers another language to a same-language sibling as the source when srclang is absent', () => {
+    const xml = `<tmx version="1.4"><header creationtool="x"/><body><tu><tuv xml:lang="tr"><seg>Evet</seg></tuv><tuv xml:lang="tr-TR"><seg>Tamam</seg></tuv><tuv xml:lang="en"><seg>Yes</seg></tuv></tu></body></tmx>`
+    expect(parseTmx(xml, { targetLocale: 'tr' })).toEqual([{ source: 'Yes', target: 'Evet', locale: 'tr' }])
+  })
+
   it('falls back to the first non-target tuv when srclang is absent', () => {
     const xml = `<tmx version="1.4"><header creationtool="x"/><body>${tu('Yes', 'Evet')}</body></tmx>`
     expect(parseTmx(xml, { targetLocale: 'tr' })).toEqual([{ source: 'Yes', target: 'Evet', locale: 'tr' }])

@@ -69,17 +69,37 @@ function readTu(tu: Node, headerSrc: string | undefined, target: string, opts: T
   const srcNormalized = srcRaw ? normalizeLocale(srcRaw) : undefined
   const src = srcNormalized && srcNormalized !== ANY_SRCLANG ? srcNormalized : undefined
 
-  let targetSeg: string | undefined
-  let sourceSeg: string | undefined
-  for (const child of tuChildren) {
-    if (!('tuv' in child)) continue
-    const lang = normalizeLocale(attrs(child)['xml:lang'] ?? attrs(child)['lang'] ?? '')
-    if (targetSeg === undefined && localeMatches(target, lang)) {
-      targetSeg = segText(child)
-    } else if (sourceSeg === undefined && (src ? localeMatches(src, lang) : !localeMatches(target, lang))) {
-      sourceSeg = segText(child)
-    }
+  // Exact language tags are claimed before language-only ones, and a tuv
+  // claimed by one side is never taken by the other. A single first-match
+  // scan was enough while the source and target were different languages,
+  // but en_GB, en_AU and the other English variants share a language with
+  // an en source: a bare "en" matches every English region, so the source
+  // tuv was read as the target and every unit filed reversed. The row count
+  // stayed right, so nothing downstream could notice.
+  const tuvs = tuChildren
+    .filter((child) => 'tuv' in child)
+    .map((node) => ({ node, lang: normalizeLocale(attrs(node)['xml:lang'] ?? attrs(node)['lang'] ?? '') }))
+  const targetBase = target.split('/')[0] ?? target
+  const claimed = new Set<Node>()
+  const claim = (match: (lang: string) => boolean): Node | undefined => {
+    const hit = tuvs.find((t) => !claimed.has(t.node) && match(t.lang))
+    if (hit) claimed.add(hit.node)
+    return hit?.node
   }
+
+  let targetNode = claim((lang) => lang === targetBase)
+  const targetExact = targetNode !== undefined
+  let sourceNode = src ? claim((lang) => lang === src) : undefined
+  targetNode ??= claim((lang) => localeMatches(target, lang))
+  if (src) sourceNode ??= claim((lang) => localeMatches(src, lang))
+  // Without a srclang the source is a tuv in another language. Only when
+  // none exists, and the target was found by its exact tag, is a sibling of
+  // the same language (en beside en-GB) taken as the source. Found by
+  // language alone, a second tuv of that language is a duplicate of the
+  // target, and a tu of tr and tr-TR has no source at all.
+  else sourceNode = claim((lang) => !localeMatches(target, lang)) ?? (targetExact ? claim(() => true) : undefined)
+  const targetSeg = targetNode && segText(targetNode)
+  const sourceSeg = sourceNode && segText(sourceNode)
 
   if (!sourceSeg?.trim() || !targetSeg?.trim()) return undefined
 
