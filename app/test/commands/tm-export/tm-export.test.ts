@@ -93,6 +93,38 @@ describe('exportTm', () => {
     }
   })
 
+  /**
+   * Weight, project and context are what the memory ranks and scopes by. An
+   * export that left them off turned every long-text row normal on the way
+   * back in, and filed every scoped row context-less, which the context
+   * fallback in findMemory then hid from the round-trip test above.
+   */
+  it('keeps weight, project and context through an export and import', async () => {
+    upsertTm(db, [
+      { source: 'Readme line', target: 'Benioku satırı', locale: 'tr', weight: 'low', project: 'akismet' },
+      { source: 'Normal line', target: 'Olağan satır', locale: 'tr', project: 'jetpack' },
+    ])
+    const file = join(home, 'memory.tmx')
+    await exportTm({ locale: 'tr', file, db })
+
+    const other = openDb(join(home, 'third.db'))
+    try {
+      await importTmx([file], { locale: 'tr', db: other })
+      const rows = other
+        .prepare<[], { source: string; context: string; project: string | null; weight: number }>(
+          `SELECT source, context, project, weight FROM tm WHERE source IN ('Readme line', 'Normal line', 'Draft') ORDER BY source`,
+        )
+        .all()
+      expect(rows).toEqual([
+        { source: 'Draft', context: 'post status', project: null, weight: 1 },
+        { source: 'Normal line', context: '', project: 'jetpack', weight: 1 },
+        { source: 'Readme line', context: '', project: 'akismet', weight: 0 },
+      ])
+    } finally {
+      other.close()
+    }
+  })
+
   it('returns the text without a file when none is named', async () => {
     const result = await exportTm({ locale: 'tr', db })
     expect(result.file).toBeUndefined()

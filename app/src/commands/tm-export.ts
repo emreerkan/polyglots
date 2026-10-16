@@ -30,6 +30,8 @@ interface Row {
   source: string
   target: string
   context: string
+  project: string | null
+  weight: number
   updated_at: string
 }
 
@@ -52,11 +54,28 @@ function stamp(updatedAt: string): string {
   return ` creationdate="${at.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')}"`
 }
 
+// The props are the ones the importer reads back, so a person who imports
+// their own export gets the memory they had rather than a flattened one.
+// Without x-weight every long-text row came back normal, and the tm-conflict
+// noise on readme strings that the weight exists to quiet came back with it;
+// without x-context a scoped row came back context-less. TMX wants props
+// before the tuvs, and a prop is written only where the row has the value,
+// since an absent prop already reads as context-less, no project and normal.
+function props(row: Row): string {
+  const prop = (type: string, value: string) => `\t\t\t<prop type="${type}">${xml(value)}</prop>\n`
+  return (
+    (row.context === '' ? '' : prop('x-context', row.context)) +
+    (row.project === null || row.project === '' ? '' : prop('x-project', row.project)) +
+    (row.weight === 0 ? prop('x-weight', 'low') : '')
+  )
+}
+
 function toTmx(rows: Row[], locale: Locale, version: string): string {
   const units = rows
     .map(
       (row) =>
         `\t\t<tu${stamp(row.updated_at)}>\n` +
+        props(row) +
         `\t\t\t<tuv xml:lang="en">\n\t\t\t\t<seg>${xml(row.source)}</seg>\n\t\t\t</tuv>\n` +
         `\t\t\t<tuv xml:lang="${locale}">\n\t\t\t\t<seg>${xml(row.target)}</seg>\n\t\t\t</tuv>\n` +
         `\t\t</tu>\n`,
@@ -103,7 +122,7 @@ export async function exportTm(opts: ExportTmOptions): Promise<ExportTmResult> {
   try {
     const rows = db
       .prepare<[string], Row>(
-        `SELECT source, target, context, updated_at FROM tm
+        `SELECT source, target, context, project, weight, updated_at FROM tm
          WHERE locale = ?
          ORDER BY source, context, updated_at DESC, id DESC`,
       )
