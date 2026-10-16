@@ -102,11 +102,34 @@ export function parseLocaleRules(text: string, path: string, opts: { probe?: boo
  * a long run of a letter whose case mapping is not one to one. A second line
  * behind polyglots-data's own check, for the files people write themselves.
  *
+ * The long runs are as long as the longest WordPress string, not longer. The
+ * spec first asked for 30,000 characters, and at that length any quadratic
+ * pattern looks like a runaway: a hint as ordinary as \w+: or (\p{L}+) \1
+ * took over 200 ms there, while it takes well under a millisecond on any real
+ * entry, and \s+$ passed at about 70 ms, so whether a file was valid depended
+ * on how fast and how busy the machine was. rules fetch reuses this probe, so
+ * one contributor's laptop could refuse a file another's accepted. The
+ * question the probe answers is whether a pattern would hang on a real entry,
+ * which is what the review's own budget would otherwise find out the hard
+ * way. The longest msgid across 67 exported projects (wp/dev, meta, the top
+ * plugins and themes, the apps) is 3,789 characters, in meta/plugins-v3;
+ * 5,000 covers it with room. At that length a quadratic hint costs a few
+ * milliseconds, a cubic one still runs for seconds, and nested repetition is
+ * caught by the 28-character bait whatever the length.
+ *
+ * The dotted capital I is shorter again. It is there for its case mapping
+ * under the i flag, not for its length, and V8 steps through a Unicode
+ * property class like \p{L} about twenty times slower on a letter outside
+ * ASCII: (\p{L}+) \1 took 370 ms over 5,000 of them and 60 ms over 2,000,
+ * the same knife edge again. A thousand is already far longer than any word,
+ * and a quadratic pattern costs about 15 ms there.
+ *
  * Literal patterns are not probed: they compile to a sequence of fixed
  * alternatives, which cannot backtrack without bound, and expanding them
  * needs the locale, which a file read by path does not have.
  */
-export const PROBES = ['a'.repeat(30_000), 'a'.repeat(28) + '!', ' '.repeat(10_000) + 'x', 'ab'.repeat(5_000) + '\n', 'İ'.repeat(5_000)]
+const PROBE_LENGTH = 5_000
+export const PROBES = ['a'.repeat(PROBE_LENGTH), 'a'.repeat(28) + '!', ' '.repeat(PROBE_LENGTH) + 'x', 'ab'.repeat(PROBE_LENGTH / 2) + '\n', 'İ'.repeat(1_000)]
 
 // The path in the file of the first regex that ran past the budget, or
 // undefined when none did. Flags as the rules themselves compile them.

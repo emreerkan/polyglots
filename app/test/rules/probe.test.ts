@@ -39,6 +39,26 @@ describe('parseLocaleRules with probe', () => {
     expect(parseLocaleRules(text, 'r.yaml').patterns).toHaveLength(1)
   })
 
+  // The probe answers "would this hang on a real entry", not "is this regex
+  // linear". Ordinary hints are quadratic in the worst case: on a run as long
+  // as the longest WordPress string they take a few milliseconds, and the
+  // probe must not call them runaways, nor let the verdict hang on how busy
+  // the machine is.
+  it('passes ordinary quadratic hints a locale manager writes', () => {
+    const patterns = ['\\w+:', '\\s+$', '\\p{L}+\\d', '(\\p{L}+) \\1', '\\s+[.,;:!?]']
+    const text = `schema: 1\npatterns:\n${patterns.map((p) => `  - find: '${p}'\n    level: hint\n`).join('')}`
+    expect(parseLocaleRules(text, 'r.yaml', { probe: true }).patterns).toHaveLength(patterns.length)
+  })
+
+  // The other half of the same line: a pattern whose cost grows faster than
+  // the square, which the short nested-repetition bait cannot expose, still
+  // runs away on a run of real length.
+  it('still refuses a cubic pattern on a run of real WordPress length', () => {
+    const text = "schema: 1\npatterns:\n  - find: '\\w*\\w*\\w*:'\n    level: hint\n"
+    const err = thrown(() => parseLocaleRules(text, 'r.yaml', { probe: true }))
+    expect(err.reason).toBe('patterns.0.find took longer than 100 ms on a test string (a regex that can run away)')
+  })
+
   it('passes the shipped fixtures', () => {
     for (const name of ['tr_TR.yaml', 'sv_SE.yaml', 'el.yaml', 'bo.yaml', 'dzo.yaml', 'th.yaml', 'tr-grammar-patterns.yaml']) {
       const path = fileURLToPath(new URL(`../fixtures/locale/${name}`, import.meta.url))
