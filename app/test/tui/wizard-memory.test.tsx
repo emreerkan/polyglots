@@ -83,7 +83,7 @@ describe('the wizard memory step', () => {
 
   it('reads a wp code in config as its slug, as tm fetch does', async () => {
     saveConfig({ defaultLocale: 'tr_TR' })
-    const planTmFetch = vi.fn(async () => plan())
+    const planTmFetch = vi.fn(async (_locale: string) => plan())
     const view = mount(async () => manifestWith({ tm: [tmEntry()] }), { planTmFetch })
     await waitForText(view.lastFrame, 'Turkish (tr): 1,002 strings')
     expect(planTmFetch.mock.calls[0]![0]).toBe('tr')
