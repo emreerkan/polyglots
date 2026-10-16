@@ -26,7 +26,7 @@ Entries say what changed. For why and how, read the commit.
 ### Changed
 
 - polyglots ships no locale data: Turkish, Swedish, Greek, Tibetan, Dzongkha and Thai now need a rules file for their sentence-end and wording rules; run `polyglots rules fetch <locale>`.
-- Every rules regex runs with a 100 ms limit; a pattern over it is skipped and reported.
+- Every rules regex has a limit of about 100 ms per translation; a pattern over it is skipped and reported.
 - Locales without `register` get a neutral register line; their cached verdicts are reviewed again once.
 - A locale that adds `formality` has its cached drafts made again once.
 - The app asks polyglots-data once at launch while your locale has no memory and the setup step is not skipped.
