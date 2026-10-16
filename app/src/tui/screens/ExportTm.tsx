@@ -3,6 +3,7 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { useState } from 'react'
 import { Box, Text } from 'ink'
 import type { ExportTmResult, TmExportFormat } from '../../commands/tm-export.js'
+import { configuredLocale } from '../../config.js'
 import { useCommands, useConfig } from '../commands.js'
 import { NeedsLocale } from '../components/NeedsLocale.js'
 import { FilePicker } from '../components/FilePicker.js'
@@ -51,7 +52,8 @@ function target(dir: string, name: string, format: TmExportFormat): string {
  */
 export function ExportTm(props: ExportTmProps) {
   const { config } = useConfig()
-  if (config.defaultLocale === undefined) {
+  const locale = configuredLocale(config)
+  if (locale === undefined) {
     return (
       <NeedsLocale
         title="Export Translation Memory"
@@ -61,7 +63,7 @@ export function ExportTm(props: ExportTmProps) {
       />
     )
   }
-  return <ExportTmInLocale {...props} locale={config.defaultLocale} />
+  return <ExportTmInLocale {...props} locale={locale} />
 }
 
 function ExportTmInLocale({ onBack, locale }: ExportTmProps & { locale: Locale }) {

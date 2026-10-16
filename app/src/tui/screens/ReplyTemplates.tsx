@@ -4,6 +4,7 @@ import { createTemplate, deleteTemplate, fillTemplate, loadTemplates, saveTempla
 import { TOKENS } from '../../ui/tokens.js'
 import { wpCodeOf } from '../../wporg/locales.js'
 import type { Locale } from '../../types.js'
+import { configuredLocale } from '../../config.js'
 import { errorMessage, useConfig } from '../commands.js'
 import { Hint } from '../components/Hint.js'
 import { NeedsLocale } from '../components/NeedsLocale.js'
@@ -47,7 +48,7 @@ function read(locale: Locale): { templates: Template[]; error?: string } {
 
 export function ReplyTemplates({ onBack, onSetup }: ReplyTemplatesProps) {
   const { config } = useConfig()
-  const locale = config.defaultLocale
+  const locale = configuredLocale(config)
   if (locale === undefined) {
     return <NeedsLocale title="Reply templates" needs="A reply template" onBack={onBack} {...(onSetup ? { onSetup } : {})} />
   }

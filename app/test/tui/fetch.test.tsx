@@ -110,6 +110,17 @@ describe('Fetch list', () => {
     await waitForText(view.lastFrame, /What to get/)
   })
 
+  // translate.wordpress.org is asked by the slug's export path; a wp code in
+  // a config.json edited by hand is read as the slug, as the CLI reads it.
+  it('resolves the projects under the slug when config holds a wp code', async () => {
+    saveConfig({ defaultLocale: 'tr_TR' })
+    const asked = vi.fn(resolveProjects)
+    const view = mount({ resolveProjects: asked })
+    await enterList(view, ['koji'])
+    await chooseAndResolve(view, 'waiting')
+    expect(asked.mock.calls[0]![1].locale).toBe('tr')
+  })
+
   it('does not move on from an empty list', async () => {
     const view = mount()
     await waitForText(view.lastFrame, /Projects/)

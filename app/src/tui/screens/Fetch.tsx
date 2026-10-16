@@ -5,6 +5,7 @@ import { defaultOutDir, type Ready, type Resolution } from '../../commands/fetch
 import { describeResolution, endOfResolution, waitNotice, type ProjectEnd } from '../../commands/fetch-report.js'
 import type { Locale } from '../../types.js'
 import { parseProjectLines, type FetchStatus } from '../../wporg/projects.js'
+import { configuredLocale } from '../../config.js'
 import { useCommands, useConfig } from '../commands.js'
 import { BatchRun, type BatchStage } from '../components/BatchRun.js'
 import { NeedsLocale } from '../components/NeedsLocale.js'
@@ -38,7 +39,8 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
  */
 export function Fetch(props: FetchProps) {
   const { config } = useConfig()
-  if (config.defaultLocale === undefined) {
+  const locale = configuredLocale(config)
+  if (locale === undefined) {
     return (
       <NeedsLocale
         title="Fetch from translate.wordpress.org"
@@ -48,7 +50,7 @@ export function Fetch(props: FetchProps) {
       />
     )
   }
-  return <FetchInLocale {...props} locale={config.defaultLocale} />
+  return <FetchInLocale {...props} locale={locale} />
 }
 
 function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {

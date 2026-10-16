@@ -168,13 +168,14 @@ export function loadConfig(): PolyglotsConfig {
  * The configured locale as the wp.org slug every lookup is keyed by, or
  * undefined when none is set or the value names no locale.
  *
- * config set stores what it is given, and config.json is edited by hand, so
- * defaultLocale can hold tr_TR where the memory, the glossary and the
- * polyglots-data manifest all say tr. The CLI resolves it through
- * requireLocale; the TUI read it raw, and a hand-edited tr_TR hid the memory
- * fetch and counted the memory step as done while tm fetch worked. This does
- * what requireLocale does without its refusal, since a screen has its own way
- * of saying a locale is missing (NeedsLocale) and must not throw while drawing.
+ * config set stores the slug, through parseLocaleArg, but a config.json
+ * edited by hand or written by an older version can hold tr_TR where the
+ * memory, the glossary and the polyglots-data manifest all say tr. The CLI
+ * resolves it through requireLocale; the TUI read it raw, and a hand-edited
+ * tr_TR hid the memory fetch and counted the memory step as done while tm
+ * fetch worked. This does what requireLocale does without its refusal, since
+ * a screen has its own way of saying a locale is missing (NeedsLocale) and
+ * must not throw while drawing.
  */
 export function configuredLocale(config: PolyglotsConfig): Locale | undefined {
   return config.defaultLocale === undefined ? undefined : resolveLocale(config.defaultLocale)?.id

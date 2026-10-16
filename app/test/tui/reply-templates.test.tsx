@@ -56,6 +56,20 @@ describe('Reply templates screen', () => {
     expect(flat(view.lastFrame())).toContain('No reply templates for tr_TR yet. Press n to create one from a starter.')
   })
 
+  // A wp code in a config.json edited by hand. templatesDir files templates
+  // under the wp code whichever form it is given, so this held before the
+  // screen resolved the locale too; it guards that the screen, now reading
+  // the slug like every other, still finds the same folder.
+  it('lists the slug\'s templates when config holds a wp code', async () => {
+    await writeTemplate('greeting', 'Hello')
+    saveConfig({ defaultLocale: 'tr_TR' })
+    const view = mount()
+    await waitForText(view.lastFrame, /Reply templates/)
+    const frame = flat(view.lastFrame())
+    expect(frame).toContain('greeting')
+    expect(frame).not.toContain('No reply templates')
+  })
+
   it('creates a template from its starter with n and a name', async () => {
     const view = mount()
     await waitForText(view.lastFrame, /Reply templates/)

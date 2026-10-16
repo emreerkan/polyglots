@@ -55,6 +55,24 @@ describe('ExportTm', () => {
     expect(opts).toEqual({ locale: 'de', file: join(downloads, defaultTmName('tmx')), format: 'tmx' })
   })
 
+  // config set stores the slug, but a config.json edited by hand or written
+  // by an older version can hold the wp code. The memory is keyed by the
+  // slug, so exporting under tr_TR would write an empty file while Import TM,
+  // which reads the same config as tr, shows the memory is there.
+  it('exports the memory under the slug when config holds a wp code', async () => {
+    saveConfig({ defaultLocale: 'tr_TR' })
+    const commands = fakeCommands()
+    const view = mount(commands)
+    await waitForText(view.lastFrame, /TMX/)
+    expect(flat(view.lastFrame())).toMatch(/· locale tr(?![_\w])/)
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Write to/)
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Exported 120 entries/)
+    const opts = vi.mocked(commands.exportTm).mock.calls[0]![0] as ExportTmOptions
+    expect(opts.locale).toBe('tr')
+  })
+
   // The format is named for the tools that read it, not for one editor: a
   // team on OmegaT has as much use for the TMX as one on Poedit.
   it('says TMX is for CAT tools in general, not one editor', async () => {
