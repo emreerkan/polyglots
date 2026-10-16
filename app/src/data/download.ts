@@ -113,14 +113,19 @@ async function removeAbandoned(dir: string): Promise<void> {
  * caller that catches the error has nothing to clean up. The caller moves or
  * deletes the file it is given.
  */
-export async function download(url: string, opts: { maxBytes: number; sha512: string; dir: string }): Promise<string> {
-  const { maxBytes, dir } = opts
+export async function download(
+  url: string,
+  // stallMs exists for the tests, which cannot wait out half a minute to see a
+  // stall; every caller in the app leaves it to STALL_MS.
+  opts: { maxBytes: number; sha512: string; dir: string; stallMs?: number },
+): Promise<string> {
+  const { maxBytes, dir, stallMs = STALL_MS } = opts
   const expected = opts.sha512.toLowerCase()
   // A name of its own per download, so two runs at once never share a file,
   // and a leading dot, so a folder listing does not show a half-written one.
   await removeAbandoned(dir)
   const path = join(dir, `${PARTIAL_PREFIX}${randomUUID()}`)
-  const dog = watchdog(STALL_MS)
+  const dog = watchdog(stallMs)
   try {
     const res = await get(url, 'application/octet-stream', maxBytes, dog.signal)
     if (!res.body) throw new DataError(`GET ${url} answered with no body`)
@@ -147,7 +152,7 @@ export async function download(url: string, opts: { maxBytes: number; sha512: st
   } catch (err) {
     await rm(path, { force: true }).catch(() => undefined)
     if (err instanceof DataError) throw err
-    if (dog.fired()) throw new DataError(`GET ${url} stalled: nothing arrived for ${STALL_MS / 1000} s; nothing was written`)
+    if (dog.fired()) throw new DataError(`GET ${url} stalled: nothing arrived for ${stallMs / 1000} s; nothing was written`)
     throw new DataError(`GET ${url} failed: ${reason(err)}`)
   } finally {
     dog.stop()

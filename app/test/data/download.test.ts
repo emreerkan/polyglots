@@ -53,6 +53,41 @@ describe('download', () => {
     expect((await readdir(dir)).sort()).toEqual(['.other-old', '.polyglots-data-fresh', path.slice(dir.length + 1)].sort())
   })
 
+  // The stall limit is per chunk, not per download: a slow line that keeps
+  // sending must be let finish, and one that goes quiet after a start must not
+  // hang the fetch or leave its partial file behind.
+  it('gives up on a body that stops part way, and leaves no file', async () => {
+    server = await serve({
+      '/f': (_req, res) => {
+        res.writeHead(200)
+        res.write('first chunk')
+      },
+    })
+    const url = server.url('/f')
+    const err = await download(url, { maxBytes: MiB, sha512: 'a'.repeat(128), dir, stallMs: 150 }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(DataError)
+    expect((err as Error).message).toMatch(/stalled/)
+    expect(await readdir(dir)).toEqual([])
+  })
+
+  it('lets a slow body finish while every chunk arrives within the stall limit', async () => {
+    const parts = ['a', 'b', 'c', 'd', 'e']
+    server = await serve({
+      '/f': (_req, res) => {
+        res.writeHead(200)
+        let i = 0
+        const next = () => {
+          if (i === parts.length) return void res.end()
+          res.write(parts[i++]!)
+          setTimeout(next, 60)
+        }
+        next()
+      },
+    })
+    const path = await download(server.url('/f'), { maxBytes: MiB, sha512: sha512(parts.join('')), dir, stallMs: 150 })
+    expect(await readFile(path, 'utf8')).toBe('abcde')
+  })
+
   it('creates the folder it is asked to write into', async () => {
     const body = 'x'
     server = await serve({ '/f': bytes(body) })
