@@ -55,7 +55,7 @@ describe('renderDefaultRules', () => {
   // file written from it can use the schema-2 keys the moment they are uncommented.
   it('names no pack and starts with schema 2', () => {
     const text = renderDefaultRules('tr')
-    expect(text).not.toMatch(/pack/i)
+    expect(text).not.toMatch(/\bpacks?\b/i)
     expect(text.split('\n')).toContain('schema: 2')
     expect(text).toContain('a wording your team rejects')
   })

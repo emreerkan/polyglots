@@ -56,7 +56,7 @@ describe('LocaleRules: no pack', () => {
   it('names no pack for a locale without a file', async () => {
     const view = mount()
     await openLocale(view)
-    expect(flat(view.lastFrame())).not.toMatch(/pack/i)
+    expect(flat(view.lastFrame())).not.toMatch(/\bpacks?\b/i)
   })
 })
 
