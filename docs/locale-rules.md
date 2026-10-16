@@ -21,6 +21,38 @@ A locale with no rules file runs the universal checks only, and every review
 says so, so an absent finding is never mistaken for a passed check. If your
 locale has no file in polyglots-data yet, write one (below).
 
+## Fetching a locale's rules
+
+```
+polyglots rules fetch [locale] [--yes]
+```
+
+downloads the locale's file from the latest polyglots-data release and
+writes it to `~/.config/polyglots/locales/` (`polyglots rules path` prints
+the exact file). Without a locale, it uses `defaultLocale`.
+
+Before it writes, it checks the file and shows what it changes:
+
+- It refuses a file that needs a newer polyglots, a file whose sha512 does
+  not match the one the release published, and a file that `rules check`
+  would reject. Nothing is written, and the command exits 1.
+- It prints, in full, any guidance, capitalization or register text that
+  differs from your file, every note and suggested wording that is new, and
+  every fix pattern added or removed. It says whether `sentenceEnd`
+  changed, and gives one line for the switches, proper nouns and other
+  patterns.
+- It names the file's status (`maintained` or `draft`) and its maintainers,
+  by their WordPress.org usernames.
+
+When you have no file yet, it then writes one. When your file is already
+the published one, it says so and writes nothing. When your file differs,
+it asks before replacing it; without a terminal to ask on, pass `--yes`.
+Your own changes to the file are lost when you accept, so keep anything
+your team should have in polyglots-data itself.
+
+The file is written exactly as downloaded, comments included. To fetch from
+a fork or a test release, point `POLYGLOTS_DATA_URL` at its `index.json`.
+
 ## The rules file
 
 ```

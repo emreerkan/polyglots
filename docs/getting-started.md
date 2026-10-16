@@ -70,6 +70,17 @@ the same one, and translate.wordpress.org has a single translation set for it,
 that is the locale used, and the run says so. A language with several sets,
 such as German with its formal variant, needs the locale named.
 
+Then fetch your locale team's rules, if it has published them:
+
+```
+polyglots rules fetch
+```
+
+They say which language checks apply to your locale (capitalization,
+apostrophes, number formats) and add the team's common mistakes. Without a
+rules file, only the universal checks run. See
+[Locale rules](locale-rules.md) for what the command shows before it writes.
+
 ## Download the glossary
 
 A review checks every string against your locale's glossary from

@@ -15,11 +15,12 @@ import { CONFIG_FILE } from './lint/config.js'
 import { makePot } from './lint/make-pot.js'
 import { dataClient, type DataClient } from './data/download.js'
 import { warnAboutLocalModel, warnAboutLocalReview, warnUniversalOnly } from './cli/run-notices.js'
-import { copyRules, editRules, NO_SUCH_FILE, noRulesFileLines, openInEditor, renderRulesReport, rulesReport, type OpenEditor } from './cli/rules.js'
+import { copyRules, describeRules, editRules, NO_SUCH_FILE, noRulesFileLines, openInEditor, renderRulesReport, rulesReport, type OpenEditor } from './cli/rules.js'
 import type { ProjectEnd } from './commands/fetch-report.js'
 import { describeTemplates, editTemplate, renderReply, resolveReplyTemplate } from './cli/templates.js'
 import { DEFAULT_TEMPLATE, deleteTemplate, fillBatchReply, listTemplates, normaliseRequester, templateFile, templatesDir } from './reply/templates.js'
 import { loadLocaleRules, localeRulesFile } from './rules/load.js'
+import { planRulesFetch, writeRulesFetch } from './commands/rules-fetch.js'
 import { openRulesDraft, saveRulesDraft, type RulesDraft } from './rules/edit.js'
 import { moveLegacyProperNouns } from './rules/legacy-names.js'
 import { syncGlossary } from './commands/glossary-sync.js'
@@ -1101,6 +1102,34 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
         for (const line of renderRulesReport(report, cli.ui.err)) cli.err(line)
         setExitCode(EXIT_ERROR)
       }
+    })
+  rules
+    .command('fetch [locale]')
+    .description('Download the locale rules file from polyglots-data, after showing what it changes')
+    .option('--yes', 'Replace a different local file without asking (required when stdin or stderr is not a terminal)')
+    .action(async (raw: string | undefined, flags: { yes?: boolean }) => {
+      const locale = requireLocale(raw, cli.config(), { argument: 'polyglots rules fetch' })
+      const plan = await planRulesFetch(locale, cli.dataClient)
+      if (plan.state === 'same') {
+        cli.out(okLine(cli.ui.out, `${plan.path} is already the published file.`))
+        return
+      }
+      for (const line of plan.summary) cli.out(line)
+      // No question for a new file: there is nothing to lose, and the summary
+      // above has already said what it sets. A replaced file is the person's
+      // own work, possibly edited since they last fetched, so it is asked
+      // about, by the same rule as template delete.
+      if (plan.state === 'changed' && flags.yes !== true) {
+        const interactive = cli.streams.stdin.isTTY === true && cli.streams.stderr.isTTY === true
+        if (!interactive) throw new UsageError('rules fetch needs --yes to replace a file when stdin or stderr is not a terminal')
+        if (!(await confirm(cli.streams, `This replaces ${plan.path}. Continue? [y/N] `))) {
+          cli.err(warnLine(cli.ui.err, 'Kept.'))
+          return
+        }
+      }
+      await writeRulesFetch(plan)
+      cli.out(okLine(cli.ui.out, `Wrote ${plan.path}.`))
+      for (const line of describeRules(locale, cli.ui.out)) cli.out(line)
     })
   rules
     .command('copy <from> <to>')
