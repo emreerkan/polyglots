@@ -1198,7 +1198,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
   const tm = program.command('tm').description('Translation memory')
   tm.command('import <files...>')
     .description('Import TMX or .po exports into the local translation memory (additive)')
-    .option('--locale <locale>', `Target locale to import (${localeDefaultHelp(shown)})`)
+    .option('--locale <locale>', `Target locale, as a WordPress code or wp.org slug (tr_TR, tr, nl/formal); stored under the slug (${localeDefaultHelp(shown)})`)
     .option('--project <name>', 'Tag imported entries with a project name')
     .action(async (patterns: string[], flags: { locale?: string; project?: string }) => {
       const files = expandFileArgs(patterns)

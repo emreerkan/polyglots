@@ -11,6 +11,7 @@ import {
   localeOfWpCode,
   resolveLocale,
   splitLocale,
+  suggestLocales,
   wpCodeOf,
 } from '../../src/wporg/locales.js'
 
@@ -114,5 +115,22 @@ describe('locale parts', () => {
     expect(localeOfWpCode('az')).toBe('az')
     expect(localeOfWpCode('tr')).toBeUndefined()
     expect(localeOfWpCode('xx_YY')).toBeUndefined()
+  })
+})
+
+describe('suggestLocales', () => {
+  it('offers the codes of the language that was typed', () => {
+    expect(suggestLocales('de_XX')).toContain('de_DE')
+  })
+
+  // A typo in the language itself shares no prefix with anything, and a
+  // refusal that suggests nothing leaves the person guessing.
+  it('falls back to the nearest spelling when no language matches', () => {
+    expect(suggestLocales('trr')[0]).toBe('tr_TR')
+    expect(suggestLocales('tr_TRR')).toContain('tr_TR')
+  })
+
+  it('suggests nothing for input nowhere near a locale', () => {
+    expect(suggestLocales('zzzzzzzz')).toEqual([])
   })
 })

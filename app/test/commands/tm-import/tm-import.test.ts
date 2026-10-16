@@ -22,6 +22,7 @@ vi.mock('../../../src/storage/index.js', async (importOriginal) => {
 import { findExactTm, openDb, upsertTm } from '../../../src/storage/index.js'
 import { dbFile } from '../../../src/paths.js'
 import { importTmx, type TmImportProgress } from '../../../src/commands/tm-import.js'
+import { UsageError } from '../../../src/cli/args.js'
 
 const SAMPLE = join(import.meta.dirname, '..', '..', 'fixtures', 'tmx', 'sample.tmx')
 const SAMPLE_TR_ENTRIES = 5
@@ -182,14 +183,39 @@ describe('importTmx', () => {
     expect(countTm(openDb(dbFile()))).toBe(2)
   })
 
-  it('normalizes the locale so stored rows match canonical lookups', async () => {
+  // Review and translate look the memory up by the wp.org slug. Storing what
+  // was typed, lowercased, filed tr_TR under tr-tr, where no lookup goes: the
+  // import reported success and the memory stayed empty.
+  it.each(['tr', 'tr_TR', 'tr-TR', 'TR', ' tr_tr '])('a .po import with locale %j stores rows under tr', async (loc) => {
+    const db = openDb(join(home, 'injected.db'))
+    const po = join(home, 'tr.po')
+    await writeFile(po, 'msgid ""\nmsgstr ""\n"Content-Type: text/plain; charset=UTF-8\\n"\n"Language: tr\\n"\n\nmsgid "Publish"\nmsgstr "Yayımla"\n', 'utf8')
+    await importTmx([po], { locale: loc, db })
+    expect(db.prepare('SELECT DISTINCT locale FROM tm').all()).toEqual([{ locale: 'tr' }])
+    expect(findExactTm(db, 'Publish', 'tr')).toMatchObject({ target: 'Yayımla' })
+  })
+
+  it('a TMX import also stores the slug', async () => {
     const db = openDb(join(home, 'injected.db'))
     await importTmx([SAMPLE], { locale: 'tr_TR', db })
-    await importTmx([second], { locale: ' TR ', db })
-    const locales = db.prepare('SELECT DISTINCT locale FROM tm ORDER BY locale').all()
-    expect(locales).toEqual([{ locale: 'tr' }, { locale: 'tr-tr' }])
-    expect(findExactTm(db, 'Save changes', 'tr-tr')).toMatchObject({ target: 'Değişiklikleri kaydet' })
-    expect(findExactTm(db, 'Publish', 'tr')).toMatchObject({ target: 'Yayımla' })
+    await importTmx([second], { locale: 'tr-TR', db })
+    expect(db.prepare('SELECT DISTINCT locale FROM tm').all()).toEqual([{ locale: 'tr' }])
+    expect(findExactTm(db, 'Save changes', 'tr')).toMatchObject({ target: 'Değişiklikleri kaydet' })
+  })
+
+  it('keeps the translation set in what it stores', async () => {
+    const db = openDb(join(home, 'injected.db'))
+    const nl = join(home, 'nl.tmx')
+    await writeFile(nl, SECOND_TMX.replaceAll('xml:lang="tr"', 'xml:lang="nl-NL"'), 'utf8')
+    await importTmx([nl], { locale: 'nl_NL_formal', db })
+    expect(db.prepare('SELECT DISTINCT locale FROM tm').all()).toEqual([{ locale: 'nl/formal' }])
+  })
+
+  it('refuses an unknown locale, names the closest match, and writes nothing', async () => {
+    const error = await importTmx([SAMPLE], { locale: 'trr' }).catch((e: Error) => e)
+    expect(error).toBeInstanceOf(UsageError)
+    expect((error as Error).message).toMatch(/did you mean [^?]*\btr_TR\b/)
+    expect(opened).toHaveLength(0)
   })
 
   it('rejects an empty locale before opening a db', async () => {

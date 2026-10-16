@@ -80,6 +80,12 @@ polyglots tm import --project woocommerce woocommerce-de.po
 Importing adds and never removes. `polyglots tm export memory.tmx` writes it
 back out, as TMX or `.po` by the file name.
 
+`--locale` takes the WordPress code or the translate.wordpress.org slug
+(`tr_TR`, `tr-TR` and `tr` are the same locale), and the rows are stored
+under the slug, where translate and review look for them. A locale
+translate.wordpress.org does not list is refused, with the nearest ones it
+does.
+
 The memory is built from your own work over time and cannot be downloaded
 again, so it is worth backing up:
 `~/.local/share/polyglots/polyglots.db`.

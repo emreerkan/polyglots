@@ -120,10 +120,50 @@ export function localeOfWpCode(code: string): Locale | undefined {
   return row ? localeId(row.slug, row.set) : undefined
 }
 
-/** Close matches for an unknown locale, for the error that refuses it. */
+/**
+ * Close matches for an unknown locale, for the error that refuses it.
+ *
+ * The codes of the language that was typed come first: de_XX is a German
+ * locale with a wrong region. When no language starts that way the language
+ * itself was mistyped (trr), and a prefix finds nothing, so the nearest codes
+ * and slugs by edit distance are offered instead. The distance is capped by
+ * the length of what was typed, so a word that is no locale at all suggests
+ * nothing rather than three unrelated two-letter codes. Among equally near
+ * ones, the one sharing the longer start wins: trr is tr before it is tir.
+ */
 export function suggestLocales(input: string, limit = 5): string[] {
-  const language = input.trim().toLowerCase().split(/[-_/]/)[0] ?? ''
-  return WPORG_LOCALES.filter((l) => l.wp.toLowerCase().startsWith(language))
+  const typed = input.trim().toLowerCase()
+  const language = typed.split(/[-_/]/)[0] ?? ''
+  const byLanguage = WPORG_LOCALES.filter((l) => l.wp.toLowerCase().startsWith(language))
+  if (language !== '' && byLanguage.length > 0) return byLanguage.slice(0, limit).map((l) => l.wp)
+  const asCode = typed.replace(/-/g, '_')
+  const reach = Math.min(2, Math.floor(asCode.length / 2))
+  const slugOf = (l: WporgLocaleRow) => l.slug.replace(/-/g, '_')
+  return WPORG_LOCALES.map((l) => ({
+    wp: l.wp,
+    d: Math.min(editDistance(asCode, l.wp.toLowerCase()), editDistance(asCode, slugOf(l))),
+    shared: Math.max(sharedStart(asCode, l.wp.toLowerCase()), sharedStart(asCode, slugOf(l))),
+  }))
+    .filter((c) => c.d <= reach)
+    .sort((a, b) => a.d - b.d || b.shared - a.shared)
     .slice(0, limit)
-    .map((l) => l.wp)
+    .map((c) => c.wp)
+}
+
+function sharedStart(a: string, b: string): number {
+  let n = 0
+  while (n < a.length && a[n] === b[n]) n++
+  return n
+}
+
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i]
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(previous[j]! + 1, row[j - 1]! + 1, previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1))
+    }
+    previous = row
+  }
+  return previous[b.length]!
 }

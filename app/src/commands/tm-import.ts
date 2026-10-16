@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises'
 import type Database from 'better-sqlite3'
 import { openDb, upsertTm } from '../storage/index.js'
 import { loadPo } from '../po/po-file.js'
-import { decodeXml, loadTmx, normalizeLocale } from '../tmx/parse.js'
+import { decodeXml, loadTmx } from '../tmx/parse.js'
+import { parseLocaleArg } from '../cli/args.js'
 import type { Locale, TmEntry } from '../types.js'
 
 export interface TmImportProgress {
@@ -25,8 +26,15 @@ export interface TmImportResult {
 }
 
 export async function importTmx(files: string[], opts: TmImportOptions): Promise<TmImportResult> {
-  const locale = normalizeLocale(opts.locale)
-  if (!locale) throw new Error('Locale must not be empty')
+  // Resolved here, not only by the CLI, because every caller has to get it
+  // right and the menu passes defaultLocale as it was typed. Review and
+  // translate look the memory up by the wp.org id (tr, nl/formal), with =.
+  // Lowercasing what was typed filed tr_TR under tr-tr, where no lookup goes:
+  // the import reported success and the memory stayed empty. An unknown
+  // locale is refused for the same reason, before a db is opened: rows under
+  // a key nothing reads are worse than an error, in the one database that
+  // cannot be regenerated.
+  const locale = parseLocaleArg(opts.locale)
   const result: TmImportResult = { files: 0, entries: 0, upserted: 0 }
   if (files.length === 0) return result
 
