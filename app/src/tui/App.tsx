@@ -4,7 +4,7 @@ import { CommandsProvider, defaultCommands, errorMessage, useCommands, type TuiC
 import type { AgentStatus } from '../agent/discover.js'
 import { DEFAULT_CONFIG } from '../config.js'
 import { DEFAULT_PROVIDER } from '../agent/providers.js'
-import type { PolyglotsConfig, ReviewChoice, Secrets } from '../types.js'
+import type { Locale, PolyglotsConfig, ReviewChoice, Secrets } from '../types.js'
 import { TOKENS } from '../ui/tokens.js'
 import { Footer, Header } from './components/Chrome.js'
 import { HelpOverlay, Palette, QuitPrompt } from './components/Overlays.js'
@@ -17,7 +17,7 @@ import { footerKeys } from './keys.js'
 import { CONFIGURATION, HOME, parentOf, TOOLS, type ScreenId } from './menu.js'
 import { providerLabel } from './local.js'
 import { createServices, ServicesProvider, useServices, useStatsError, useStatsUrl, type Services } from './services.js'
-import { setupStatus, type SetupStatus } from './setup.js'
+import { memoryState, setupStatus, tmListed, type SetupStatus } from './setup.js'
 import { frameLayout, frameSize, MIN_SIZE, SizeProvider, useSize } from './size.js'
 import { SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
 import { Agents } from './screens/Agents.js'
@@ -209,6 +209,34 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   const [glossary, setGlossary] = useState<number | undefined>(countGlossary)
   const refreshGlossary = () => setGlossary(countGlossary())
 
+  // The memory step, counted the same way: rows for the slug, read when the
+  // glossary is. Rows answer it outright. Without them, whether polyglots-data
+  // has a memory for the locale decides between nothing to offer (done) and
+  // one to fetch (missing), and that is a network question, asked once per
+  // locale in the background and only when nothing else has answered it, so
+  // a launch never waits on it and an install with a memory never asks.
+  const configuredLocale = () => tryOr(() => commands.loadConfig(), DEFAULT_CONFIG).defaultLocale
+  const countMemory = () => {
+    const locale = configuredLocale()
+    return locale === undefined ? undefined : tryOr(() => commands.memoryCount(locale), undefined)
+  }
+  const [memoryRows, setMemoryRows] = useState<number | undefined>(countMemory)
+  const refreshMemory = () => setMemoryRows(countMemory())
+  const memoryLocale = useMemo(configuredLocale, [commands, setupEpoch])
+  const [listing, setListing] = useState<{ locale: Locale; listed?: boolean }>()
+  const asksManifest =
+    memoryLocale !== undefined && !(memoryRows !== undefined && memoryRows > 0) && !tuiState.wizard.skipped.includes('memory')
+  useEffect(() => {
+    if (!asksManifest || memoryLocale === undefined || listing?.locale === memoryLocale) return
+    setListing({ locale: memoryLocale })
+    // Kept only while it is still the locale asked about. A failure leaves
+    // the answer unknown, which counts neither way and reopens nothing.
+    commands.dataClient.manifest().then(
+      (manifest) => setListing((prev) => (prev?.locale === memoryLocale ? { locale: memoryLocale, listed: tmListed(manifest, memoryLocale) } : prev)),
+      () => undefined,
+    )
+  }, [asksManifest, memoryLocale])
+
   const status: SetupStatus = useMemo(() => {
     const config: PolyglotsConfig = tryOr(() => commands.loadConfig(), DEFAULT_CONFIG)
     const locale = config.defaultLocale
@@ -220,8 +248,9 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
       localeConfigured: tryOr(() => commands.localeConfigured(), false),
       ...(glossary === undefined ? {} : { glossaryCount: glossary }),
       hasLocaleRules: locale === undefined ? false : tryOr(() => commands.hasLocaleRules(locale), false),
+      memory: locale === undefined ? 'missing' : memoryState(memoryRows, listing?.locale === locale ? listing.listed : undefined),
     })
-  }, [commands, tuiState, agents, setupEpoch, provider, glossary])
+  }, [commands, tuiState, agents, setupEpoch, provider, glossary, memoryRows, listing])
 
   // The wizard opens at launch while setup has a step that is plainly
   // missing and it has not been walked to the end. "Unknown" does not count:
@@ -251,6 +280,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   const go = (next: ScreenId) => {
     setSetupEpoch((e) => e + 1)
     if (screen === 'sync-glossary' || screen === 'setup') refreshGlossary()
+    if (screen === 'import-tm' || screen === 'setup') refreshMemory()
     setStatusFocus(undefined)
     if (next === 'setup') {
       setWizardReturn(screen === 'setup' ? wizardReturn : screen)
@@ -430,6 +460,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
             onAdvance={() => {
               setSetupEpoch((e) => e + 1)
               refreshGlossary()
+              refreshMemory()
             }}
             onDone={back}
           />

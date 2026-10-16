@@ -20,6 +20,7 @@ import type { ModelCheck, ModelServer } from '../../src/draft/discover.js'
 import type { ReviewProvider, ReviewSummary } from '../../src/types.js'
 import type { FetchStatus, ProjectRef } from '../../src/wporg/projects.js'
 import { DEFAULT_QWEN_MODEL } from '../../src/draft/qwen.js'
+import type { Manifest, RulesManifestEntry, TmManifestEntry } from '../../src/data/manifest.js'
 
 const ANSI = /\x1b\[[0-9;]*m/g
 const strip = (s: string | undefined): string => (s ?? '').replace(ANSI, '')
@@ -296,6 +297,42 @@ export function modelServer(patch: Partial<ModelServer> = {}): ModelServer {
   }
 }
 
+// polyglots-data as the TUI tests see it: a manifest that lists nothing, so
+// the memory step reads as done for a locale the vault does not have, and no
+// test opens a socket. A test about fetching passes its own.
+export function manifestWith(patch: Partial<Manifest> = {}): Manifest {
+  return { schema: 1, generated: '2026-10-16T00:00:00Z', tm: [], rules: [], ...patch }
+}
+
+export function tmEntry(patch: Partial<TmManifestEntry> = {}): TmManifestEntry {
+  return {
+    locale: 'tr_TR',
+    slug: 'tr',
+    url: 'https://example.invalid/tr_TR.tmx.gz',
+    bytes: 100_454,
+    bytesUncompressed: 812_000,
+    sha512: 'a'.repeat(128),
+    units: 1002,
+    built: '2026-10-15T00:00:00Z',
+    projects: [{ path: 'wp/dev', units: 1002 }],
+    ...patch,
+  }
+}
+
+export function rulesEntry(patch: Partial<RulesManifestEntry> = {}): RulesManifestEntry {
+  return {
+    locale: 'tr_TR',
+    slug: 'tr',
+    url: 'https://example.invalid/tr_TR.yaml',
+    sha512: 'b'.repeat(128),
+    schema: 2,
+    minPolyglots: '1.0.0',
+    status: 'maintained',
+    maintainers: ['emre'],
+    ...patch,
+  }
+}
+
 export function fakeCommands(overrides: Partial<TuiCommands> = {}): TuiCommands {
   return {
     writeStats: vi.fn(async (opts: StatsOptions = {}) => ({
@@ -370,6 +407,23 @@ export function fakeCommands(overrides: Partial<TuiCommands> = {}): TuiCommands 
     glossaryCount: vi.fn(() => 0),
     hasLocaleRules: vi.fn(() => false),
     localeConfigured: vi.fn(() => false),
+    memoryCount: vi.fn(() => 0),
+    dataClient: {
+      manifest: vi.fn(async () => manifestWith()),
+      download: vi.fn(async () => {
+        throw new Error('a TUI test does not download')
+      }),
+    },
+    // Refusals, as an empty manifest would answer: a test that reaches a fetch
+    // without faking it sees the error line, never the network.
+    planRulesFetch: vi.fn(async (locale: string) => {
+      throw new Error(`No polyglots-data entry for ${locale}; the manifest lists none.`)
+    }),
+    writeRulesFetch: vi.fn(async () => {}),
+    planTmFetch: vi.fn(async (locale: string) => {
+      throw new Error(`No polyglots-data entry for ${locale}; the manifest lists none.`)
+    }),
+    runTmFetch: vi.fn(async () => ({ units: 0, added: 0, present: 0, projects: 0, ms: 0 })),
     startStatsServer: vi.fn(async () => ({ url: 'http://127.0.0.1:4321/t0k3n/', port: 4321, close: vi.fn(async () => {}) })),
     stopOwnRuns: vi.fn(() => 0),
     openInBrowser: vi.fn(async () => true),

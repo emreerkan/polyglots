@@ -16,7 +16,7 @@ progress carries on underneath.
 ## The first run
 
 On a fresh install the app opens on the setup wizard rather than on home. It
-has five steps:
+has six steps:
 
 1. **Locale**: the language you translate into. Type a few letters (`de`,
    `pt_BR`, `nl_NL_formal`) and choose from the matches.
@@ -30,9 +30,14 @@ has five steps:
    Skip this if you only review.
 4. **Glossary sync**: downloads your locale's glossary from
    translate.wordpress.org. A review will not start without it.
-5. **Locale rules**: the checks for your language's conventions. polyglots
-   ships none; fetch your locale team's file or start one here. See
-   [Locale rules](locale-rules.md).
+5. **Translation memory**: your locale's published memory from
+   polyglots-data, when it has one: a summary of what would be imported,
+   then `y` downloads and imports it. Shown only for a locale polyglots-data
+   has; offline, it is skipped with a note. Optional, like every import. See
+   [Fetching a locale's memory](translate.md#fetching-a-locales-memory).
+6. **Locale rules**: the checks for your language's conventions. polyglots
+   ships none; fetch your locale team's file (**Fetch from polyglots-data**
+   on this screen) or start one here. See [Locale rules](locale-rules.md).
 
 Last, it asks once whether to share a few anonymous totals for the website.
 The answer is No unless you choose Yes; see
@@ -50,7 +55,7 @@ The top of the screen shows:
 - the version, and beside it the newer one when npm has a newer release. The
   same notice, with the command to update, is printed when you quit,
 - `review` and the agent that reviews (`p` on home switches it),
-- `setup` and how many of the five steps are done, with a tick or a cross for
+- `setup` and how many of the six steps are done, with a tick or a cross for
   each. Press `tab` to move onto them, arrows to choose one, and `enter` to
   open the wizard at that step.
 - `stats` and an address, while the statistics page is being served.
@@ -64,7 +69,7 @@ and press `enter`.
 | `t` | Translate a .po file | Fills untranslated entries from your translation memory first, then machine drafts, and marks drafts fuzzy for you to check. See [Translating](translate.md). |
 | `f` | Fetch from translate.wordpress.org | Downloads the waiting or untranslated strings for a list of projects, and can review or translate each file as it arrives. |
 | `s` | Review statistics | Serves your statistics page from this machine while the app runs, and can write a copy to keep. |
-| `o` | Tools | Split a large `.po` into parts, import translation memory, export it. |
+| `o` | Tools | Split a large `.po` into parts, import translation memory from a file or fetch your locale's from polyglots-data, export it. |
 | `c` | Configuration | Glossary, locale rules, agents, local models, API keys, the setup wizard and interface settings. |
 | `h` | Help | Every screen and every key, on one page. |
 | `a` | About | The version, where polyglots keeps its files, and links. |
@@ -190,12 +195,12 @@ again once stopped.
 | Key | Screen | What it does |
 |---|---|---|
 | `g` | Sync WordPress.org glossary | Downloads your locale's glossary. Run it again when your team changes it. |
-| `r` | Locale rules | Edits your locale's rules: which built-in checks run, proper nouns, common mistakes, patterns, and guidance for the reviewer. `s` saves. |
+| `r` | Locale rules | Edits your locale's rules: which built-in checks run, proper nouns, common mistakes, patterns, and guidance for the reviewer. `s` saves. **Fetch from polyglots-data** shows what the published file would change and writes it on `y`. |
 | `t` | Reply templates | Your locale's [reply templates](reply-templates.md): `e` edits one, `n` creates one from a starter, `d` deletes one, `v` previews it clean or with problems. |
 | `a` | Check AI agents | Shows whether each review agent is installed, signed in and set up for polyglots. `r` checks again. |
 | `m` | Local models | Finds model servers on this machine, such as Ollama or LM Studio, and chooses the drafting model. See [Local models](local-models.md). |
 | `k` | Configure API keys | Stores your DeepL and OpenAI keys. A key set in your environment wins over a saved one. |
-| `w` | Setup wizard | The five setup steps, from wherever you left them. |
+| `w` | Setup wizard | The six setup steps, from wherever you left them. |
 | `i` | Interface settings | Settings for the app only, such as printing the last output path after you quit. |
 | `u` | Usage statistics | Shows exactly what would be shared for the website's totals, and turns it on or off. See [Usage statistics](usage-statistics.md). |
 

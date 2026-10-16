@@ -4,27 +4,29 @@ import type { AgentStatus } from '../../agent/discover.js'
 import type { ModelServer } from '../../draft/discover.js'
 import { TOKENS } from '../../ui/tokens.js'
 import { WPORG_LOCALES, localeId } from '../../wporg/locales.js'
-import { errorMessage, useCommands } from '../commands.js'
+import { errorMessage, useCommands, useConfig } from '../commands.js'
 import { useKeys } from '../hooks/useKeys.js'
+import { useTmListing } from '../hooks/useTmListing.js'
 import { TextInput } from '../input.js'
 import { DRAFT_ENGINES, REVIEW_PROVIDERS, type DraftEngineOption, type ProviderOption } from '../providers.js'
 import { STEP_LABELS, type SetupStatus } from '../setup.js'
 import { SETUP_STEPS, type SetupStep, type TuiState } from '../state.js'
 import { useGlyphs } from '../theme.js'
 import { ConfigureKeys } from './ConfigureKeys.js'
+import { TmFetch } from './ImportTm.js'
 import { LocaleRules } from './LocaleRules.js'
 import { LocalModels } from './LocalModels.js'
 import { SyncGlossary } from './SyncGlossary.js'
 
-// The setup wizard: five steps, each skippable, resumable because where it
-// stands is derived from the same facts as the header's x/5 rather than from
-// a page number. Three steps are the existing screens, embedded: their own
-// "back" is the wizard's "next", so a glossary sync or a rules edit behaves
-// here exactly as it does from Configuration.
+// The setup wizard: six steps, each skippable, resumable because where it
+// stands is derived from the same facts as the header's x/6 rather than from
+// a page number. Four steps are the existing screens, embedded: their own
+// "back" is the wizard's "next", so a glossary sync, a memory fetch or a
+// rules edit behaves here exactly as it does from the menu.
 
-// The wizard's own steps: the five setup steps, then one question that is not
+// The wizard's own steps: the six setup steps, then one question that is not
 // part of setup. Kept out of SETUP_STEPS on purpose. Those are counted in the
-// header's x/5 and reopen the wizard while missing; counting the usage
+// header's x/6 and reopen the wizard while missing; counting the usage
 // question there would make "no answer yet" read as unfinished setup and
 // press the person to answer, which is the opposite of asking neutrally.
 type WizardStep = SetupStep | 'usage'
@@ -48,6 +50,7 @@ const TITLES: Record<WizardStep, string> = {
   provider: 'Review provider',
   keys: 'Draft engine and API keys',
   glossary: 'Glossary sync',
+  memory: 'Translation memory',
   rules: 'Locale rules',
   usage: 'Usage statistics',
 }
@@ -225,12 +228,49 @@ function PickStep<T extends { id: string; label: string; cost: string }>({
   )
 }
 
+export const OFFLINE_NOTE = 'Could not reach polyglots-data; skipped.'
+
+// The memory step reads the manifest itself, in the background: the step is
+// drawn at once with a line saying so, and esc skips it while it waits. A
+// locale the vault does not have, or no locale at all, has nothing to offer
+// and moves straight on; offline, the step is skipped with a note, since
+// there is nothing to offer then either and the person should not have to
+// press a key to learn that.
+function MemoryStep({ onSkip, onUnlisted, onOffline, onDone }: { onSkip: () => void; onUnlisted: () => void; onOffline: () => void; onDone: () => void }) {
+  const { config } = useConfig()
+  const locale = config.defaultLocale
+  const listing = useTmListing(locale)
+  useEffect(() => {
+    if (listing.status === 'unlisted') onUnlisted()
+    else if (listing.status === 'offline') onOffline()
+  }, [listing.status])
+  if (listing.status === 'listed' && locale !== undefined) {
+    return (
+      <Box flexDirection="column">
+        <Text>The locale's published memory from polyglots-data, so drafts and reviews have its wordings from the start.</Text>
+        <Text> </Text>
+        <TmFetch locale={locale} client={listing.client} onBack={onSkip} onDone={onDone} doneHint="enter next step" />
+      </Box>
+    )
+  }
+  return <MemoryWait onSkip={onSkip} />
+}
+
+function MemoryWait({ onSkip }: { onSkip: () => void }) {
+  useKeys({ wizard: { skip: onSkip, move: undefined, choose: undefined } })
+  return <Text {...TOKENS.muted.ink}>Checking polyglots-data…</Text>
+}
+
 export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: WizardProps) {
   const commands = useCommands()
   const [step, setStep] = useState<WizardStep>(start)
   // Inside the keys step: once an engine is picked, its own screen follows.
   const [engine, setEngine] = useState<DraftEngineOption['id'] | undefined>(undefined)
   const [error, setError] = useState<string>()
+  // A line about the step just left, shown on the next one: the memory step
+  // skips itself offline, and moving on without a word would look like a
+  // step that was never there.
+  const [note, setNote] = useState<string>()
   const servers = useServers()
   const index = step === 'usage' ? SETUP_STEPS.length : SETUP_STEPS.indexOf(step)
   // Asked once: an answer either way, from here or from the CLI, means the
@@ -247,6 +287,7 @@ export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: W
     onAdvance?.()
     setEngine(undefined)
     setError(undefined)
+    setNote(undefined)
     const next = step === 'usage' ? undefined : (SETUP_STEPS[index + 1] ?? (unanswered() ? 'usage' : undefined))
     if (next) setStep(next)
     else {
@@ -334,6 +375,21 @@ export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: W
     }
   } else if (step === 'glossary') {
     body = <SyncGlossary onBack={advance} />
+  } else if (step === 'memory') {
+    body = (
+      <MemoryStep
+        onSkip={skip}
+        onUnlisted={advance}
+        onOffline={() => {
+          skip()
+          setNote(OFFLINE_NOTE)
+        }}
+        onDone={() => {
+          record('confirmed')
+          advance()
+        }}
+      />
+    )
   } else if (step === 'usage') {
     // esc is the default answer, said out loud: leaving the question
     // unanswered would ask it again at the next walk through the wizard.
@@ -375,6 +431,7 @@ export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: W
         </Text>
       )}
       <Text {...TOKENS.muted.ink}>esc skips a step · the wizard stays under Configuration › Setup wizard</Text>
+      {note && <Text {...TOKENS.warn.ink}>{note}</Text>}
       <Text> </Text>
       {body}
       {error && <Text {...TOKENS.error.ink}>Could not save that: {error}</Text>}

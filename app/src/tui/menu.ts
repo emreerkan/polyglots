@@ -61,7 +61,7 @@ export const TOOLS: MenuNode[] = [
     description: 'Load .tmx or .po files into memory',
     icon: '→db',
     asciiIcon: '>db',
-    help: 'Imports approved translations from .tmx or .po files into the translation memory that drafts and reviews read from.',
+    help: "Imports approved translations from .tmx or .po files, or fetches the locale's published memory from polyglots-data, into the translation memory that drafts and reviews read from.",
   },
   {
     id: 'export-tm',
@@ -136,7 +136,7 @@ export const CONFIGURATION: MenuNode[] = [
     description: 'Locale, provider, keys, glossary, rules',
     icon: '1›5',
     asciiIcon: '1>5',
-    help: 'Walks through the five setup steps. Each can be skipped, and the wizard can be run again at any time.',
+    help: 'Walks through the six setup steps. Each can be skipped, and the wizard can be run again at any time.',
   },
   {
     id: 'interface',

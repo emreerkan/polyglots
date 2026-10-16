@@ -3,12 +3,13 @@ import { usableProviders, type AgentStatus } from '../agent/discover.js'
 import { loadLocaleRules } from '../rules/load.js'
 import { configFile, dbFile } from '../paths.js'
 import { allGlossary } from '../storage/glossary.js'
+import type { Manifest } from '../data/manifest.js'
 import type { GlossaryEntry, Locale, PolyglotsConfig, Secrets } from '../types.js'
 import { SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
 import { readOnly } from '../storage/read-only.js'
 
-// The five setup steps and whether each is done, worked out in one place so
-// the header's x/5 and the wizard can never disagree.
+// The six setup steps and whether each is done, worked out in one place so
+// the header's x/6 and the wizard can never disagree.
 
 export type StepState = 'done' | 'missing' | 'unknown'
 
@@ -22,7 +23,17 @@ export interface SetupFacts {
   // Undefined when the memory could not be read.
   glossaryCount?: number
   hasLocaleRules: boolean
+  // What polyglots-data offers the locale's memory, see memoryState.
+  memory: MemoryFact
 }
+
+/**
+ * The memory step's facts. `has-rows`: the memory holds strings for the
+ * slug. `no-entry`: polyglots-data has no memory for the locale, so there is
+ * nothing to fetch. `missing`: it has one and the memory is empty. `unknown`:
+ * the manifest is still being read, or could not be.
+ */
+export type MemoryFact = 'has-rows' | 'no-entry' | 'unknown' | 'missing'
 
 export interface SetupStatus {
   steps: Record<SetupStep, StepState>
@@ -35,6 +46,7 @@ export const STEP_LABELS: Record<SetupStep, string> = {
   provider: 'provider',
   keys: 'keys',
   glossary: 'glossary',
+  memory: 'memory',
   rules: 'rules',
 }
 
@@ -71,6 +83,14 @@ export function setupStatus(f: SetupFacts): SetupStatus {
         ? 'done'
         : 'missing',
     glossary: f.glossaryCount === undefined ? 'missing' : f.glossaryCount > 0 ? 'done' : 'missing',
+    // Optional, unlike the glossary: a memory built from the person's own
+    // imports is as good a start as the vault's, and most locales have no
+    // vault memory at all. So a skip counts, and so does a locale the
+    // manifest does not list. Unknown while the manifest is out of reach,
+    // never missing: an offline launch must not reopen the wizard for a
+    // step it cannot offer.
+    memory:
+      f.memory === 'has-rows' || f.memory === 'no-entry' || skipped('memory') ? 'done' : f.memory === 'unknown' ? 'unknown' : 'missing',
     rules: f.hasLocaleRules ? 'done' : 'missing',
   }
   const done = SETUP_STEPS.filter((s) => steps[s] === 'done').length
@@ -110,6 +130,39 @@ export function glossaryCount(locale: Locale, path: string = dbFile()): number |
  */
 export function glossaryRows(locale: Locale, path: string = dbFile()): GlossaryEntry[] {
   return readOnly(path, (db) => allGlossary(db, locale), [])
+}
+
+/**
+ * Memory rows for a locale's slug, counted without writing, as glossaryCount
+ * counts the glossary. Undefined when there is no database or it cannot be
+ * read.
+ */
+export function memoryCount(locale: Locale, path: string = dbFile()): number | undefined {
+  return readOnly(
+    path,
+    (db) => (db.prepare('SELECT COUNT(*) AS n FROM tm WHERE locale = ?').get(locale) as { n: number }).n,
+    undefined,
+  )
+}
+
+/**
+ * The memory step's fact from what is known: rows first, since rows held
+ * answer the question without the network; then whether the manifest lists
+ * the locale (undefined while it is read, or when it could not be).
+ */
+export function memoryState(rows: number | undefined, listed: boolean | undefined): MemoryFact {
+  if (rows !== undefined && rows > 0) return 'has-rows'
+  return listed === undefined ? 'unknown' : listed ? 'missing' : 'no-entry'
+}
+
+/**
+ * Whether the manifest has a memory for the slug. Only the slug is read, as
+ * findTmEntry reads it, and the entry is not judged here: a listed entry that
+ * turns out invalid is offered, and the fetch then says what is wrong with
+ * it, which is more use than a step that silently never appears.
+ */
+export function tmListed(manifest: Manifest, locale: Locale): boolean {
+  return manifest.tm.some((row) => typeof row === 'object' && row !== null && (row as { slug?: unknown }).slug === locale)
 }
 
 /** Whether the locale has a rules file. An invalid one still counts: it exists, and its screen says what is wrong. */

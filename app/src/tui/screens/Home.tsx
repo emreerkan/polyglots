@@ -172,7 +172,7 @@ export function Home(props: HomeProps) {
   )
 
   // Tab toggles between the cards and the setup status. On the status, the
-  // arrows walk the five steps and enter opens the wizard at the one chosen,
+  // arrows walk the six steps and enter opens the wizard at the one chosen,
   // which is how "selecting a step jumps to the fix" reads with a keyboard.
   useKeys({
     homeTab: {

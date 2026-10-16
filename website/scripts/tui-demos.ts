@@ -107,10 +107,13 @@ const SET_UP: TuiState = {
   whatsNew: { seen: VERSION },
 }
 
-// What a settled install reports: a glossary synced, no rules file yet.
+// What a settled install reports: a glossary synced, the locale's memory
+// fetched, no rules file yet. Rows in the memory answer the memory step
+// without the manifest, so the demo never reads polyglots-data.
 const settled = (): Partial<TuiCommands> => ({
   discoverAgents: async () => AGENTS,
   glossaryCount: () => 1_342,
+  memoryCount: () => 48_206,
   hasLocaleRules: () => false,
   localeConfigured: () => true,
 })
@@ -248,6 +251,7 @@ export const setup: TuiScenario = {
     // build from probing ports on whatever machine runs it.
     discoverModels: async () => [],
     glossaryCount: () => undefined,
+    memoryCount: () => undefined,
     hasLocaleRules: () => false,
     localeConfigured: () => false,
   }),

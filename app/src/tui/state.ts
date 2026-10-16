@@ -9,7 +9,7 @@ import { VERSION } from '../version.js'
 // and someone who never opens the TUI never sees fields that mean nothing to
 // them.
 
-export const SETUP_STEPS = ['locale', 'provider', 'keys', 'glossary', 'rules'] as const
+export const SETUP_STEPS = ['locale', 'provider', 'keys', 'glossary', 'memory', 'rules'] as const
 export type SetupStep = (typeof SETUP_STEPS)[number]
 
 export interface TuiState {

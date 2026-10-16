@@ -216,10 +216,10 @@ describe('setup facts', () => {
     await tick(ESC_DELAY)
     await waitForText(view.lastFrame, 'Setup wizard')
     view.stdin.write('w')
-    await waitForText(view.lastFrame, 'Step 1 of 5')
+    await waitForText(view.lastFrame, 'Step 1 of 6')
     view.stdin.write(keys.esc)
     await tick(ESC_DELAY)
-    await waitForText(view.lastFrame, 'Step 2 of 5')
+    await waitForText(view.lastFrame, 'Step 2 of 6')
     const last = state.saveTuiState.mock.calls.at(-1)![0]
     expect(last.wizard.skipped).toContain('locale')
     expect(last.settings.exitSummary).toBe(false)

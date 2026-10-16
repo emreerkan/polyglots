@@ -56,14 +56,14 @@ async function type(stdin: { write(s: string): void }, text: string) {
 describe('opening at launch', () => {
   it('opens on the first missing step when setup is incomplete and the wizard was never finished', async () => {
     const { lastFrame } = render(<App commands={fakeCommands({ ...memoryTuiState(fresh()) })} />)
-    await waitForText(lastFrame, 'Step 1 of 5')
+    await waitForText(lastFrame, 'Step 1 of 6')
     expect(flat(lastFrame())).toContain('Locale')
   })
 
   it('stays on home once the wizard has been walked to the end', async () => {
     const { lastFrame } = render(<App commands={fakeCommands()} />)
     await waitForText(lastFrame, 'Translate a .po file')
-    expect(lastFrame()).not.toContain('Step 1 of 5')
+    expect(lastFrame()).not.toContain('Step 1 of 6')
   })
 
   // The provider is unknown until discovery answers. Counting that as
@@ -81,7 +81,7 @@ describe('opening at launch', () => {
     })
     const { lastFrame } = render(<App commands={commands} />)
     await waitForText(lastFrame, 'Translate a .po file')
-    expect(lastFrame()).not.toContain('Step 1 of 5')
+    expect(lastFrame()).not.toContain('Step 1 of 6')
   })
 })
 
@@ -95,7 +95,7 @@ describe('the steps', () => {
     await type(stdin, 'de_DE')
     await waitForText(lastFrame, 'de_DE')
     stdin.write(keys.enter)
-    await waitForText(lastFrame, 'Step 2 of 5')
+    await waitForText(lastFrame, 'Step 2 of 6')
     expect(config.saved).toContainEqual({ defaultLocale: 'de' })
     const last = state.saveTuiState.mock.calls.at(-1)![0]
     expect(last.wizard.confirmed).toContain('locale')
@@ -104,10 +104,10 @@ describe('the steps', () => {
   it('skips a step with esc and remembers that it was skipped', async () => {
     const state = memoryTuiState(fresh())
     const { lastFrame, stdin } = render(<App commands={fakeCommands({ ...state })} />)
-    await waitForText(lastFrame, 'Step 1 of 5')
+    await waitForText(lastFrame, 'Step 1 of 6')
     stdin.write(keys.esc)
     await tick(ESC_DELAY)
-    await waitForText(lastFrame, 'Step 2 of 5')
+    await waitForText(lastFrame, 'Step 2 of 6')
     expect(state.saveTuiState.mock.calls.at(-1)![0].wizard.skipped).toEqual(['locale'])
   })
 
@@ -120,7 +120,7 @@ describe('the steps', () => {
       discoverModels: async () => [],
     })
     const { lastFrame, stdin } = render(<App commands={commands} />)
-    await waitForText(lastFrame, 'Step 1 of 5')
+    await waitForText(lastFrame, 'Step 1 of 6')
     stdin.write(keys.esc)
     await tick(ESC_DELAY)
     await waitForText(lastFrame, 'Claude Code')
@@ -129,7 +129,7 @@ describe('the steps', () => {
     expect(frame).not.toContain('Antigravity')
     expect(frame).not.toContain('Local model')
     stdin.write(keys.enter)
-    await waitForText(lastFrame, 'Step 3 of 5')
+    await waitForText(lastFrame, 'Step 3 of 6')
     expect(config.saved).toContainEqual({ reviewProvider: 'claude' })
   })
 
@@ -145,19 +145,19 @@ describe('the steps', () => {
       discoverModels: async () => [],
     })
     const { lastFrame, stdin } = render(<App commands={commands} />)
-    await waitForText(lastFrame, 'Step 1 of 5')
+    await waitForText(lastFrame, 'Step 1 of 6')
     stdin.write(keys.esc)
     await tick(ESC_DELAY)
     await waitForText(lastFrame, 'No AI')
     expect(flat(lastFrame())).not.toContain('No review agent is ready')
     stdin.write(keys.enter)
-    await waitForText(lastFrame, 'Step 3 of 5')
+    await waitForText(lastFrame, 'Step 3 of 6')
     expect(config.saved).toContainEqual({ reviewProvider: 'none' })
   })
 
   it('lists No AI after the agents', async () => {
     const { lastFrame, stdin } = render(<App commands={fakeCommands({ ...memoryTuiState(fresh()) })} />)
-    await waitForText(lastFrame, 'Step 1 of 5')
+    await waitForText(lastFrame, 'Step 1 of 6')
     stdin.write(keys.esc)
     await tick(ESC_DELAY)
     await waitForText(lastFrame, 'No AI')
@@ -168,7 +168,7 @@ describe('the steps', () => {
   it('offers no draft engine, and moves straight on without a key screen', async () => {
     const config = configStore()
     const { lastFrame, stdin } = render(<App commands={fakeCommands({ ...config, ...memoryTuiState(fresh()) })} />)
-    await waitForText(lastFrame, 'Step 1 of 5')
+    await waitForText(lastFrame, 'Step 1 of 6')
     for (let i = 0; i < 2; i++) {
       stdin.write(keys.esc)
       await tick(ESC_DELAY)
@@ -179,24 +179,24 @@ describe('the steps', () => {
       await tick()
     }
     stdin.write(keys.enter)
-    await waitForText(lastFrame, 'Step 4 of 5')
+    await waitForText(lastFrame, 'Step 4 of 6')
     expect(config.saved).toContainEqual({ defaultDraftEngine: 'none' })
   })
 
   it('offers the local draft engine only when a local server answers', async () => {
     const withServer = render(<App commands={fakeCommands({ ...memoryTuiState(fresh()), discoverModels: async () => [modelServer()] })} />)
-    await waitForText(withServer.lastFrame, 'Step 1 of 5')
+    await waitForText(withServer.lastFrame, 'Step 1 of 6')
     for (let i = 0; i < 2; i++) {
       withServer.stdin.write(keys.esc)
       await tick(ESC_DELAY)
     }
-    await waitForText(withServer.lastFrame, 'Step 3 of 5')
+    await waitForText(withServer.lastFrame, 'Step 3 of 6')
     await waitForText(withServer.lastFrame, 'Local model')
     expect(flat(withServer.lastFrame())).toContain('DeepL')
     cleanup()
 
     const without = render(<App commands={fakeCommands({ ...memoryTuiState(fresh()), discoverModels: async () => [modelServer({ state: 'down', models: [] })] })} />)
-    await waitForText(without.lastFrame, 'Step 1 of 5')
+    await waitForText(without.lastFrame, 'Step 1 of 6')
     for (let i = 0; i < 2; i++) {
       without.stdin.write(keys.esc)
       await tick(ESC_DELAY)
@@ -208,7 +208,7 @@ describe('the steps', () => {
   it('goes on to the key screen after choosing DeepL', async () => {
     const config = configStore()
     const { lastFrame, stdin } = render(<App commands={fakeCommands({ ...config, ...memoryTuiState(fresh()) })} />)
-    await waitForText(lastFrame, 'Step 1 of 5')
+    await waitForText(lastFrame, 'Step 1 of 6')
     for (let i = 0; i < 2; i++) {
       stdin.write(keys.esc)
       await tick(ESC_DELAY)
@@ -222,9 +222,9 @@ describe('the steps', () => {
   it('is dismissed and lands on home after the last step', async () => {
     const state = memoryTuiState(fresh())
     const { lastFrame, stdin } = render(<App commands={fakeCommands({ ...state, ...configStore({ usageStats: false }) })} />)
-    await waitForText(lastFrame, 'Step 1 of 5')
-    for (const step of [1, 2, 3, 4, 5]) {
-      await waitForText(lastFrame, `Step ${step} of 5`)
+    await waitForText(lastFrame, 'Step 1 of 6')
+    for (const step of [1, 2, 3, 4, 6]) {
+      await waitForText(lastFrame, `Step ${step} of 6`)
       stdin.write(keys.esc)
       await tick(ESC_DELAY)
     }
@@ -238,19 +238,20 @@ describe('the steps', () => {
     stdin.write('c')
     await waitForText(lastFrame, 'Setup wizard')
     stdin.write('w')
-    await waitForText(lastFrame, 'Step 1 of 5')
+    await waitForText(lastFrame, 'Step 1 of 6')
   })
 })
 
 describe('the usage statistics question', () => {
-  // Walks the five setup steps with esc, to the question after them.
+  // Walks the six setup steps with esc, to the question after them. The
+  // memory step passes by itself: the fake manifest lists no memory.
   async function toQuestion(initial: Partial<PolyglotsConfig> = {}) {
     const config = configStore(initial)
     const state = memoryTuiState(fresh())
     const r = render(<App commands={fakeCommands({ ...config, ...state })} />)
-    await waitForText(r.lastFrame, 'Step 1 of 5')
-    for (const step of [1, 2, 3, 4, 5]) {
-      await waitForText(r.lastFrame, `Step ${step} of 5`)
+    await waitForText(r.lastFrame, 'Step 1 of 6')
+    for (const step of [1, 2, 3, 4, 6]) {
+      await waitForText(r.lastFrame, `Step ${step} of 6`)
       r.stdin.write(keys.esc)
       await tick(ESC_DELAY)
     }
@@ -261,7 +262,7 @@ describe('the usage statistics question', () => {
     const { lastFrame, stdin, config, state } = await toQuestion()
     await waitForText(lastFrame, 'Share anonymous totals (strings reviewed, number of projects) to show on the website?')
     expect(flat(lastFrame())).toContain('You can change this any time.')
-    expect(flat(lastFrame())).not.toContain('Step 6')
+    expect(flat(lastFrame())).not.toContain('Step 7')
     stdin.write(keys.enter)
     await waitForText(lastFrame, 'Translate a .po file')
     expect(config.saved).toContainEqual({ usageStats: false })

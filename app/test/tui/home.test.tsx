@@ -175,7 +175,9 @@ describe('Home', () => {
   it('reaches the TM import picker through Tools', async () => {
     const { lastFrame, stdin } = render(<App commands={fakeCommands()} cwd={cwd} />)
     await openFromHome(stdin, 'import-tm')
-    await waitForText(lastFrame, /Import Translation Memory \(\.tmx or \.po\)/)
+    await waitForText(lastFrame, /Import Translation Memory · locale/)
+    // The fake manifest lists no memory, so the file is the one way in.
+    expect(flat(lastFrame())).toContain('Import a file')
   })
 
   it('reaches the glossary sync screen through Configuration', async () => {
@@ -240,18 +242,22 @@ describe('the header', () => {
     const frame = flat(lastFrame())
     expect(frame).toMatch(/polyglots \d+\.\d+\.\d+/)
     expect(frame).toContain('review antigravity · Gemini 3.8 Flash (Low)')
-    expect(frame).toMatch(/setup 2\/5/)
+    // locale is not configured by the file, keys and glossary are missing;
+    // the provider, the rules and the memory (the fake manifest lists none
+    // for tr, so there is nothing to fetch) are done.
+    await waitForText(lastFrame, /setup 3\/6/)
   })
 
   it('opens the wizard at a missing step from the setup status', async () => {
     const { lastFrame, stdin } = render(<App commands={fakeCommands()} cwd={cwd} />)
-    await waitForText(lastFrame, 'setup 1/5')
+    // The memory step is done: the fake manifest lists no memory for tr.
+    await waitForText(lastFrame, 'setup 2/6')
     stdin.write(keys.tab)
     await tick()
     // Focus lands on the first step that is not done.
     expect(flat(lastFrame())).toMatch(/› ✗ locale/)
     stdin.write(keys.enter)
-    await waitForText(lastFrame, 'Step 1 of 5')
+    await waitForText(lastFrame, 'Step 1 of 6')
   })
 })
 

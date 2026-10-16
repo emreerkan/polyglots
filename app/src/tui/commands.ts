@@ -6,6 +6,9 @@ import { syncGlossary } from '../commands/glossary-sync.js'
 import { exportTm } from '../commands/tm-export.js'
 import { importTmx } from '../commands/tm-import.js'
 import { reviewFile } from '../commands/review.js'
+import { planRulesFetch, writeRulesFetch } from '../commands/rules-fetch.js'
+import { planTmFetch, runTmFetch } from '../commands/tm-fetch.js'
+import { dataClient, type DataClient } from '../data/download.js'
 import { splitPo } from '../commands/split.js'
 import { writeStats } from '../commands/stats.js'
 import { translateFile } from '../commands/translate.js'
@@ -13,7 +16,7 @@ import { openJobsDb } from '../jobs/db.js'
 import { stopOwnRuns } from '../jobs/runs.js'
 import { DEFAULT_CONFIG, loadConfig, saveConfig, loadSecrets, saveSecret } from '../config.js'
 import type { Locale, PolyglotsConfig, ReviewEvent, ReviewSummary } from '../types.js'
-import { glossaryCount, hasLocaleRules, localeConfigured } from './setup.js'
+import { glossaryCount, hasLocaleRules, localeConfigured, memoryCount } from './setup.js'
 import { loadTuiState, saveTuiState } from './state.js'
 import { openInBrowser, startStatsServer, type StartStatsServer } from './stats-server.js'
 
@@ -42,6 +45,15 @@ export interface TuiCommands {
   glossaryCount: (locale: Locale) => number | undefined
   hasLocaleRules: typeof hasLocaleRules
   localeConfigured: typeof localeConfigured
+  memoryCount: (locale: Locale) => number | undefined
+  // polyglots-data: the manifest and verified downloads, and the two fetches
+  // built on them. Handed in like every other command so the screens can be
+  // driven without a socket, and so the website's TUI demos must fake them.
+  dataClient: DataClient
+  planRulesFetch: typeof planRulesFetch
+  writeRulesFetch: typeof writeRulesFetch
+  planTmFetch: typeof planTmFetch
+  runTmFetch: typeof runTmFetch
   startStatsServer: StartStatsServer
   openInBrowser: typeof openInBrowser
   // Ends this process's in-flight runs as stopped; returns how many.
@@ -70,6 +82,12 @@ export const defaultCommands: TuiCommands = {
   glossaryCount: (locale) => glossaryCount(locale),
   hasLocaleRules,
   localeConfigured,
+  memoryCount: (locale) => memoryCount(locale),
+  dataClient,
+  planRulesFetch,
+  writeRulesFetch,
+  planTmFetch,
+  runTmFetch,
   startStatsServer,
   openInBrowser,
   stopOwnRuns: () => {

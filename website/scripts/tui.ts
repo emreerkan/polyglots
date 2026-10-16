@@ -74,6 +74,12 @@ const COMMANDS = {
   glossaryCount: true,
   hasLocaleRules: true,
   localeConfigured: true,
+  memoryCount: true,
+  dataClient: true,
+  planRulesFetch: true,
+  writeRulesFetch: true,
+  planTmFetch: true,
+  runTmFetch: true,
   startStatsServer: true,
   openInBrowser: true,
   stopOwnRuns: true,
@@ -81,11 +87,13 @@ const COMMANDS = {
 
 function refuseUnfaked(name: string): TuiCommands {
   const stubs: Record<string, unknown> = {}
-  for (const command of Object.keys(COMMANDS)) {
-    stubs[command] = () => {
-      throw new Error(`The ${name} TUI demo called ${command}, which it does not fake. Fake it in scripts/tui-demos.ts, or the build would run the real thing.`)
-    }
+  const refuse = (command: string) => () => {
+    throw new Error(`The ${name} TUI demo called ${command}, which it does not fake. Fake it in scripts/tui-demos.ts, or the build would run the real thing.`)
   }
+  for (const command of Object.keys(COMMANDS)) stubs[command] = refuse(command)
+  // An object, not a function: a function stub would fail as "manifest is
+  // not a function", which names nothing worth fixing.
+  stubs.dataClient = { manifest: refuse('dataClient.manifest'), download: refuse('dataClient.download') }
   return stubs as unknown as TuiCommands
 }
 

@@ -49,7 +49,7 @@ describe('the setup wizard with no locale', () => {
     expect(flat(lastFrame())).toContain("Type the locale's code")
     stdin.write(keys.enter)
     await tick(20)
-    expect(flat(lastFrame())).toContain('Step 1 of 5')
+    expect(flat(lastFrame())).toContain('Step 1 of 6')
     expect(config.saved).toEqual([])
   })
 
@@ -146,6 +146,6 @@ describe.each([
     expect(flat(lastFrame())).toContain('enter to open setup')
     stdin.write(keys.enter)
     await waitForText(lastFrame, 'Search:')
-    expect(flat(lastFrame())).toContain('Step 1 of 5')
+    expect(flat(lastFrame())).toContain('Step 1 of 6')
   })
 })

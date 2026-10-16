@@ -27,12 +27,21 @@ afterEach(async () => {
   await home.cleanup()
 })
 
+// The default fake manifest lists no memory, so the menu holds the file
+// choice alone; enter on it opens the picker (import-tm-fetch.test.tsx has
+// the fetch).
 function mount(commands = fakeCommands(), onBack: () => void = () => undefined) {
-  return render(
+  const view = render(
     <CommandsProvider value={commands}>
       <ImportTm cwd={cwd} onBack={onBack} />
     </CommandsProvider>,
   )
+  return view
+}
+
+async function openPicker(view: ReturnType<typeof mount>) {
+  await waitForText(view.lastFrame, 'Import a file')
+  view.stdin.write(keys.enter)
 }
 
 describe('ImportTm', () => {
@@ -43,7 +52,9 @@ describe('ImportTm', () => {
     await writeFile(join(cwd, 'notes.txt'), '')
     const commands = fakeCommands()
     let back = 0
-    const { lastFrame, stdin } = mount(commands, () => back++)
+    const view = mount(commands, () => back++)
+    const { lastFrame, stdin } = view
+    await openPicker(view)
     await waitForText(lastFrame, 'poedit.tmx')
     expect(lastFrame()).toContain('plugin-tr.po')
     expect(lastFrame()).not.toContain('notes.txt')
@@ -72,7 +83,9 @@ describe('ImportTm', () => {
         throw new Error('Invalid TMX: missing <tmx> root element')
       }),
     })
-    const { lastFrame, stdin } = mount(commands)
+    const view = mount(commands)
+    const { lastFrame, stdin } = view
+    await openPicker(view)
     await waitForText(lastFrame, 'poedit.tmx')
     stdin.write(keys.down)
     await tick()

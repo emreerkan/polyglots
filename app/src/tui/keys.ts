@@ -223,6 +223,14 @@ export const KEYS = {
   fetchResolved: {
     next: { keys: 'enter', does: 'continue to the options', match: enter },
   },
+  // Import TM's first question: the vault's memory, or a file of one's own.
+  importChoice: {
+    move: { keys: '↑↓', does: 'fetch from polyglots-data or import a file', match: vertical },
+    choose: { keys: 'enter', does: 'go on with the one chosen', match: enter },
+  },
+  tmFetch: {
+    start: { keys: 'y', does: 'after the summary: download and import', match: char('y') },
+  },
   stats: {
     write: { keys: 'w', does: 'write a standalone HTML copy', match: char('w') },
     open: { keys: 'o', does: 'open the page in a browser', match: char('o') },
@@ -245,6 +253,12 @@ export const KEYS = {
     move: { keys: '↑↓', does: 'move', match: vertical },
     open: { keys: 'enter', does: 'open a section', match: enter },
     save: { keys: 's', does: 'save the rules file', match: char('s') },
+  },
+  // The rules fetch's summary: the file it would write, read before it is
+  // written. Its own group so y means nothing on the rest of the screen.
+  rulesFetch: {
+    scroll: { keys: '↑↓', does: 'scroll the fetched summary', match: vertical },
+    write: { keys: 'y', does: 'write the fetched rules file', match: char('y') },
   },
   ruleList: {
     move: { keys: '↑↓', does: 'move through the built-in rules', match: vertical },
@@ -414,7 +428,10 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   help: { shown: [KEYS.helpPage.line], more: [KEYS.helpPage.page] },
   about: { shown: [], more: [KEYS.about.close] },
   split: { shown: [fields.pickAndSplit], more: [picker.sort, finished.close] },
-  'import-tm': { shown: [fields.importFile], more: [picker.sort, finished.close, KEYS.needsLocale.setup] },
+  'import-tm': {
+    shown: [KEYS.importChoice.move, KEYS.importChoice.choose, fields.importFile],
+    more: [KEYS.tmFetch.start, picker.sort, finished.close, KEYS.needsLocale.setup],
+  },
   'export-tm': {
     shown: [KEYS.exportFormat.format, KEYS.exportFormat.next, KEYS.target.folder],
     more: [fields.write, picker.sort, finished.close, retry.again, KEYS.needsLocale.setup],
@@ -424,6 +441,8 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
     shown: [KEYS.localeRules.move, KEYS.localeRules.open],
     more: [
       KEYS.localeRules.save,
+      KEYS.rulesFetch.scroll,
+      KEYS.rulesFetch.write,
       KEYS.leave.save,
       KEYS.leave.discard,
       KEYS.ruleList.move,

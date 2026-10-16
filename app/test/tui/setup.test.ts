@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '../../src/config.js'
-import { glossaryCount, localeConfigured, setupStatus, type SetupFacts } from '../../src/tui/setup.js'
+import { glossaryCount, localeConfigured, memoryCount, memoryState, setupStatus, tmListed, type SetupFacts } from '../../src/tui/setup.js'
 import { DEFAULT_TUI_STATE, loadTuiState, parseTuiState, saveTuiState, tuiStateFile } from '../../src/tui/state.js'
 import { VERSION } from '../../src/version.js'
 import { agentStatus, makeHome, unusableAgent, type Home } from './helpers.js'
@@ -25,6 +25,7 @@ function facts(patch: Partial<SetupFacts> = {}): SetupFacts {
     localeConfigured: false,
     glossaryCount: 0,
     hasLocaleRules: false,
+    memory: 'missing',
     ...patch,
   }
 }
@@ -32,9 +33,9 @@ function facts(patch: Partial<SetupFacts> = {}): SetupFacts {
 describe('setupStatus', () => {
   it('counts only the provider on a fresh install with a working agent', () => {
     const status = setupStatus(facts())
-    expect(status.steps).toEqual({ locale: 'missing', provider: 'done', keys: 'missing', glossary: 'missing', rules: 'missing' })
+    expect(status.steps).toEqual({ locale: 'missing', provider: 'done', keys: 'missing', glossary: 'missing', memory: 'missing', rules: 'missing' })
     expect(status.done).toBe(1)
-    expect(status.total).toBe(5)
+    expect(status.total).toBe(6)
   })
 
   // Read off config.json, not the loaded config: the defaults once named tr,
@@ -87,6 +88,70 @@ describe('setupStatus', () => {
     const status = setupStatus(facts({ glossaryCount: 12, hasLocaleRules: true }))
     expect(status.steps.glossary).toBe('done')
     expect(status.steps.rules).toBe('done')
+  })
+})
+
+describe('the memory step', () => {
+  it('header counts six steps', () => {
+    expect(setupStatus(facts()).total).toBe(6)
+  })
+
+  // Done when there is nothing left to offer: rows already held, or a locale
+  // the vault does not have. Unknown, not missing, while the manifest is
+  // read or out of reach, so a launch offline does not reopen the wizard.
+  it.each([
+    ['has-rows', 'done'],
+    ['no-entry', 'done'],
+    ['unknown', 'unknown'],
+    ['missing', 'missing'],
+  ] as const)('reads %s as %s', (memory, step) => {
+    expect(setupStatus(facts({ memory })).steps.memory).toBe(step)
+  })
+
+  it('counts a skipped memory step as done, since fetching is optional', () => {
+    const skipped = { ...DEFAULT_TUI_STATE, wizard: { ...DEFAULT_TUI_STATE.wizard, skipped: ['memory' as const] } }
+    expect(setupStatus(facts({ state: skipped, memory: 'missing' })).steps.memory).toBe('done')
+    expect(setupStatus(facts({ state: skipped, memory: 'unknown' })).steps.memory).toBe('done')
+  })
+})
+
+describe('memoryState', () => {
+  it('prefers rows, then the manifest, and is unknown without either', () => {
+    expect(memoryState(3, undefined)).toBe('has-rows')
+    expect(memoryState(3, true)).toBe('has-rows')
+    expect(memoryState(0, false)).toBe('no-entry')
+    expect(memoryState(0, true)).toBe('missing')
+    expect(memoryState(undefined, true)).toBe('missing')
+    expect(memoryState(0, undefined)).toBe('unknown')
+    expect(memoryState(undefined, undefined)).toBe('unknown')
+  })
+})
+
+describe('memoryCount', () => {
+  it('is undefined when there is no database, and never creates one', () => {
+    const path = join(home.path, 'data', 'polyglots.db')
+    expect(memoryCount('tr', path)).toBeUndefined()
+    expect(() => new Database(path, { fileMustExist: true })).toThrow()
+  })
+
+  it('counts the rows for the slug only', () => {
+    const path = join(home.path, 'm.db')
+    const db = new Database(path)
+    db.exec('CREATE TABLE tm (locale TEXT, source TEXT)')
+    db.prepare('INSERT INTO tm VALUES (?, ?)').run('tr', 'Post')
+    db.prepare('INSERT INTO tm VALUES (?, ?)').run('tr', 'Page')
+    db.prepare('INSERT INTO tm VALUES (?, ?)').run('tr_TR', 'Post')
+    db.close()
+    expect(memoryCount('tr', path)).toBe(2)
+    expect(memoryCount('de', path)).toBe(0)
+  })
+})
+
+describe('tmListed', () => {
+  it('finds the locale by slug without judging the rest of the manifest', () => {
+    const manifest = { schema: 1, generated: '', tm: [{ slug: 'tr', locale: 'tr_TR' }, 'garbage', null], rules: [] }
+    expect(tmListed(manifest, 'tr')).toBe(true)
+    expect(tmListed(manifest, 'de')).toBe(false)
   })
 })
 

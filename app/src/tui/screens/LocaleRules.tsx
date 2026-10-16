@@ -6,7 +6,8 @@ import { openRulesDraft, saveRulesDraft, type RulesDraft, type RulesValue } from
 import { BUILT_IN_RULES, findingLabel } from '../../rules/names.js'
 import { GUIDANCE_LIMIT } from '../../rules/schema.js'
 import { resolveLocale, wpCodeOf } from '../../wporg/locales.js'
-import { useConfig } from '../commands.js'
+import type { RulesFetchPlan } from '../../commands/rules-fetch.js'
+import { useCommands, useConfig } from '../commands.js'
 import { Hint } from '../components/Hint.js'
 import { ListEditor } from '../components/ListEditor.js'
 import { Form } from '../components/Form.js'
@@ -16,6 +17,8 @@ import { tryRules, type TryResult } from '../../rules/try.js'
 import { glossaryRows } from '../setup.js'
 import type { GlossaryEntry } from '../../types.js'
 import { useKeys } from '../hooks/useKeys.js'
+import { useTask, type TaskState } from '../hooks/useTask.js'
+import { useSize } from '../size.js'
 import { TextInput } from '../input.js'
 import { ScrollTarget } from '../components/Viewport.js'
 
@@ -23,10 +26,26 @@ export interface LocaleRulesProps {
   onBack: () => void
 }
 
-type Stage = 'pick' | 'overview' | 'rules' | 'ratio' | 'nouns' | 'nounList' | 'mistakes' | 'patterns' | 'guidance' | 'try' | 'copy' | 'leave'
+type Stage = 'pick' | 'overview' | 'rules' | 'ratio' | 'nouns' | 'nounList' | 'mistakes' | 'patterns' | 'guidance' | 'try' | 'copy' | 'fetch' | 'leave'
 
-const SECTIONS = ['Built-in rules', 'Glossary match', 'Proper nouns', 'Common mistakes', 'Patterns', 'Guidance', 'Try the rules', 'Copy to another locale'] as const
-const SECTION_STAGE: Stage[] = ['rules', 'ratio', 'nouns', 'mistakes', 'patterns', 'guidance', 'try', 'copy']
+const SECTIONS = [
+  'Built-in rules',
+  'Glossary match',
+  'Proper nouns',
+  'Common mistakes',
+  'Patterns',
+  'Guidance',
+  'Try the rules',
+  'Copy to another locale',
+  'Fetch from polyglots-data',
+] as const
+const SECTION_STAGE: Stage[] = ['rules', 'ratio', 'nouns', 'mistakes', 'patterns', 'guidance', 'try', 'copy', 'fetch']
+// The rows of the screen around a fetch summary: the frame's header and
+// footer, this screen's title, path and the lines above and below the
+// summary. What is left is the summary's window; a smaller terminal still
+// gets a few lines, and the frame scrolls whatever wraps past it.
+const FETCH_CHROME_ROWS = 16
+const MIN_FETCH_ROWS = 5
 type NounList = 'always' | 'dateOnly'
 const NOUN_LISTS: { key: NounList; label: string }[] = [
   { key: 'always', label: 'Always capitalized' },
@@ -127,6 +146,8 @@ const round = (n: number) => Math.round(n * 100) / 100
  * configHash, so the next review of every file in the locale starts over.
  */
 export function LocaleRules({ onBack }: LocaleRulesProps) {
+  const commands = useCommands()
+  const size = useSize()
   const { config } = useConfig()
   const [stage, setStage] = useState<Stage>('pick')
   // Empty when no locale is configured: prefilling one would open someone
@@ -142,6 +163,10 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   const [trial, setTrial] = useState<TryResult | string>()
   const [glossary, setGlossary] = useState<GlossaryEntry[]>()
   const [copyResult, setCopyResult] = useState<{ ok: boolean; lines: string[] }>()
+  const fetchTask = useTask<RulesFetchPlan>()
+  const [fetchTop, setFetchTop] = useState(0)
+  const [writing, setWriting] = useState(false)
+  const [writeError, setWriteError] = useState<string>()
 
   const dirty = draft !== undefined && JSON.stringify(value) !== JSON.stringify(draft.value)
   // A locale with no file can be saved as it stands: that is how someone
@@ -219,8 +244,40 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   const copyNotice = stage === 'copy' && (dirty || !draft?.exists)
   const toOverview = () => setStage('overview')
   const leave = () => (dirty ? setStage('leave') : onBack())
+  // Fetching never starts over unsaved edits: the fetched file replaces the
+  // one on disk, the edits were made against that one, and writing it would
+  // drop them without a word. Save or discard first, as copy asks.
+  const openFetch = () => {
+    setFetchTop(0)
+    setWriteError(undefined)
+    if (dirty) fetchTask.reset()
+    else fetchTask.run(() => commands.planRulesFetch(id, commands.dataClient))
+  }
+  const fetchPlan = fetchTask.state.status === 'done' ? fetchTask.state.result : undefined
+  const fetchRows = Math.max(MIN_FETCH_ROWS, size.rows - FETCH_CHROME_ROWS)
+  const fetchMaxTop = Math.max(0, (fetchPlan?.summary.length ?? 0) - fetchRows)
+  // Written exactly as downloaded, then read back through the same open the
+  // screen started with, so what is on screen is the file now on disk, with
+  // nothing left over from the old one to save on top of it.
+  const writeFetched = async (plan: RulesFetchPlan) => {
+    setWriting(true)
+    try {
+      await commands.writeRulesFetch(plan)
+      const opened = openRulesDraft(plan.locale)
+      setDraft(opened)
+      setValue(opened.value)
+      setError(undefined)
+      setNotice(`Wrote ${basename(plan.path)}.`)
+      setStage('overview')
+    } catch (err) {
+      setWriteError(errorText(err))
+    } finally {
+      setWriting(false)
+    }
+  }
   const openSection = () => {
     const next = SECTION_STAGE[cursor]!
+    if (next === 'fetch') openFetch()
     if (next === 'copy') setCopyResult(undefined)
     if (next === 'try') {
       setTrial(undefined)
@@ -231,7 +288,14 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   }
   useKeys({
     back: {
-      esc: copyNotice || on('nouns', 'rules', 'ratio', 'leave') ? toOverview : on('pick') ? onBack : on('overview') ? leave : undefined,
+      esc:
+        copyNotice || on('nouns', 'rules', 'ratio', 'leave') || (on('fetch') && !writing)
+          ? toOverview
+          : on('pick')
+            ? onBack
+            : on('overview')
+              ? leave
+              : undefined,
       q: on('overview') ? leave : undefined,
     },
     localeRules: {
@@ -240,6 +304,13 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
         : undefined,
       open: on('overview') ? openSection : undefined,
       save: on('overview') && savable ? () => void save() : undefined,
+    },
+    rulesFetch: {
+      scroll:
+        on('fetch') && fetchMaxTop > 0
+          ? (_ch, key) => setFetchTop((t) => Math.min(fetchMaxTop, Math.max(0, Math.min(t, fetchMaxTop) + (key.upArrow ? -1 : 1))))
+          : undefined,
+      write: on('fetch') && !dirty && !writing && fetchPlan !== undefined && fetchPlan.state !== 'same' ? () => void writeFetched(fetchPlan) : undefined,
     },
     leave: {
       save: on('leave') ? () => void save().then(toOverview) : undefined,
@@ -315,6 +386,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
           <Text>{`${marker(cursor === 5)}Guidance           ${value.guidance?.length ?? 0} of ${GUIDANCE_LIMIT} characters`}</Text>
           <Text>{`${marker(cursor === 6)}Try the rules      check a sample against the rules as edited`}</Text>
           <Text>{`${marker(cursor === 7)}Copy to another locale`}</Text>
+          <Text>{`${marker(cursor === 8)}Fetch from polyglots-data`}</Text>
           {dirty && (
             <Text color="yellow">
               Saving changes the rules for {id}: the next review of every {id} file starts over.
@@ -485,6 +557,18 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
         </>
       )}
 
+      {draft && stage === 'fetch' && (
+        <FetchPanel
+          id={id}
+          dirty={dirty}
+          task={fetchTask.state}
+          top={Math.min(fetchTop, fetchMaxTop)}
+          rows={fetchRows}
+          writing={writing}
+          writeError={writeError}
+        />
+      )}
+
       {draft && stage === 'try' && (
         <>
           <Text>Try the rules as edited, saved or not</Text>
@@ -528,6 +612,83 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
         </>
       )}
     </Box>
+  )
+}
+
+/**
+ * What a fetch would write, before it is written: the same checks and the
+ * same summary as rules fetch, read in a window the arrow keys move, since a
+ * changed guidance or capitalization is printed in full and can run to pages.
+ * The question sits above the summary so it stays in view however far the
+ * summary is scrolled.
+ */
+function FetchPanel({
+  id,
+  dirty,
+  task,
+  top,
+  rows,
+  writing,
+  writeError,
+}: {
+  id: string
+  dirty: boolean
+  task: TaskState<RulesFetchPlan>
+  top: number
+  rows: number
+  writing: boolean
+  writeError: string | undefined
+}) {
+  const back = <Hint>esc back to the overview</Hint>
+  let body
+  if (dirty) {
+    body = (
+      <>
+        <Text color="yellow">Save or discard your changes first: the fetched file replaces the one on disk, and these edits would be lost.</Text>
+        {back}
+      </>
+    )
+  } else if (task.status === 'idle' || task.status === 'running') {
+    body = <Text>Checking polyglots-data…</Text>
+  } else if (task.status === 'error') {
+    body = (
+      <>
+        <Text color="red">{task.message}</Text>
+        {back}
+      </>
+    )
+  } else if (task.result.state === 'same') {
+    body = (
+      <>
+        <Text color="green">Already the published file.</Text>
+        {back}
+      </>
+    )
+  } else {
+    const plan = task.result
+    const below = Math.max(0, plan.summary.length - top - rows)
+    body = (
+      <>
+        <Text color="yellow">{plan.state === 'changed' ? `This replaces ${plan.path}.` : `y writes ${plan.path}.`}</Text>
+        <Text color="yellow">
+          Writing changes the rules for {id}: the next review of every {id} file starts over.
+        </Text>
+        {writeError && <Text color="red">{writeError}</Text>}
+        <Hint>{writing ? 'Writing…' : `${below > 0 || top > 0 ? '↑↓ scroll · ' : ''}y write · esc cancel`}</Hint>
+        <Text> </Text>
+        {top > 0 && <Text dimColor>{`… ${top} more above`}</Text>}
+        {plan.summary.slice(top, top + rows).map((line, i) => (
+          <Text key={top + i}>{line}</Text>
+        ))}
+        {below > 0 && <Text dimColor>{`… ${below} more below`}</Text>}
+      </>
+    )
+  }
+  return (
+    <>
+      <Text>Fetch the published rules of {id} from polyglots-data</Text>
+      {body}
+    </>
   )
 }
 
