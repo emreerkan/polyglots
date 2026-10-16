@@ -131,6 +131,13 @@ It reports a mistake with the line it is on, and summarises what the file
 sets. A review refuses to run on a file that does not parse, rather than run
 on rules you believe are in force.
 
+Each regular expression may take at most 100 ms on one translation. Some
+expressions, such as `^(a+)+$`, can take minutes on the wrong text. A review
+stops such an expression after 100 ms and does not use it again. The entry
+where it stopped gets a finding that names the expression, and the summary
+names it once. `rules check` runs each expression on a few test strings first,
+and reports one that takes too long as an error on its line.
+
 ## Variants of a language
 
 `polyglots rules copy nl_NL nl_BE` starts one locale's file from another's.

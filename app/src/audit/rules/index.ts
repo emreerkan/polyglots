@@ -4,6 +4,7 @@ import { localeDisplayName } from '../../wporg/locales.js'
 import { customFindings } from '../../rules/custom.js'
 import { loadLocaleRules } from '../../rules/load.js'
 import { CUSTOM_RULE } from '../../rules/names.js'
+import { PATTERN_BUDGET_MS, runRegexOps, skippedFor, type RegexOp } from '../../rules/sandbox.js'
 import type { CustomPattern, SentenceEndRules } from '../../rules/schema.js'
 import { missingPlaceholders } from '../../draft/placeholders.js'
 import {
@@ -390,25 +391,66 @@ export interface CompiledSentenceEnd {
 // nothing the check should have reported.
 const DOTTED_ABBREVIATION = /(?:^|[\s(])(?:\p{L}\p{M}*\.){2,}\s*$/u
 
+/**
+ * The file's sentenceEnd regexes over one entry, in the sandbox, in one call.
+ *
+ * They come from a rules file like any pattern, so they run where a runaway
+ * one can be stopped. Each id carries the regex's source as well as its place,
+ * because the sandbox remembers a skipped id for the whole process and a TUI
+ * session can review a Greek file after a Thai one. All of them run, even an
+ * answer the source does not ask for: one call costs less than the second
+ * call laziness would need, and these are a handful of short patterns.
+ */
+function sentenceEndOf(style: CompiledSentenceEnd, msgid: string, text: string): { notEnding: boolean; answers: boolean; skipped: Finding[] } {
+  const ops: RegexOp[] = []
+  const labels = new Map<string, string>()
+  const add = (path: string, re: RegExp, against: string) => {
+    const id = `sentenceEnd:${path.replaceAll('.', ':')}\u0000${re.source}`
+    labels.set(id, `sentenceEnd.${path}`)
+    ops.push({ kind: 'exec', id, source: re.source, flags: re.flags, text: against })
+    return id
+  }
+  const notEnding = style.notEnding ? add('notEnding', style.notEnding, text) : undefined
+  const answers = style.answers.map((a, i) => ({
+    text: add(`answers.${i}.text`, a.text, text),
+    ...(a.source === undefined ? {} : { source: add(`answers.${i}.source`, a.source, msgid) }),
+  }))
+  if (ops.length === 0) return { notEnding: false, answers: false, skipped: [] }
+  const before = new Set(ops.filter((op) => skippedFor(op.id)).map((op) => op.id))
+  const results = new Map(runRegexOps(ops, (id) => labels.get(id) ?? id).map((r) => [r.id, r.match]))
+  const matched = (id: string) => typeof results.get(id) === 'string'
+  return {
+    notEnding: notEnding !== undefined && matched(notEnding),
+    answers: answers.some((a) => matched(a.text) && (a.source === undefined || matched(a.source))),
+    skipped: [...labels]
+      .filter(([id]) => !before.has(id) && skippedFor(id))
+      .map(([, label]) => ({
+        rule: CUSTOM_RULE,
+        severity: 'suspect' as const,
+        message: `locale rule skipped: ${label} took longer than ${PATTERN_BUDGET_MS} ms`,
+      })),
+  }
+}
+
 // The same concern as the rule above, at the end of a sentence rather than a
 // label: a full stop the source has and the translation drops, or the reverse.
 const sentenceEnd: Rule = (entry, ctx) => {
   const text = entry.msgstr.find(Boolean)
   if (!text) return []
-  const style = ctx.sentenceEnd
+  const style = ctx.sentenceEnd ? sentenceEndOf(ctx.sentenceEnd, entry.msgid, text) : undefined
   // The source is English, so only the translation is read in its own style.
   const source = endsSentence(entry.msgid)
-  const answers = (source: string, text: string) =>
-    style?.answers.some((a) => a.text.test(text) && (a.source === undefined || a.source.test(source))) === true
   // Where the source ends a sentence, the abbreviation's dot ends it too, as
   // English writes "at 9 a.m." without a second stop.
   const target =
-    style?.notEnding?.test(text) === true || (!source && DOTTED_ABBREVIATION.test(text))
+    style?.notEnding === true || (!source && DOTTED_ABBREVIATION.test(text))
       ? false
-      : endsSentence(text) || (source && answers(entry.msgid, text))
-  if (source === target) return []
-  if (source && style?.unmarked) return []
+      : endsSentence(text) || (source && style?.answers === true)
+  const skipped = style?.skipped ?? []
+  if (source === target) return skipped
+  if (source && ctx.sentenceEnd?.unmarked) return skipped
   return [
+    ...skipped,
     {
       rule: 'punctuation',
       severity: 'suspect',

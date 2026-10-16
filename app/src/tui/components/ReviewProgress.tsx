@@ -9,6 +9,7 @@ import { copyToClipboard } from '../clipboard.js'
 import { openInDefaultApp } from '../open-file.js'
 import { renderBar } from './Progress.js'
 import { estimateRemainingMs, formatDuration, formatFinishTime } from '../../cli/progress.js'
+import { skippedRuleText } from '../../cli/summaries.js'
 import { useElapsed } from '../hooks/useElapsed.js'
 import { useKeys } from '../hooks/useKeys.js'
 
@@ -386,6 +387,11 @@ export function ReviewProgress({ events, wporgUsername = '', templates = [], req
               Stopped early with {summary.pending} entries not reviewed. Run it again to carry on.
             </Text>
           )}
+          {(summary.skippedRules ?? []).map((label) => (
+            <Text key={label} color="yellow">
+              {skippedRuleText(label)}
+            </Text>
+          ))}
           {summary.repaired > 0 && (
             <Text color="green">
               {summary.repaired} repaired, {summary.written - summary.repaired} left for you.

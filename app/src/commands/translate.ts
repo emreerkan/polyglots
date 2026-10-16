@@ -40,6 +40,7 @@ import { loadPo, type ApplyResult, type PoFile } from '../po/po-file.js'
 import { reviewBatch } from '../review/draft-review.js'
 import { allGlossary, findMemory, openDb } from '../storage/index.js'
 import { normalizeLocale } from '../tmx/parse.js'
+import { takeSkipped } from '../rules/sandbox.js'
 import type {
   DraftEngine,
   Locale,
@@ -107,6 +108,9 @@ export interface TranslateSummary {
   // Entries a locale rule's fix pattern changed. Absent when none did, so a run
   // on a locale without fixes reports exactly what it always has.
   fixedByRules?: number
+  // Locale rules given up on because a regex ran past the sandbox's budget.
+  // Absent when none was.
+  skippedRules?: string[]
   stopped?: string
 }
 
@@ -443,6 +447,10 @@ async function reviewDrafts(
 
 export async function translateFile(opts: TranslateOptions): Promise<TranslateSummary> {
   const emit: Emit = opts.onProgress ?? (() => undefined)
+  // Whatever an earlier run in this process left unreported (a rules try in
+  // the TUI, say) is not this run's to name. A pattern skipped back then is
+  // named again below if this run asks for it.
+  takeSkipped()
   const batchSize = resolveBatchSize(opts.batchSize)
   const locale = normalizeLocale(opts.locale)
   const po = await loadPo(opts.file)
@@ -762,6 +770,10 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
   // Outside the try on purpose: by here the run's history is settled, and a
   // caller whose progress handler throws must not be able to rewrite it. A
   // failed notification is not a failed translation.
+  // Each runaway pattern once per run, however many entries it would have
+  // run on: the entry where it hung carries the finding, this the summary line.
+  const skippedRules = takeSkipped().map((s) => s.label)
+  if (skippedRules.length > 0) summary.skippedRules = skippedRules
   emit({ type: 'done', summary })
   return summary
 }

@@ -1,6 +1,7 @@
 import { Box, Text } from 'ink'
 import { useState } from 'react'
 import { estimateRemainingMs, formatDuration, formatFinishTime, renderBar as bar, type BatchPhase } from '../../cli/progress.js'
+import { skippedRuleText } from '../../cli/summaries.js'
 import { useElapsed } from '../hooks/useElapsed.js'
 import { openInDefaultApp } from '../open-file.js'
 import type {
@@ -248,6 +249,11 @@ export function Progress({ events }: { events: TranslateEvent[] }) {
           {state.summary.stopped && <Text color="red">Stopped: {state.summary.stopped}</Text>}
           <Text bold>{formatSummary(state.summary)}</Text>
           {state.summary.fixedByRules !== undefined && <Text>fixed by locale rules {state.summary.fixedByRules}</Text>}
+          {(state.summary.skippedRules ?? []).map((label) => (
+            <Text key={label} color="yellow">
+              {skippedRuleText(label)}
+            </Text>
+          ))}
           <Text>Open {state.summary.file} in your .po editor to review.</Text>
           <Text dimColor>o to open it</Text>
           {opened && <Text color="green">Opening it now.</Text>}

@@ -46,6 +46,17 @@ async function writeFileIn(name: string, text: string) {
 }
 
 describe('rules check --file', () => {
+  it('reports a regex that runs away on a test string as an error', async () => {
+    const file = await writeFileIn('bad.yaml', "schema: 1\npatterns:\n  - find: '^(a+)+$'\n    level: hint\n")
+    const { out, code } = await run(['rules', 'check', '--file', file, '--json'])
+    expect(code).toBe(1)
+    expect(JSON.parse(out)).toMatchObject({
+      valid: false,
+      line: 3,
+      error: 'patterns.0.find took longer than 100 ms on a test string (a regex that can run away)',
+    })
+  })
+
   it('checks a file by path with an empty home', async () => {
     const { out, code } = await run(['rules', 'check', '--file', fixture('tr_TR.yaml'), '--json'])
     expect(code).toBe(0)

@@ -387,6 +387,17 @@ describe('ReviewProgress', () => {
     expect(frame).toContain('10 repaired, 0 left for you')
     expect(frame).not.toMatch(/-\d+ left for you/)
   })
+
+  it('names a locale rule given up on as a runaway', () => {
+    const skippedEvents: ReviewEvent[] = [
+      { type: 'start', file: FILE, total: 10, reviewable: 10 },
+      { type: 'done', summary: { ...reviewSummaryOf(FILE, { approvable: 10 }), skippedRules: ['nested repetition'] } },
+    ]
+    expect(flat(render(<ReviewProgress events={skippedEvents} />).lastFrame())).toContain(
+      'locale rule skipped (took longer than 100 ms): nested repetition',
+    )
+    expect(flat(render(<ReviewProgress events={events} />).lastFrame())).not.toContain('locale rule skipped')
+  })
 })
 
 describe('batchSizeChoices', () => {

@@ -1,6 +1,7 @@
 import type { Finding, Locale } from '../types.js'
 import { intlTag } from '../wporg/locales.js'
 import { CUSTOM_RULE } from './names.js'
+import { PATTERN_BUDGET_MS, runRegexOps, skippedFor, type RegexOp } from './sandbox.js'
 import type { CustomPattern } from './schema.js'
 
 interface Text {
@@ -109,21 +110,18 @@ function message(p: CustomPattern, matched: string): string {
   return p.note ?? `matches "${matched}"`
 }
 
-/**
- * A regular expression's match on normalised text, for a finding.
- *
- * A literal already finds every encoding, but a regular expression cannot be
- * expanded letter by letter without parsing it, so for a finding both the
- * pattern and the translation are put in NFC and compared again. A finding
- * needs no position in the original, which is why this is enough here and
- * not for a fix: a fix written as a regular expression matches the
- * translation as typed, and the documentation says so. Tried after the raw
- * match, not instead of it, so a pattern that names a code point with an
- * escape such as \u095C still finds it where the contributor typed it.
- */
-function normalisedMatch(p: CustomPattern, form: string, locale: Locale): RegExpExecArray | null {
-  if (p.find === undefined) return null
-  return new RegExp(p.find.normalize('NFC'), `gu${p.ignoreCase ? 'i' : ''}`).exec(form.normalize('NFC'))
+// A pattern's id in the sandbox: its place in the file and its text, so two
+// patterns with the same text stay apart and a pattern skipped as a runaway is
+// the same one on every entry. The label is what the person reads.
+const patternId = (p: CustomPattern, index: number) => `${index}:${p.find ?? p.text}`
+const patternLabel = (p: CustomPattern) => p.note ?? p.find ?? p.text ?? ''
+
+function labelsOf(patterns: readonly CustomPattern[]): (id: string) => string {
+  return (id) => {
+    const index = Number(id.slice(0, id.indexOf(':')))
+    const p = patterns[index]
+    return p ? patternLabel(p) : id
+  }
 }
 
 /**
@@ -133,27 +131,54 @@ function normalisedMatch(p: CustomPattern, form: string, locale: Locale): RegExp
  * person's note, and the model decides in context. An error is proof, so the
  * entry is condemned through the ordinary path. Fix patterns are not reported
  * here; the repair step has already applied them.
+ *
+ * Every regex runs in the sandbox, in one call per entry. A regular expression
+ * is tried twice per form: as typed, and with both the pattern and the
+ * translation in NFC. A literal already finds every encoding, but a regular
+ * expression cannot be expanded letter by letter without parsing it, so for a
+ * finding both sides are normalised and compared again. A finding needs no
+ * position in the original, which is why this is enough here and not for a
+ * fix: a fix written as a regular expression matches the translation as typed,
+ * and the documentation says so. Tried after the raw match, not instead of it,
+ * so a pattern that names a code point with an escape such as \u095C still
+ * finds it where the contributor typed it.
+ *
+ * A pattern that runs past the budget on this entry is reported here, once, as
+ * a suspect: the person learns which entry it choked on, and the run summary
+ * names it once more. Every later entry runs without it.
  */
 export function customFindings(entry: Text, patterns: readonly CustomPattern[], locale: Locale): Finding[] {
+  const ops: RegexOp[] = []
+  const asked: { p: CustomPattern; id: string; wasSkipped: boolean }[] = []
+  const forms = entry.msgstr.filter(translated)
+  patterns.forEach((p, index) => {
+    if (p.level === 'fix' || !applies(p, entry.msgid, locale) || forms.length === 0) return
+    const id = patternId(p, index)
+    const re = regexOf(p, locale)
+    asked.push({ p, id, wasSkipped: skippedFor(id) })
+    for (const text of forms) {
+      ops.push({ kind: 'exec', id, source: re.source, flags: re.flags, text })
+      if (p.find !== undefined) ops.push({ kind: 'exec', id, source: p.find, flags: re.flags, text, normalise: true })
+    }
+  })
+  if (ops.length === 0) return []
+  const results = runRegexOps(ops, labelsOf(patterns))
   const findings: Finding[] = []
-  for (const p of patterns) {
-    if (p.level === 'fix' || !applies(p, entry.msgid, locale)) continue
-    for (const form of entry.msgstr.filter(translated)) {
-      const match = regexOf(p, locale).exec(form) ?? normalisedMatch(p, form, locale)
-      if (match) {
-        findings.push({ rule: CUSTOM_RULE, severity: p.level === 'error' ? 'error' : 'suspect', message: message(p, match[0]) })
-        break
-      }
+  for (const { p, id, wasSkipped } of asked) {
+    // Results come back in op order, so the first match is the first form's,
+    // raw before normalised, exactly as the in-thread loop found it.
+    const match = results.find((r) => r.id === id && typeof r.match === 'string')?.match
+    if (typeof match === 'string') {
+      findings.push({ rule: CUSTOM_RULE, severity: p.level === 'error' ? 'error' : 'suspect', message: message(p, match) })
+    } else if (!wasSkipped && skippedFor(id)) {
+      findings.push({
+        rule: CUSTOM_RULE,
+        severity: 'suspect',
+        message: `locale rule skipped: ${patternLabel(p)} took longer than ${PATTERN_BUDGET_MS} ms`,
+      })
     }
   }
   return findings
-}
-
-function capitaliseLike(matched: string, replacement: string, locale: Locale): string {
-  const first = [...matched][0]
-  if (!first || first === first.toLocaleLowerCase(intlTag(locale))) return replacement
-  const [head = '', ...rest] = [...replacement]
-  return head.toLocaleUpperCase(intlTag(locale)) + rest.join('')
 }
 
 /**
@@ -164,6 +189,11 @@ function capitaliseLike(matched: string, replacement: string, locale: Locale): s
  * becomes "Ön izleme" at the start of a label. A replacement that would leave
  * a form empty is not applied: that destroys a translation rather than
  * repairing it.
+ *
+ * One sandbox call per pattern, with every form in it: each fix applies to
+ * what the one before it left, so the patterns cannot share a call, and fix
+ * patterns are few. A pattern skipped as a runaway changes nothing; the run
+ * summary names it.
  */
 export function applyFixPatterns(
   entry: Text,
@@ -172,20 +202,36 @@ export function applyFixPatterns(
 ): { forms: string[]; notes: string[] } | undefined {
   let forms = entry.msgstr
   const notes: string[] = []
-  for (const p of patterns) {
-    if (p.level !== 'fix' || p.replace === undefined || !applies(p, entry.msgid, locale)) continue
+  const label = labelsOf(patterns)
+  patterns.forEach((p, index) => {
+    if (p.level !== 'fix' || p.replace === undefined || !applies(p, entry.msgid, locale)) return
+    const id = patternId(p, index)
+    const re = regexOf(p, locale)
+    const at = forms.flatMap((form, i) => (translated(form) ? [i] : []))
+    if (at.length === 0) return
+    const ops: RegexOp[] = at.map((i) => ({
+      kind: 'replace',
+      id,
+      source: re.source,
+      flags: re.flags,
+      text: forms[i]!,
+      replacement: p.replace!,
+      ...(p.text === undefined ? {} : { capitaliseTag: intlTag(locale) }),
+    }))
+    const results = runRegexOps(ops, label)
+    // All or nothing: a pattern that hung yields no result for any form.
+    if (results.length !== ops.length) return
     let changed = false
-    forms = forms.map((form) => {
-      if (!translated(form)) return form
-      const next =
-        p.text !== undefined
-          ? form.replace(regexOf(p, locale), (m) => capitaliseLike(m, p.replace!, locale))
-          : form.replace(regexOf(p, locale), p.replace!)
-      if (next === form || !translated(next)) return form
+    const next = [...forms]
+    at.forEach((i, k) => {
+      const text = results[k]!.text
+      if (text === undefined || text === forms[i] || !translated(text)) return
+      next[i] = text
       changed = true
-      return next
     })
-    if (changed) notes.push(p.note ?? `replaced ${p.text ?? p.find} with "${p.replace}"`)
-  }
+    if (!changed) return
+    forms = next
+    notes.push(p.note ?? `replaced ${p.text ?? p.find} with "${p.replace}"`)
+  })
   return notes.length > 0 ? { forms, notes } : undefined
 }

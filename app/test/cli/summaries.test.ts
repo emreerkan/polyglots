@@ -40,6 +40,13 @@ describe('translateSummary', () => {
     expect(translateSummary(plainPainter, base, false).join('\n')).not.toContain('locale rules')
   })
 
+  it('names each locale rule given up on as a runaway, one line each', () => {
+    const lines = translateSummary(plainPainter, { ...base, skippedRules: ['nested repetition', 'sentenceEnd.notEnding'] }, false)
+    expect(lines).toContain('! locale rule skipped (took longer than 100 ms): nested repetition')
+    expect(lines).toContain('! locale rule skipped (took longer than 100 ms): sentenceEnd.notEnding')
+    expect(translateSummary(plainPainter, base, false).join('\n')).not.toContain('skipped (took')
+  })
+
   it('reads the same with colour on, once the codes are stripped', () => {
     const painted = translateSummary(createPainter({ isTTY: true }, {}), base, false)
     expect(painted.join('\n')).toMatch(/\x1b\[/)
@@ -55,6 +62,13 @@ function reviewed(patch: Partial<ReviewSummary>, problemsFile: string | undefine
 }
 
 describe('reviewSummary', () => {
+  it('names each locale rule given up on as a runaway, under the box', () => {
+    const plain = reviewed({ reviewed: 3, problems: 0, needsReview: 1, approvable: 2, pending: 0 }, 'out/a-problems.po')
+    const lines = reviewSummary(plainPainter, { ...plain, skippedRules: ['nested repetition'] }, undefined)
+    expect(lines).toContain('! locale rule skipped (took longer than 100 ms): nested repetition')
+    expect(reviewSummary(plainPainter, plain, undefined).join('\n')).not.toContain('skipped (took')
+  })
+
   it('frames reviewed, flagged and approvable, flagged highlighted', () => {
     const s = reviewed({ reviewed: 120, skipped: 3, problems: 9, needsReview: 2, approvable: 109, pending: 0 }, 'out/a-problems.po')
     const lines = reviewSummary(plainPainter, s, undefined)

@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
 import { buildRuleContext, runRules } from '../../src/audit/rules/index.js'
+import { localeRulesFile } from '../../src/rules/load.js'
+import { resetSandbox, takeSkipped } from '../../src/rules/sandbox.js'
 import { useLocaleFixture } from '../locale-fixture.js'
 
 // How Greek, Tibetan, Dzongkha and Thai end a sentence used to be a table in
@@ -140,4 +144,30 @@ it('has no sentence style without a rules file', () => {
   const ctx = buildRuleContext({ locale: 'th', glossary: [], nplurals: 1, entries: [] })
   expect(runRules({ key: 'a', msgid: 'Saved.', msgstr: ['บันทึกแล้ว'], comments: [], references: [], fuzzy: false }, ctx)
     .some((f) => f.rule === 'punctuation')).toBe(true)
+})
+
+// sentenceEnd's regexes come from a file too, so they run in the sandbox like
+// every pattern: a runaway one is given up on after the budget, reported on
+// the entry where it hung, and every later entry is checked without it.
+describe('a runaway sentenceEnd regex', () => {
+  afterEach(() => resetSandbox())
+
+  it('is skipped after the budget and reported once', () => {
+    const path = localeRulesFile('th')
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, "schema: 2\nsentenceEnd:\n  notEnding: '^(a+)+$'\n")
+    resetSandbox()
+    const runaway = 'a'.repeat(30) + 'b'
+    const entry = (key: string) => ({ key, msgid: 'Saved', msgstr: [runaway], comments: [], references: [], fuzzy: false })
+    const ctx = buildRuleContext({ locale: 'th', glossary: [], nplurals: 1, entries: [] })
+    const t0 = Date.now()
+    const first = runRules(entry('a'), ctx)
+    const second = runRules(entry('b'), ctx)
+    expect(Date.now() - t0).toBeLessThan(2000)
+    expect(first.filter((f) => f.message.includes('locale rule skipped'))).toEqual([
+      { rule: 'custom', severity: 'suspect', message: 'locale rule skipped: sentenceEnd.notEnding took longer than 100 ms' },
+    ])
+    expect(second.some((f) => f.message.includes('locale rule skipped'))).toBe(false)
+    expect(takeSkipped().map((s) => s.label)).toEqual(['sentenceEnd.notEnding'])
+  })
 })

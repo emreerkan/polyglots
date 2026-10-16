@@ -92,7 +92,7 @@ export function rulesReport(path: string): RulesReport {
     return { valid: false, path, error: code === 'ENOENT' ? NO_SUCH_FILE : (error as Error).message }
   }
   try {
-    return summariseRules(parseLocaleRules(text, path), path)
+    return summariseRules(parseLocaleRules(text, path, { probe: true }), path)
   } catch (error) {
     if (!(error instanceof RulesFileError)) throw error
     return {

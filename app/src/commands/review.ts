@@ -38,6 +38,7 @@ import { languageOf } from '../wporg/locales.js'
 import { tmKey } from '../audit/rules/index.js'
 import { FIX_SUSPECT_RULE } from '../audit/repair.js'
 import { allGlossary, findMemory, openDb } from '../storage/index.js'
+import { takeSkipped } from '../rules/sandbox.js'
 import type {
   AuditEntry,
   Locale,
@@ -290,6 +291,10 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
   const all = po.auditEntries()
   const reviewable = all.filter(submitted)
   const emit = opts.onProgress ?? (() => {})
+  // Whatever an earlier run in this process left unreported (a rules try in
+  // the TUI, say) is not this run's to name. A pattern skipped back then is
+  // named again below if this run asks for it.
+  takeSkipped()
 
   const target = outputPath(opts.file, { ...(opts.outDir === undefined ? {} : { outDir: opts.outDir }), noAi })
   const properNouns = opts.properNouns ?? configuredProperNouns(opts.locale)
@@ -564,6 +569,10 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
   // Outside the try on purpose: by here the run's history is settled, and a
   // caller whose progress handler throws must not be able to rewrite it. A
   // failed notification is not a failed review.
+  // Each runaway pattern once per run, however many entries it would have
+  // run on: the entry where it hung carries the finding, this the summary line.
+  const skippedRules = takeSkipped().map((s) => s.label)
+  if (skippedRules.length > 0) summary.skippedRules = skippedRules
   emit({ type: 'done', summary })
   return summary
 }

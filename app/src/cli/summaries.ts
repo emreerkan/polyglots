@@ -6,6 +6,16 @@ import { box, displayWidth, padTo, sparkline, table } from '../ui/layout.js'
 import { hintLine, nextLine } from '../ui/messages.js'
 import type { Painter } from '../ui/paint.js'
 import { replyCaution } from '../reply/templates.js'
+import { PATTERN_BUDGET_MS } from '../rules/sandbox.js'
+
+// A locale rule the sandbox gave up on, one line per rule and outside the
+// box: it is not a count but something to fix in the rules file, and the
+// entry where it hung carries the same words in the output file.
+export function skippedRuleLines(p: Painter, labels: readonly string[] | undefined): string[] {
+  return (labels ?? []).map((label) => `${p.paint('warn', p.glyphs.warn)} ${skippedRuleText(label)}`)
+}
+
+export const skippedRuleText = (label: string) => `locale rule skipped (took longer than ${PATTERN_BUDGET_MS} ms): ${label}`
 
 // Each command's closing block, as pure functions of a painter and a summary.
 // Kept out of cli.ts so they can be tested with colour forced on and off
@@ -38,7 +48,7 @@ export function translateSummary(p: Painter, s: TranslateSummary, dryRun: boolea
     dryRun ? 'Nothing was written.'
     : s.stopped ? 'Re-run the same command to resume.'
     : `Open ${p.paint('path', s.file)} in your .po editor to review.`
-  return [...box(p, title, rows), nextLine(p, next)]
+  return [...box(p, title, rows), ...skippedRuleLines(p, s.skippedRules), nextLine(p, next)]
 }
 
 export interface ReviewSummaryOptions {
@@ -78,7 +88,7 @@ export function reviewSummary(
   // written - repaired, not flagged - repaired: a whitespace-only fix is neither
   // a problem nor a needsReview entry, so flagged - repaired can go negative.
   if (s.repaired > 0) rows.push(['repaired', String(s.repaired), p.paint('muted', `${s.written - s.repaired} left for you`)])
-  const out = box(p, title, table(rows, { align: ['left', 'right', 'left'] }))
+  const out = [...box(p, title, table(rows, { align: ['left', 'right', 'left'] })), ...skippedRuleLines(p, s.skippedRules)]
   // The reply instead of the message, not under it: the reply already holds
   // the message, and printing both put the same sentence on screen twice.
   if (opts.reply) {

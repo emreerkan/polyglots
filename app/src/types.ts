@@ -138,6 +138,9 @@ export interface ReviewSummary {
   // per group can exceed the number of entries actually fixed.
   byGroup: Record<string, number>
   problemsFile?: string
+  // Locale rules given up on because a regex ran past the sandbox's budget, by
+  // note or text. Absent when none was, so every other summary reads as before.
+  skippedRules?: string[]
 }
 
 /**

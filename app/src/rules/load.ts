@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { LineCounter, parseDocument } from 'yaml'
 import { configDir } from '../paths.js'
 import type { Locale } from '../types.js'
+import { PATTERN_BUDGET_MS, runRegexOps, skippedFor, type RegexOp } from './sandbox.js'
 import { localeRulesSchema, MAX_SCHEMA, normalise, type LocaleRules } from './schema.js'
 
 export class RulesFileError extends Error {
@@ -39,8 +40,14 @@ export function localeRulesFile(locale: Locale): string {
  * placed on the line of the value it is about, when the document can resolve
  * that path, so "patterns.2.find is not a valid regular expression" points at
  * the line to fix rather than leaving the person to count list items.
+ *
+ * With `probe`, every regex the file carries is also run once over PROBES in
+ * the sandbox, and one that runs past the budget is an error on its line.
+ * Only rules check asks, and so rules fetch: a review already survives a
+ * runaway pattern, and loading a file for one should not cost a second of
+ * probing every time.
  */
-export function parseLocaleRules(text: string, path: string): LocaleRules {
+export function parseLocaleRules(text: string, path: string, opts: { probe?: boolean } = {}): LocaleRules {
   const lines = new LineCounter()
   const doc = parseDocument(text, { lineCounter: lines, prettyErrors: false })
   const syntax = doc.errors[0]
@@ -73,7 +80,53 @@ export function parseLocaleRules(text: string, path: string): LocaleRules {
     const line = range ? lines.linePos(range[0]).line : undefined
     throw new RulesFileError(path, `${dotted ? `${dotted} ` : ''}${issue.message}`, line)
   }
-  return normalise(parsed.data)
+  const rules = normalise(parsed.data)
+  if (opts.probe) {
+    const runaway = probe(rules)
+    if (runaway) {
+      const range = (doc.getIn(runaway, true) as { range?: [number, number, number] } | undefined)?.range
+      throw new RulesFileError(
+        path,
+        `${runaway.join('.')} took longer than ${PATTERN_BUDGET_MS} ms on a test string (a regex that can run away)`,
+        range ? lines.linePos(range[0]).line : undefined,
+      )
+    }
+  }
+  return rules
+}
+
+/**
+ * Strings that make a runaway regex run away: long runs of one character,
+ * the same run ending in a character that breaks the match (the bait for
+ * nested repetition), long whitespace, a long alternation of two letters, and
+ * a long run of a letter whose case mapping is not one to one. A second line
+ * behind polyglots-data's own check, for the files people write themselves.
+ *
+ * Literal patterns are not probed: they compile to a sequence of fixed
+ * alternatives, which cannot backtrack without bound, and expanding them
+ * needs the locale, which a file read by path does not have.
+ */
+export const PROBES = ['a'.repeat(30_000), 'a'.repeat(28) + '!', ' '.repeat(10_000) + 'x', 'ab'.repeat(5_000) + '\n', 'İ'.repeat(5_000)]
+
+// The path in the file of the first regex that ran past the budget, or
+// undefined when none did. Flags as the rules themselves compile them.
+function probe(rules: LocaleRules): (string | number)[] | undefined {
+  const regexes: { at: (string | number)[]; source: string; flags: string }[] = []
+  rules.patterns.forEach((p, i) => {
+    if (p.find !== undefined) regexes.push({ at: ['patterns', i, 'find'], source: p.find, flags: `gu${p.ignoreCase ? 'i' : ''}` })
+  })
+  const end = rules.sentenceEnd
+  end?.answers?.forEach((a, i) => {
+    regexes.push({ at: ['sentenceEnd', 'answers', i, 'text'], source: a.text, flags: 'u' })
+    if (a.source !== undefined) regexes.push({ at: ['sentenceEnd', 'answers', i, 'source'], source: a.source, flags: 'u' })
+  })
+  if (end?.notEnding !== undefined) regexes.push({ at: ['sentenceEnd', 'notEnding'], source: end.notEnding, flags: 'u' })
+  // Keyed by the regex itself, so probing the same file twice in a TUI
+  // session finds the runaway it found the first time without running it.
+  const idOf = (r: (typeof regexes)[number]) => `probe:${r.flags}\u0000${r.source}`
+  const ops: RegexOp[] = regexes.flatMap((r) => PROBES.map((text) => ({ kind: 'exec' as const, id: idOf(r), source: r.source, flags: r.flags, text })))
+  if (ops.length > 0) runRegexOps(ops)
+  return regexes.find((r) => skippedFor(idOf(r)))?.at
 }
 
 // Keyed by path and modification time, so a file edited between two runs of

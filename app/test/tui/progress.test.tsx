@@ -174,6 +174,19 @@ describe('Progress', () => {
     expect(plain.lastFrame()).not.toContain('locale rules')
   })
 
+  it('names a locale rule given up on as a runaway', async () => {
+    const skipped: TranslateEvent[] = [
+      { type: 'start', file: FILE, total: 10, pending: 4 },
+      { type: 'done', summary: { file: FILE, total: 10, pending: 4, fromTm: 0, translated: 4, fuzzy: 0, skipped: 0, skippedRules: ['nested repetition'] } },
+    ]
+    const { lastFrame } = render(<Progress events={skipped} />)
+    await tick()
+    expect(flat(lastFrame())).toContain('locale rule skipped (took longer than 100 ms): nested repetition')
+    const plain = render(<Progress events={events} />)
+    await tick()
+    expect(plain.lastFrame()).not.toContain('locale rule skipped')
+  })
+
   it('renders a waiting line before the start event', async () => {
     const { lastFrame } = render(<Progress events={[]} />)
     await tick()
