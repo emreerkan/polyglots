@@ -98,8 +98,12 @@ function regexOf(p: CustomPattern, locale: Locale): RegExp {
   return p.text !== undefined ? literalRegex(p.text, locale) : new RegExp(p.find!, `gu${p.ignoreCase ? 'i' : ''}`)
 }
 
-const applies = (p: CustomPattern, source: string, locale: Locale) =>
-  p.whenSource === undefined || source.toLocaleLowerCase(intlTag(locale)).includes(p.whenSource.toLocaleLowerCase(intlTag(locale)))
+function applies(p: CustomPattern, source: string, locale: Locale): boolean {
+  if (p.whenSource === undefined && p.whenNotSource === undefined) return true
+  const tag = intlTag(locale)
+  const has = (text: string) => source.toLocaleLowerCase(tag).includes(text.toLocaleLowerCase(tag))
+  return (p.whenSource === undefined || has(p.whenSource)) && (p.whenNotSource === undefined || !has(p.whenNotSource))
+}
 
 const translated = (form: string) => form.trim() !== ''
 

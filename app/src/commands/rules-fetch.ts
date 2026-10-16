@@ -116,11 +116,21 @@ const PROMPT_TEXT = [
   ['register.translate', (r: LocaleRules) => r.register?.translate],
 ] as const
 
-const fixLine = (p: CustomPattern) => `${p.find ?? p.text} → ${p.replace ?? ''}${p.whenSource === undefined ? '' : ` (when the source has ${p.whenSource})`}`
+const fixCondition = (p: CustomPattern) =>
+  [
+    ...(p.whenSource === undefined ? [] : [`has ${p.whenSource}`]),
+    ...(p.whenNotSource === undefined ? [] : [`lacks ${p.whenNotSource}`]),
+  ].join(' and ')
+
+const fixLine = (p: CustomPattern) => {
+  const condition = fixCondition(p)
+  return `${p.find ?? p.text} → ${p.replace ?? ''}${condition === '' ? '' : ` (when the source ${condition})`}`
+}
 
 // Everything that decides what a fix does, so a change in any of it shows,
 // as the old fix removed and the new one added.
-const fixKey = (p: CustomPattern) => JSON.stringify([p.find ?? null, p.text ?? null, p.replace ?? null, p.ignoreCase, p.whenSource ?? null])
+const fixKey = (p: CustomPattern) =>
+  JSON.stringify([p.find ?? null, p.text ?? null, p.replace ?? null, p.ignoreCase, p.whenSource ?? null, p.whenNotSource ?? null])
 
 /**
  * What `after` changes against `before` (or against nothing), as lines for a

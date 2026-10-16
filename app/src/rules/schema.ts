@@ -40,7 +40,10 @@ export interface CustomPattern {
   // The suggested wording of a common mistake, shown in its finding.
   right?: string
   level: PatternLevel
+  // Both are plain text matched with a locale-aware includes, never a regex,
+  // so neither needs the sandbox. When both are set, both must hold.
   whenSource?: string
+  whenNotSource?: string
   note?: string
 }
 
@@ -112,7 +115,15 @@ const pattern = z
     ignoreCase: z.boolean().optional(),
     replace: z.string().optional(),
     level: z.enum(['hint', 'error', 'fix']).optional(),
-    when: z.object({ source: z.string().min(1) }).strict().optional(),
+    // notSource exists for the wording that is right unless the English
+    // says otherwise: es "blog" is "sitio", except where the source itself
+    // says blog. Without it the only way to say that was a regex lookahead
+    // over the target, which cannot see the source at all.
+    when: z
+      .object({ source: z.string().min(1).optional(), notSource: z.string().min(1).optional() })
+      .strict()
+      .refine((w) => w.source !== undefined || w.notSource !== undefined, { message: 'needs source or notSource' })
+      .optional(),
     note: z.string().optional(),
   })
   .strict()
@@ -166,6 +177,13 @@ export const localeRulesSchema = z
     for (const key of SCHEMA_2_KEYS) {
       if (raw[key] !== undefined) ctx.addIssue({ code: 'custom', path: [key], message: 'needs schema: 2 at the top of the file' })
     }
+    // Not a top-level key, so not in SCHEMA_2_KEYS, but the same reasoning:
+    // an older polyglots refuses it as an unknown key inside when.
+    raw.patterns.forEach((p, i) => {
+      if (p.when?.notSource !== undefined) {
+        ctx.addIssue({ code: 'custom', path: ['patterns', i, 'when', 'notSource'], message: 'needs schema: 2 at the top of the file' })
+      }
+    })
   })
 
 export type RawLocaleRules = z.infer<typeof localeRulesSchema>
@@ -192,7 +210,8 @@ export function normalise(raw: RawLocaleRules): LocaleRules {
       level: p.level ?? 'hint',
       // A literal is always matched case-insensitively; only a regex opts in.
       ignoreCase: p.text !== undefined ? true : (p.ignoreCase ?? false),
-      ...(p.when === undefined ? {} : { whenSource: p.when.source }),
+      ...(p.when?.source === undefined ? {} : { whenSource: p.when.source }),
+      ...(p.when?.notSource === undefined ? {} : { whenNotSource: p.when.notSource }),
       ...(p.note === undefined ? {} : { note: p.note }),
     })),
   ]

@@ -351,6 +351,37 @@ describe('LocaleRules: patterns', () => {
   })
 })
 
+describe('LocaleRules: when the source lacks a text', () => {
+  // The form once had a field for source only, so editing a pattern rebuilt
+  // its when from that field and dropped notSource without a word.
+  it('shows notSource and keeps it through an edit', async () => {
+    const file = localeRulesFile('tr')
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, 'schema: 2\npatterns:\n  - text: blog\n    when: { notSource: blog }\n', 'utf8')
+    const view = mount()
+    await openLocale(view)
+    await select(view, /Patterns/)
+    await waitForText(view.lastFrame, /when the source lacks "blog"/)
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /When source lacks:/)
+    for (let i = 0; i < 7; i++) {
+      view.stdin.write(keys.tab)
+      await tick()
+    }
+    await typeInto(view, 'sitio')
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /sitio/)
+    view.stdin.write(keys.esc)
+    await tick(ESC_DELAY)
+    view.stdin.write('s')
+    await waitForText(view.lastFrame, /Saved/)
+    const saved = loadLocaleRules('tr')!.patterns[0]!
+    expect(saved).toMatchObject({ text: 'blog', whenNotSource: 'blog' })
+    expect(saved.note).toContain('sitio')
+    expect(saved).not.toHaveProperty('whenSource')
+  })
+})
+
 describe('LocaleRules: trying the rules', () => {
   it('shows what fires on a sample under the unsaved rules', async () => {
     const view = mount()

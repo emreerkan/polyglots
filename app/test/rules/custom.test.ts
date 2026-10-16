@@ -45,6 +45,28 @@ describe('customFindings', () => {
     expect(customFindings(entry('Edit post', 'Yazıyı düzenle'), [p], 'tr')).toHaveLength(0)
   })
 
+  // es: "blog" is "sitio", unless the English itself says blog.
+  it('notSource: fires only when the source lacks the text', () => {
+    const p: CustomPattern = { kind: 'pattern', text: 'blog', level: 'hint', ignoreCase: true, whenNotSource: 'blog' }
+    expect(customFindings(entry('Visit the site', 'Visita el blog'), [p], 'es')).toHaveLength(1)
+    expect(customFindings(entry('Import a blog', 'Importa un blog'), [p], 'es')).toHaveLength(0)
+  })
+
+  it('source and notSource together must both hold', () => {
+    const p: CustomPattern = { kind: 'pattern', text: 'blog', level: 'hint', ignoreCase: true, whenSource: 'site', whenNotSource: 'blog' }
+    expect(customFindings(entry('Visit the site', 'Visita el blog'), [p], 'es')).toHaveLength(1)
+    expect(customFindings(entry('Visit the site blog', 'Visita el blog'), [p], 'es')).toHaveLength(0)
+    expect(customFindings(entry('Visit the page', 'Visita el blog'), [p], 'es')).toHaveLength(0)
+  })
+
+  // Lowercased in the locale, like source: in Turkish İŞ is iş, and in
+  // English it is i plus a combining dot, which does not contain iş.
+  it('notSource matches case-insensitively in the locale, like source', () => {
+    const p: CustomPattern = { kind: 'pattern', text: 'görev', level: 'hint', ignoreCase: true, whenNotSource: 'iş' }
+    expect(customFindings(entry('İŞ LIST', 'görev listesi'), [p], 'tr')).toHaveLength(0)
+    expect(customFindings(entry('İŞ LIST', 'görev listesi'), [p], 'en')).toHaveLength(1)
+  })
+
   it('runs a regular expression, case-sensitive unless asked', () => {
     const p: CustomPattern = { kind: 'pattern', find: '\\b(\\d+) %', level: 'hint', ignoreCase: false, note: 'no space before %' }
     expect(customFindings(entry('%d%%', '%d %'), [{ ...p, find: '%d %' }], 'tr')).toHaveLength(1)
@@ -154,6 +176,12 @@ describe('applyFixPatterns', () => {
     const wipe: CustomPattern = { kind: 'pattern', find: '.+', replace: '', level: 'fix', ignoreCase: false }
     expect(applyFixPatterns(entry('Hi', 'Merhaba'), [wipe], 'tr')).toBeUndefined()
     expect(applyFixPatterns(entry('Hi', '  '), [ellipsis], 'tr')).toBeUndefined()
+  })
+
+  it('respects notSource', () => {
+    const p: CustomPattern = { kind: 'pattern', text: 'blog', replace: 'sitio', level: 'fix', ignoreCase: true, whenNotSource: 'blog' }
+    expect(applyFixPatterns(entry('Import a blog', 'blog'), [p], 'es')).toBeUndefined()
+    expect(applyFixPatterns(entry('Visit the site', 'blog'), [p], 'es')).toBeDefined()
   })
 
   it('respects the source condition', () => {

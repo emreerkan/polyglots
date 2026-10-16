@@ -30,7 +30,8 @@ mistakes: []
 
 # Patterns: "text" (a literal) or "find" (a regular expression).
 # level: hint (the AI judges), error (always wrong, the AI must fix) or fix (replaced automatically).
-# "when: { source: ... }" applies a pattern only when the English source contains that text.
+# "when: { source: ... }" applies a pattern only when the English source contains that text,
+# and "when: { notSource: ... }" only when it does not.
 patterns: []
 #  - find: ' {2,}'
 #    replace: ' '

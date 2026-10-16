@@ -63,3 +63,33 @@ describe('schema 2 keys', () => {
     expect(rulesFingerprint(parse('schema: 2\nformality: formal'))).not.toBe('')
   })
 })
+
+describe('when', () => {
+  it('reads notSource into whenNotSource', () => {
+    const r = parse('schema: 2\npatterns:\n  - text: blog\n    when: { notSource: blog }\n')
+    expect(r.patterns[0]).toMatchObject({ text: 'blog', whenNotSource: 'blog' })
+    expect(r.patterns[0]).not.toHaveProperty('whenSource')
+  })
+  it('reads source and notSource together', () => {
+    const r = parse('schema: 2\npatterns:\n  - text: x\n    when: { source: a, notSource: b }\n')
+    expect(r.patterns[0]).toMatchObject({ whenSource: 'a', whenNotSource: 'b' })
+  })
+  it('rejects an empty when', () => {
+    expect(error('schema: 2\npatterns:\n  - text: x\n    when: {}\n').message).toContain('needs source or notSource')
+  })
+  it('rejects an empty notSource and an unknown key', () => {
+    expect(() => parse("schema: 2\npatterns:\n  - text: x\n    when: { notSource: '' }\n")).toThrow(RulesFileError)
+    expect(() => parse('schema: 2\npatterns:\n  - text: x\n    when: { lacks: y }\n')).toThrow(RulesFileError)
+  })
+  // An older polyglots refuses notSource as an unknown key, so a file that
+  // uses it must say so, as with the other schema 2 keys.
+  it('needs schema: 2 for notSource, not for source', () => {
+    expect(error('patterns:\n  - text: x\n    when: { notSource: y }\n').message).toContain('needs schema: 2 at the top of the file')
+    expect(parse('patterns:\n  - text: x\n    when: { source: y }\n').patterns[0]?.whenSource).toBe('y')
+  })
+  it('fingerprints notSource', () => {
+    const a = parse('schema: 2\npatterns:\n  - text: x\n    when: { notSource: y }\n')
+    const b = parse('schema: 2\npatterns:\n  - text: x\n    when: { notSource: z }\n')
+    expect(rulesFingerprint(a)).not.toBe(rulesFingerprint(b))
+  })
+})

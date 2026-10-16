@@ -234,6 +234,15 @@ describe('diffRules', () => {
     ])
   })
 
+  it('shows a fix whose notSource changed, and names the condition', () => {
+    const before = parse('schema: 2\npatterns:\n  - text: a\n    replace: b\n    level: fix\n    when: { notSource: x }\n')
+    const after = parse('schema: 2\npatterns:\n  - text: a\n    replace: b\n    level: fix\n    when: { notSource: y }\n')
+    expect(diffRules(before, after).slice(0, 2)).toEqual([
+      'fix removed: a → b (when the source lacks x)',
+      'fix added: a → b (when the source lacks y)',
+    ])
+  })
+
   it('shows a changed fix as the old one removed and the new one added', () => {
     const before = parse('patterns:\n  - text: a\n    replace: b\n    level: fix\n')
     const after = parse('patterns:\n  - text: a\n    replace: c\n    level: fix\n')

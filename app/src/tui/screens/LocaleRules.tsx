@@ -48,7 +48,8 @@ const compiles = (source: string) => {
 const describePattern = (p: Pattern) =>
   `${p.text !== undefined ? `"${p.text}"` : `/${p.find}/`}  ${p.level ?? 'hint'}` +
   `${p.replace !== undefined ? ` → ${p.replace}` : ''}` +
-  `${p.when ? `  when the source has "${p.when.source}"` : ''}${p.note ? `  (${p.note})` : ''}`
+  `${p.when?.source !== undefined ? `  when the source has "${p.when.source}"` : ''}` +
+  `${p.when?.notSource !== undefined ? `  when the source lacks "${p.when.notSource}"` : ''}${p.note ? `  (${p.note})` : ''}`
 
 const PATTERN_FIELDS = [
   {
@@ -75,6 +76,7 @@ const PATTERN_FIELDS = [
           : undefined,
   },
   { key: 'when', label: 'When source contains' },
+  { key: 'notSource', label: 'When source lacks' },
   { key: 'note', label: 'Note' },
 ]
 
@@ -85,6 +87,7 @@ const patternToForm = (p: Pattern): Record<string, string> => ({
   replace: p.replace ?? '',
   level: p.level ?? '',
   when: p.when?.source ?? '',
+  notSource: p.when?.notSource ?? '',
   note: p.note ?? '',
 })
 
@@ -96,7 +99,14 @@ const patternFromForm = (v: Record<string, string>): Pattern => {
     ...(/^y$/i.test((v.ignoreCase ?? '').trim()) ? { ignoreCase: true } : {}),
     ...((v.replace ?? '') !== '' ? { replace: v.replace! } : {}),
     ...(has('level') ? { level: v.level!.trim() as 'hint' | 'error' | 'fix' } : {}),
-    ...(has('when') ? { when: { source: v.when!.trim() } } : {}),
+    ...(has('when') || has('notSource')
+      ? {
+          when: {
+            ...(has('when') ? { source: v.when!.trim() } : {}),
+            ...(has('notSource') ? { notSource: v.notSource!.trim() } : {}),
+          },
+        }
+      : {}),
     ...(has('note') ? { note: v.note!.trim() } : {}),
   }
 }

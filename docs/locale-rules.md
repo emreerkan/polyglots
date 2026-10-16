@@ -125,8 +125,20 @@ Every section is optional.
 - **`patterns`** match a literal `text` or a regular expression `find`. The
   `level` decides what a match means: `hint` (the reviewer judges it), `error`
   (always wrong, and the reviewer must fix it) or `fix` (replaced
-  automatically with `replace`). `when: { source: ... }` applies a pattern
-  only when the English source contains that text.
+  automatically with `replace`). `when` limits a pattern by the English
+  source: with `source`, it runs only when the source contains that text;
+  with `notSource`, only when the source does not. With both, both must hold.
+  Both are plain text, not regular expressions, matched without regard to
+  case. `notSource` needs `schema: 2`. In Spanish, "blog" is usually "sitio",
+  unless the English says blog:
+
+  ```yaml
+  schema: 2
+  patterns:
+    - text: blog
+      when: { notSource: blog }
+      note: Use "sitio" unless the source says blog.
+  ```
 
   A letter can be stored in two ways that look the same, such as Hindi ड़ as
   one character or as ड with a dot below. `mistakes` and `text` patterns find
