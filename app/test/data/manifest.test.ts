@@ -6,6 +6,8 @@ import {
   DataError,
   DEFAULT_MANIFEST_URL,
   findEntry,
+  findRulesEntry,
+  findTmEntry,
   manifestUrl,
   parseManifest,
 } from '../../src/data/manifest.js'
@@ -36,32 +38,82 @@ describe('parseManifest', () => {
     expect(() => parseManifest({ schema: 3, entries: {} })).toThrow('is schema 3')
   })
 
-  it('refuses a bad shape as a DataError naming the field', () => {
-    expect(() => parseManifest({ schema: 1, generated: '', tm: [{ slug: 'tr' }], rules: [] })).toThrow(DataError)
-    expect(() => parseManifest({ schema: 1, generated: '', tm: [{ slug: 'tr' }], rules: [] })).toThrow(/tm\.0\./)
+  it('refuses a bad top level as a DataError naming the field', () => {
+    expect(() => parseManifest({ schema: 1, generated: '', tm: {}, rules: [] })).toThrow(DataError)
+    expect(() => parseManifest({ schema: 1, generated: '', tm: {}, rules: [] })).toThrow(/tm: /)
     expect(() => parseManifest('nope')).toThrow(DataError)
   })
 
-  it('refuses a minPolyglots that is not x.y.z', () => {
-    expect(() => parseManifest({ schema: 1, generated: '', tm: [], rules: [{ ...rulesEntry, minPolyglots: 'soon' }] })).toThrow(
-      /minPolyglots/,
-    )
+  // One locale's entry is the producer's mistake for that locale only: a
+  // shipped client cannot be patched, so a bad neighbour must not take every
+  // other locale's fetch down with it. Entries are judged when one is chosen.
+  it('reads a manifest whose entries for other locales are malformed', () => {
+    const m = parseManifest({
+      schema: 1,
+      generated: '',
+      tm: [{ slug: 'de', locale: 'de_DE', sha512: 'short' }],
+      rules: [{ ...rulesEntry, slug: 'de', locale: 'de_DE', status: 'retired', minPolyglots: 'soon' }, rulesEntry],
+    })
+    expect(findRulesEntry(m, 'tr')).toEqual(rulesEntry)
   })
 
   it('reads the real fixture manifest', async () => {
     const m = parseManifest(JSON.parse(await readFile(fixture('data/index.json'), 'utf8')))
     expect(m.tm[0]).toMatchObject({ locale: 'tr_TR', slug: 'tr', units: 1002 })
+    expect(m.generated).toMatch(/^\d{4}-/)
   })
 
   // The long-text projects carry a kind the tm fetch summary reports.
   it('keeps a project kind and a stale date', async () => {
     const m = parseManifest(JSON.parse(await readFile(fixture('data/index.json'), 'utf8')))
-    expect(m.tm[0]!.projects).toContainEqual({ path: 'wp-plugins/debug-bar/dev-readme', units: 62, kind: 'long-text' })
-    expect(m.tm[0]!.projects).toContainEqual({ path: 'wp-plugins/debug-bar/dev', units: 84, stale: '2026-10-09T03:00:00Z' })
+    const tm = findTmEntry(m, 'tr')
+    expect(tm.projects).toContainEqual({ path: 'wp-plugins/debug-bar/dev-readme', units: 62, kind: 'long-text' })
+    expect(tm.projects).toContainEqual({ path: 'wp-plugins/debug-bar/dev', units: 84, stale: '2026-10-09T03:00:00Z' })
   })
 
   it('reads a rules entry', () => {
-    expect(parseManifest({ schema: 1, generated: '', tm: [], rules: [rulesEntry] }).rules).toEqual([rulesEntry])
+    expect(findRulesEntry(parseManifest({ schema: 1, generated: '', tm: [], rules: [rulesEntry] }), 'tr')).toEqual(rulesEntry)
+  })
+})
+
+describe('findRulesEntry and findTmEntry', () => {
+  const manifest = (rules: unknown[], tm: unknown[] = []) => parseManifest({ schema: 1, generated: '', tm, rules })
+
+  it('refuses a malformed requested entry, naming the locale and the field', () => {
+    expect(() => findRulesEntry(manifest([{ ...rulesEntry, sha512: 'short' }]), 'tr')).toThrow(DataError)
+    expect(() => findRulesEntry(manifest([{ ...rulesEntry, sha512: 'short' }]), 'tr')).toThrow(
+      /polyglots-data rules entry for tr is not valid: sha512/,
+    )
+    expect(() => findTmEntry(manifest([], [{ slug: 'tr', locale: 'tr_TR' }]), 'tr')).toThrow(/tm entry for tr is not valid: url/)
+  })
+
+  it('refuses a status this client does not know for the requested entry', () => {
+    expect(() => findRulesEntry(manifest([{ ...rulesEntry, status: 'retired' }]), 'tr')).toThrow(/status/)
+  })
+
+  it('refuses a minPolyglots that is not a version', () => {
+    expect(() => findRulesEntry(manifest([{ ...rulesEntry, minPolyglots: 'soon' }]), 'tr')).toThrow(/minPolyglots/)
+  })
+
+  // The contract says semver, so a prerelease is a version, and refusing it
+  // as malformed would say "not valid" where "update polyglots" is the truth.
+  it('accepts a prerelease minPolyglots', () => {
+    expect(findRulesEntry(manifest([{ ...rulesEntry, minPolyglots: '1.1.0-rc.1' }]), 'tr').minPolyglots).toBe('1.1.0-rc.1')
+  })
+
+  it('still names the locales that have an entry, skipping rows with no slug', () => {
+    expect(() => findRulesEntry(manifest([{ ...rulesEntry, slug: 'de', locale: 'de_DE' }, { locale: 'x' }, 7]), 'tr')).toThrow(
+      'No polyglots-data entry for tr. Available: de',
+    )
+  })
+
+  it('still cross-checks the WP code against the registry', () => {
+    expect(() => findRulesEntry(manifest([{ ...rulesEntry, slug: 'az' }]), 'az')).toThrow(/tr_TR.*az/)
+  })
+
+  it('reads the tm entry of the real fixture manifest', async () => {
+    const m = parseManifest(JSON.parse(await readFile(fixture('data/index.json'), 'utf8')))
+    expect(findTmEntry(m, 'tr')).toMatchObject({ locale: 'tr_TR', slug: 'tr', units: 1002 })
   })
 })
 
@@ -100,6 +152,16 @@ describe('compareVersions', () => {
     expect(compareVersions('0.10.0', '0.9.9')).toBeGreaterThan(0)
     expect(compareVersions('0.34.0', '0.34.0')).toBe(0)
     expect(compareVersions('0.34.0', '1.0.0')).toBeLessThan(0)
+  })
+
+  // A prerelease sorts below its release, so 1.0.0 satisfies 1.0.0-rc.1 and
+  // 1.0.0-rc.1 does not satisfy 1.0.0. NaN here once let every check pass.
+  it('places a prerelease below its release', () => {
+    expect(compareVersions('1.0.0', '1.0.0-rc.1')).toBeGreaterThan(0)
+    expect(compareVersions('1.0.0-rc.1', '1.0.0')).toBeLessThan(0)
+    expect(compareVersions('1.0.0-rc.2', '1.0.0-rc.10')).toBeLessThan(0)
+    expect(compareVersions('1.1.0-rc.1', '1.0.0')).toBeGreaterThan(0)
+    expect(compareVersions('1.0.0+build.5', '1.0.0')).toBe(0)
   })
 })
 

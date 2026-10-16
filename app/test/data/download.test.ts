@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dataClient, download, fetchJson } from '../../src/data/download.js'
-import { DataError } from '../../src/data/manifest.js'
+import { DataError, findTmEntry } from '../../src/data/manifest.js'
 import { USER_AGENT } from '../../src/wporg/http.js'
 import { bytes, chunked, redirect, serve, silent, type TestServer } from './server.js'
 
@@ -125,6 +125,6 @@ describe('dataClient', () => {
     server = await serve({ '/index.json': bytes(index) })
     vi.stubEnv('POLYGLOTS_DATA_URL', server.url('/index.json'))
     const m = await dataClient.manifest()
-    expect(m.tm[0]!.slug).toBe('tr')
+    expect(findTmEntry(m, 'tr').slug).toBe('tr')
   })
 })
