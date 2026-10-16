@@ -172,14 +172,6 @@ describe('createTemplate and deleteTemplate', () => {
     expect(await readFile(createTemplate('tr', 'short'), 'utf8')).toBe(starterTemplate('tr', 'approved'))
   })
 
-  it('never overwrites a template that exists', async () => {
-    const file = templateFile('tr', 'approved')
-    await mkdir(dirname(file), { recursive: true })
-    await writeFile(file, 'mine')
-    expect(() => createTemplate('tr', 'approved')).toThrow(/already exists/)
-    expect(await readFile(file, 'utf8')).toBe('mine')
-  })
-
   // A tr_TR manager's approved.txt may be the reply that used to be built in
   // here, and dropping that text from the code must not reach the file.
   it('never rewrites a template that exists, whatever the starter now says', async () => {
