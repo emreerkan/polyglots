@@ -1,5 +1,5 @@
 import type { PatternLevel } from '../../../../app/src/rules/schema.js';
-import type { BuilderState } from '../../../../app/src/rules/emit.js';
+import type { BuilderPattern, BuilderState } from '../../../../app/src/rules/emit.js';
 
 // What the live tester runs for one sample: which mistakes and patterns apply
 // to the sample's source, and the regex work each one needs, mirroring
@@ -51,7 +51,7 @@ export function literalSource(text: string, tag: string): string {
     .join('');
 }
 
-const compiles = (source: string) => {
+export const compiles = (source: string): boolean => {
   try {
     new RegExp(source, 'u');
     return true;
@@ -103,4 +103,15 @@ export function checksFor(state: BuilderState, source: string, translation: stri
     checks.push({ kind: 'pattern', index, label, level: p.level, regex, applies, invalid, ops });
   });
   return checks;
+}
+
+// What a pattern row would be refused for, said beside it rather than only
+// as the file's first error in the review step; empty when nothing is wrong.
+// It says no more than the app's parser would. An empty replace on a fix is
+// not a missing one: emit.ts writes it as replace: '', the schema accepts it,
+// and the app deletes what the pattern finds, which is how a stray space
+// before a comma is removed. Flagging it put a false error beside a valid row.
+export function patternProblem(p: BuilderPattern): string {
+  if (p.mode === 'find' && p.value !== '' && !compiles(p.value)) return 'Not a valid regular expression.';
+  return '';
 }

@@ -1,8 +1,9 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { emptyBuilderState, type BuilderPattern } from '../../app/src/rules/emit.js'
+import { emitRulesYaml, emptyBuilderState, type BuilderPattern } from '../../app/src/rules/emit.js'
+import { parseRulesText } from '../../app/src/rules/parse.js'
 import { debounce } from '../src/components/rules-builder/debounce.js'
-import { checksFor, literalSource } from '../src/components/rules-builder/match.js'
+import { checksFor, literalSource, patternProblem } from '../src/components/rules-builder/match.js'
 import { emptyShare, sendRules, shareBlocker, type ShareFields } from '../src/components/rules-builder/share.js'
 import { restoreSaved } from '../src/components/rules-builder/store.js'
 
@@ -199,4 +200,14 @@ test('debounce: a schedule with no flush runs once after the wait', async () => 
   assert.equal(runs, 0)
   await new Promise((resolve) => setTimeout(resolve, 30))
   assert.equal(runs, 1)
+})
+
+// A fix with an empty replace deletes what it finds, and the app reads it as
+// such. The row must say no more than the parser would.
+test('rows: a deletion fix is no problem, as the app reads it', () => {
+  const p: BuilderPattern = { mode: 'find', value: '\\s+(?=[.,])', level: 'fix', replace: '', ignoreCase: false, whenSource: '', whenNotSource: '', note: '' }
+  const yaml = emitRulesYaml({ ...emptyBuilderState('tr_TR'), patterns: [p] })
+  assert.equal(parseRulesText(yaml, 'tr_TR.yaml').patterns[0]?.replace, '')
+  assert.equal(patternProblem(p), '')
+  assert.equal(patternProblem({ ...p, value: '(' }), 'Not a valid regular expression.')
 })

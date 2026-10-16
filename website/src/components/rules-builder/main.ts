@@ -3,7 +3,7 @@ import { BUILT_IN_RULES, UNIVERSAL_RULES, findingLabel } from '../../../../app/s
 import { RulesFileError, parseRulesText } from '../../../../app/src/rules/parse.js';
 import { intlTag, localeDisplayName, resolveLocale } from '../../../../app/src/wporg/locales.js';
 import { debounce } from './debounce.js';
-import { checksFor, type Check } from './match.js';
+import { checksFor, compiles, patternProblem, type Check } from './match.js';
 import { RULE_EXAMPLES } from './rule-copy.js';
 import { emptyShare, sendRules, shareBlocker, type ShareFields } from './share.js';
 import { loadSaved, save, STEPS } from './store.js';
@@ -366,14 +366,6 @@ export function start(): void {
 
   // What a row would be refused for, said beside it rather than only as the
   // file's first error in the review step.
-  const compiles = (source: string) => {
-    try {
-      new RegExp(source, 'u');
-      return true;
-    } catch {
-      return false;
-    }
-  };
   function showRowError(li: HTMLElement) {
     const out = li.querySelector<HTMLElement>('[data-row-error]');
     if (!out) return;
@@ -381,8 +373,7 @@ export function start(): void {
     let problem = '';
     if (li.dataset.list === 'patterns') {
       const p = state.patterns[i];
-      if (p && p.mode === 'find' && p.value !== '' && !compiles(p.value)) problem = 'Not a valid regular expression.';
-      else if (p && p.level === 'fix' && p.replace === '' && p.value.trim() !== '') problem = 'A fix needs something to replace the match with.';
+      if (p) problem = patternProblem(p);
     } else if (li.dataset.list === 'answers') {
       const a = state.sentenceEnd.answers[i];
       if (a && ((a.text !== '' && !compiles(a.text)) || (a.source !== '' && !compiles(a.source)))) problem = 'Not a valid regular expression.';
