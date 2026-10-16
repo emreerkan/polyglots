@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 // Nothing they reach may need Node: a node: import fails the site's build, and
 // a package with Node internals fails it in the browser instead, which nobody
 // sees until a person opens the page. Walked statically, as the bundler does.
-const ENTRIES = ['rules/emit.ts', 'rules/parse.ts', 'rules/builder-url.ts', 'rules/names.ts', 'wporg/locales.ts']
+const ENTRIES = ['rules/emit.ts', 'rules/parse.ts', 'rules/builder-url.ts', 'rules/names.ts', 'rules/probes.ts', 'wporg/locales.ts']
 const PACKAGES = new Set(['zod', 'yaml'])
 const src = resolve(dirname(fileURLToPath(import.meta.url)), '../../src')
 

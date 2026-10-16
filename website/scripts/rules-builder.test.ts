@@ -2,8 +2,10 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { emitRulesYaml, emptyBuilderState, type BuilderPattern } from '../../app/src/rules/emit.js'
 import { parseRulesText } from '../../app/src/rules/parse.js'
+import { runRegexOps, skippedFor } from '../../app/src/rules/sandbox.js'
 import { debounce } from '../src/components/rules-builder/debounce.js'
-import { checksFor, literalSource, patternProblem } from '../src/components/rules-builder/match.js'
+import { checksFor, literalSource, patternProblem, type RegexJob } from '../src/components/rules-builder/match.js'
+import { probeProblem } from '../src/components/rules-builder/probe.js'
 import { emptyShare, sendRules, shareBlocker, type ShareFields } from '../src/components/rules-builder/share.js'
 import { restoreSaved } from '../src/components/rules-builder/store.js'
 
@@ -210,4 +212,32 @@ test('rows: a deletion fix is no problem, as the app reads it', () => {
   assert.equal(parseRulesText(yaml, 'tr_TR.yaml').patterns[0]?.replace, '')
   assert.equal(patternProblem(p), '')
   assert.equal(patternProblem({ ...p, value: '(' }), 'Not a valid regular expression.')
+})
+
+// The page's Web Worker cannot run under node, so the probe is handed the
+// app's own sandbox instead: the same budget, enforced the same way, over the
+// same strings rules check uses.
+let probeId = 0
+const sandboxRun = async (job: RegexJob) => {
+  const id = `builder-probe-${probeId++}`
+  const [result] = runRegexOps([{ kind: 'exec', id, source: job.source, flags: job.flags, text: job.text }])
+  return skippedFor(id) ? { runaway: true as const } : { match: result?.match ?? null }
+}
+
+// rules check refuses a regex that runs away on its probes, and the page
+// tells the person to run rules check, so the page must not call that file valid.
+test('validity: a regex that runs away on the probes is not valid', async () => {
+  const yaml = emitRulesYaml({
+    ...emptyBuilderState('tr_TR'),
+    patterns: [pattern({ mode: 'find', value: '\\s{2,}' }), pattern({ mode: 'find', value: '(a+)+$' })],
+  })
+  const problem = await probeProblem(parseRulesText(yaml, 'tr_TR.yaml'), sandboxRun)
+  assert.match(problem ?? '', /patterns\.1\.find/)
+  assert.match(problem ?? '', /\(a\+\)\+\$/)
+  assert.match(problem ?? '', /100 ms/)
+})
+
+test('validity: ordinary regexes pass the probes', async () => {
+  const yaml = emitRulesYaml({ ...emptyBuilderState('tr_TR'), patterns: [pattern({ mode: 'find', value: '\\s{2,}' })] })
+  assert.equal(await probeProblem(parseRulesText(yaml, 'tr_TR.yaml'), sandboxRun), undefined)
 })

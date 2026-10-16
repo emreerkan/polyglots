@@ -1,9 +1,11 @@
 import { emitRulesYaml, emptyBuilderState, stateFromRules, type BuilderState } from '../../../../app/src/rules/emit.js';
 import { BUILT_IN_RULES, UNIVERSAL_RULES, findingLabel } from '../../../../app/src/rules/names.js';
 import { RulesFileError, parseRulesText } from '../../../../app/src/rules/parse.js';
+import type { LocaleRules } from '../../../../app/src/rules/schema.js';
 import { intlTag, localeDisplayName, resolveLocale } from '../../../../app/src/wporg/locales.js';
 import { debounce } from './debounce.js';
 import { checksFor, compiles, patternProblem, type Check } from './match.js';
+import { probeProblem } from './probe.js';
 import { RULE_EXAMPLES } from './rule-copy.js';
 import { emptyShare, sendRules, shareBlocker, type ShareFields } from './share.js';
 import { loadSaved, save, STEPS } from './store.js';
@@ -73,6 +75,15 @@ export function start(): void {
   let step = saved.step;
   const share: ShareFields = emptyShare();
   const runner = new RegexRunner();
+  // The probes get a runner of their own. A pattern that runs away on the
+  // person's sample in the tester is not one rules check would refuse, and
+  // sharing the runner's memory of runaways would let the tester's sample
+  // decide whether the file is valid.
+  const prober = new RegexRunner();
+  const probePassed = new Set<string>();
+  let probing = 0;
+  // The latest refresh's probe, which Send waits for after its flush.
+  let probed: Promise<void> = Promise.resolve();
   let yaml = '';
   let fileError: string | undefined;
 
@@ -478,13 +489,27 @@ export function start(): void {
   const fileName = () => `${state.locale || 'rules'}.yaml`;
   const refreshFile = () => {
     yaml = emitRulesYaml(state);
+    const mine = ++probing;
+    let rules: LocaleRules | undefined;
     try {
-      parseRulesText(yaml, fileName());
-      fileError = undefined;
-      say(validity, 'Valid: polyglots reads this file as it is.', 'ok');
+      rules = parseRulesText(yaml, fileName());
+      // Parsed is not yet valid: rules check also probes every regex, so the
+      // file stays unsendable until the probes below have come back.
+      fileError = 'the regular expressions are still being checked';
+      say(validity, 'Checking the regular expressions…');
     } catch (err) {
       fileError = err instanceof RulesFileError ? err.message : errorText(err);
       say(validity, `Not valid yet: ${fileError}`, 'warn');
+    }
+    if (rules) {
+      probed = probeProblem(rules, (job) => prober.run(job), probePassed).then((problem) => {
+        // A newer refresh has its own file and its own probe.
+        if (mine !== probing) return;
+        fileError = problem;
+        if (problem === undefined) say(validity, 'Valid: polyglots reads this file as it is.', 'ok');
+        else say(validity, `Not valid yet: ${problem}`, 'warn');
+        showShare();
+      });
     }
     yamlOut.textContent = yaml;
     install.textContent =
@@ -547,6 +572,9 @@ export function start(): void {
   });
   sendButton.addEventListener('click', async () => {
     pending.flush();
+    // A click inside the debounce starts a fresh probe; send once it answers
+    // rather than refusing a click the person made on a valid file.
+    await probed;
     if (shareBlocker(share, { locale: state.locale, error: fileError }) !== undefined) return;
     sending = true;
     showShare();
