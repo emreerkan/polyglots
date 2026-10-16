@@ -1,4 +1,4 @@
-import { emptyBuilderState, type BuilderMistake, type BuilderPattern, type BuilderState } from '../../../../app/src/rules/emit.js';
+import { emitRulesYaml, emptyBuilderState, type BuilderMistake, type BuilderPattern, type BuilderState } from '../../../../app/src/rules/emit.js';
 
 // The builder keeps the person's work in localStorage, so a reload, a closed
 // tab or a failed share never loses it. What comes back is whatever an older
@@ -94,4 +94,26 @@ export function save(saved: Saved): void {
   } catch {
     // The page works the same without it; only a reload loses the work.
   }
+}
+
+/** Whether the state holds anything the person entered, whatever its locale. */
+export const hasContent = (s: BuilderState): boolean => emitRulesYaml({ ...s, locale: '' }) !== emitRulesYaml(emptyBuilderState(''));
+
+export interface LocaleRequest {
+  state: BuilderState;
+  conflict?: { saved: string; asked: string };
+}
+
+/**
+ * The state to open with when the address asks for a locale. The app's link
+ * (polyglots rules builder tr) is a request to work on that locale, so an
+ * empty state, or work not yet tied to a locale, takes it. Work saved for
+ * another locale keeps its own: relabelling it would download or share de_DE
+ * rules as tr_TR without a word. The conflict is returned for the page to
+ * offer a fresh start, as the published-rules fetch asks before it replaces.
+ */
+export function applyAskedLocale(saved: BuilderState, asked: string | undefined): LocaleRequest {
+  if (asked === undefined || saved.locale === asked) return { state: saved };
+  if (saved.locale !== '' && hasContent(saved)) return { state: saved, conflict: { saved: saved.locale, asked } };
+  return { state: { ...saved, locale: asked } };
 }

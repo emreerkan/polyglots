@@ -7,7 +7,7 @@ import { debounce } from '../src/components/rules-builder/debounce.js'
 import { checksFor, literalSource, patternProblem, type RegexJob } from '../src/components/rules-builder/match.js'
 import { probeProblem } from '../src/components/rules-builder/probe.js'
 import { emptyShare, sendRules, shareBlocker, type ShareFields } from '../src/components/rules-builder/share.js'
-import { restoreSaved } from '../src/components/rules-builder/store.js'
+import { applyAskedLocale, restoreSaved } from '../src/components/rules-builder/store.js'
 
 const contact = (patch: Partial<ShareFields> = {}): ShareFields => ({ ...emptyShare(), slack: 'emre', consent: true, ...patch })
 
@@ -240,4 +240,28 @@ test('validity: a regex that runs away on the probes is not valid', async () => 
 test('validity: ordinary regexes pass the probes', async () => {
   const yaml = emitRulesYaml({ ...emptyBuilderState('tr_TR'), patterns: [pattern({ mode: 'find', value: '\\s{2,}' })] })
   assert.equal(await probeProblem(parseRulesText(yaml, 'tr_TR.yaml'), sandboxRun), undefined)
+})
+
+// The app's link names a locale in the address. Saved work for another
+// locale must not be relabelled to it, or de_DE rules leave the page as tr_TR.
+test('store: an address locale does not relabel saved work for another locale', () => {
+  const saved = { ...emptyBuilderState('de_DE'), guidance: 'Sie, nicht du.' }
+  const { state, conflict } = applyAskedLocale(saved, 'tr_TR')
+  assert.equal(state.locale, 'de_DE')
+  assert.equal(state.guidance, 'Sie, nicht du.')
+  assert.deepEqual(conflict, { saved: 'de_DE', asked: 'tr_TR' })
+})
+
+test('store: an address locale switches an empty or same-locale state silently', () => {
+  const empty = applyAskedLocale(emptyBuilderState('de_DE'), 'tr_TR')
+  assert.equal(empty.state.locale, 'tr_TR')
+  assert.equal(empty.conflict, undefined)
+  const same = applyAskedLocale({ ...emptyBuilderState('tr_TR'), guidance: 'siz' }, 'tr_TR')
+  assert.equal(same.state.guidance, 'siz')
+  assert.equal(same.conflict, undefined)
+  // Work with no locale yet belongs to none, so the address may name it.
+  const unnamed = applyAskedLocale({ ...emptyBuilderState(''), guidance: 'siz' }, 'tr_TR')
+  assert.equal(unnamed.state.locale, 'tr_TR')
+  assert.equal(unnamed.conflict, undefined)
+  assert.equal(applyAskedLocale(emptyBuilderState('de_DE'), undefined).state.locale, 'de_DE')
 })

@@ -8,7 +8,7 @@ import { checksFor, compiles, patternProblem, type Check } from './match.js';
 import { probeProblem } from './probe.js';
 import { RULE_EXAMPLES } from './rule-copy.js';
 import { emptyShare, sendRules, shareBlocker, type ShareFields } from './share.js';
-import { loadSaved, save, STEPS } from './store.js';
+import { applyAskedLocale, hasContent, loadSaved, save, STEPS } from './store.js';
 import { PATTERN_BUDGET_MS, RegexRunner } from './tester.js';
 
 // The page's behaviour. Plain DOM: the site has no client framework, and the
@@ -71,7 +71,12 @@ export function start(): void {
   const root = document.querySelector<HTMLElement>('[data-rb]');
   if (!root) return;
   const saved = loadSaved();
-  let state = saved.state;
+  // A locale named in the address wins over the saved one, unless the saved
+  // work is for another locale: then that work stays as it is, and step 1
+  // offers to start over for the asked locale (see applyAskedLocale).
+  const asked = new URLSearchParams(location.search).get('locale');
+  const request = applyAskedLocale(saved.state, asked === null ? undefined : resolveLocale(asked)?.wp);
+  let state = request.state;
   let step = saved.step;
   const share: ShareFields = emptyShare();
   const runner = new RegexRunner();
@@ -86,12 +91,6 @@ export function start(): void {
   let probed: Promise<void> = Promise.resolve();
   let yaml = '';
   let fileError: string | undefined;
-
-  // A locale named in the address wins over the saved one: the app's link
-  // (polyglots rules builder tr) is a request to work on that locale.
-  const asked = new URLSearchParams(location.search).get('locale');
-  const askedRow = asked === null ? undefined : resolveLocale(asked);
-  if (askedRow) state.locale = askedRow.wp;
 
   const persist = () => save({ state, step });
   const localeTag = () => {
@@ -121,8 +120,6 @@ export function start(): void {
   localeInput.addEventListener('change', () => {
     if (state.locale !== '') localeInput.value = state.locale;
   });
-
-  const hasContent = (s: BuilderState) => emitRulesYaml({ ...s, locale: '' }) !== emitRulesYaml(emptyBuilderState(''));
 
   const say = (node: HTMLElement, text: string, tone?: 'ok' | 'warn') => {
     node.textContent = text;
@@ -636,6 +633,19 @@ export function start(): void {
   }
 
   load(state);
+  if (request.conflict) {
+    const { saved: kept, asked: wanted } = request.conflict;
+    const restart = el('button', { type: 'button', class: 'btn quiet', text: `Start over for ${wanted}` });
+    restart.addEventListener('click', () => {
+      load(emptyBuilderState(wanted));
+      say(fetchStatus, `Started over for ${wanted}.`);
+    });
+    say(fetchStatus, `The link asked for ${wanted}, but your saved work is for ${kept}, so it stays ${kept}. `, 'warn');
+    fetchStatus.append(restart);
+    // The notice sits on the first step, so open there rather than at the
+    // saved step, where it would go unseen.
+    step = 0;
+  }
   show(step);
   refreshFile();
   void runTester();
