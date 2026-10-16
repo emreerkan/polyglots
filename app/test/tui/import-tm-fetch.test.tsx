@@ -53,6 +53,16 @@ describe('ImportTm: fetch from polyglots-data', () => {
     expect(frame).not.toContain('poedit.tmx')
   })
 
+  // config.json is hand-editable, and tm fetch reads tr_TR as tr through
+  // requireLocale; the menu has to read it the same way or it hides a fetch
+  // the CLI would run.
+  it('reads a wp code in config as its slug and still offers fetch', async () => {
+    saveConfig({ defaultLocale: 'tr_TR' })
+    const view = mount({ dataClient: listed() })
+    await waitForText(view.lastFrame, 'Fetch from polyglots-data')
+    expect(flat(view.lastFrame())).toContain('locale tr')
+  })
+
   it('hides fetch when the manifest has no entry for the locale', async () => {
     const view = mount({ dataClient: { manifest: vi.fn(async () => manifestWith({ tm: [tmEntry({ slug: 'de', locale: 'de_DE' })] })), download: vi.fn() } })
     await waitForText(view.lastFrame, 'Import a file')

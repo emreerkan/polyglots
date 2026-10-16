@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, useApp } from 'ink'
 import { CommandsProvider, defaultCommands, errorMessage, useCommands, type TuiCommands } from './commands.js'
 import type { AgentStatus } from '../agent/discover.js'
-import { DEFAULT_CONFIG } from '../config.js'
+import { DEFAULT_CONFIG, configuredLocale } from '../config.js'
 import { DEFAULT_PROVIDER } from '../agent/providers.js'
 import type { Locale, PolyglotsConfig, ReviewChoice, Secrets } from '../types.js'
 import { TOKENS } from '../ui/tokens.js'
@@ -203,7 +203,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   // every navigation like the cheaper facts below: it opens polyglots.db.
   // With no locale there is no glossary to count, and the step reads as missing.
   const countGlossary = () => {
-    const locale = tryOr(() => commands.loadConfig(), DEFAULT_CONFIG).defaultLocale
+    const locale = configuredLocale(tryOr(() => commands.loadConfig(), DEFAULT_CONFIG))
     return locale === undefined ? undefined : tryOr(() => commands.glossaryCount(locale), undefined)
   }
   const [glossary, setGlossary] = useState<number | undefined>(countGlossary)
@@ -215,14 +215,14 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   // one to fetch (missing), and that is a network question, asked once per
   // locale in the background and only when nothing else has answered it, so
   // a launch never waits on it and an install with a memory never asks.
-  const configuredLocale = () => tryOr(() => commands.loadConfig(), DEFAULT_CONFIG).defaultLocale
+  const memoryLocaleNow = () => configuredLocale(tryOr(() => commands.loadConfig(), DEFAULT_CONFIG))
   const countMemory = () => {
-    const locale = configuredLocale()
+    const locale = memoryLocaleNow()
     return locale === undefined ? undefined : tryOr(() => commands.memoryCount(locale), undefined)
   }
   const [memoryRows, setMemoryRows] = useState<number | undefined>(countMemory)
   const refreshMemory = () => setMemoryRows(countMemory())
-  const memoryLocale = useMemo(configuredLocale, [commands, setupEpoch])
+  const memoryLocale = useMemo(memoryLocaleNow, [commands, setupEpoch])
   const [listing, setListing] = useState<{ locale: Locale; listed?: boolean }>()
   const asksManifest =
     memoryLocale !== undefined && !(memoryRows !== undefined && memoryRows > 0) && !tuiState.wizard.skipped.includes('memory')
@@ -239,7 +239,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
 
   const status: SetupStatus = useMemo(() => {
     const config: PolyglotsConfig = tryOr(() => commands.loadConfig(), DEFAULT_CONFIG)
-    const locale = config.defaultLocale
+    const locale = configuredLocale(config)
     return setupStatus({
       config,
       secrets: tryOr<Secrets>(() => commands.loadSecrets(), {}),

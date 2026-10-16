@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Box, Text } from 'ink'
 import type { AgentStatus } from '../../agent/discover.js'
 import type { ModelServer } from '../../draft/discover.js'
+import { configuredLocale } from '../../config.js'
 import { TOKENS } from '../../ui/tokens.js'
 import { WPORG_LOCALES, localeId } from '../../wporg/locales.js'
 import { errorMessage, useCommands, useConfig } from '../commands.js'
@@ -238,7 +239,7 @@ export const OFFLINE_NOTE = 'Could not reach polyglots-data; skipped.'
 // press a key to learn that.
 function MemoryStep({ onSkip, onUnlisted, onOffline, onDone }: { onSkip: () => void; onUnlisted: () => void; onOffline: () => void; onDone: () => void }) {
   const { config } = useConfig()
-  const locale = config.defaultLocale
+  const locale = configuredLocale(config)
   const listing = useTmListing(locale)
   useEffect(() => {
     if (listing.status === 'unlisted') onUnlisted()

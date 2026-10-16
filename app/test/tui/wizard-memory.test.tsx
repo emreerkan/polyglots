@@ -81,6 +81,14 @@ describe('the wizard memory step', () => {
     expect(unlisted.state().wizard.skipped).not.toContain('memory')
   })
 
+  it('reads a wp code in config as its slug, as tm fetch does', async () => {
+    saveConfig({ defaultLocale: 'tr_TR' })
+    const planTmFetch = vi.fn(async () => plan())
+    const view = mount(async () => manifestWith({ tm: [tmEntry()] }), { planTmFetch })
+    await waitForText(view.lastFrame, 'Turkish (tr): 1,002 strings')
+    expect(planTmFetch.mock.calls[0]![0]).toBe('tr')
+  })
+
   it('wizard: offline skips the memory step without waiting', async () => {
     const view = mount(async () => {
       throw new Error('GET https://example.invalid/index.json failed: getaddrinfo ENOTFOUND')
@@ -130,6 +138,37 @@ describe('the app and the memory step', () => {
     expect(flat(lastFrame())).toMatch(/✓ memory/)
     // Rows answer the question; the network is not asked.
     expect(commands.dataClient.manifest).not.toHaveBeenCalled()
+  })
+
+  // A hand-edited tr_TR is tr to every CLI command. Read raw, the memory
+  // was counted under tr_TR (none) and the manifest asked for tr_TR (not
+  // listed), so the step read as done with nothing fetched.
+  it('counts memory under the slug when config holds a wp code', async () => {
+    const memoryCount = vi.fn((locale: string) => (locale === 'tr' ? 1_002 : 0))
+    const commands = fakeCommands({
+      loadConfig: () => ({ ...DEFAULT_CONFIG, defaultLocale: 'tr_TR' }),
+      localeConfigured: () => true,
+      memoryCount,
+      dataClient: { manifest: vi.fn(async () => manifestWith({ tm: [tmEntry()] })), download: vi.fn() },
+    })
+    const { lastFrame } = render(<App commands={commands} />)
+    await waitForText(lastFrame, /setup \d\/6/)
+    expect(flat(lastFrame())).toMatch(/✓ memory/)
+    expect(memoryCount).toHaveBeenCalledWith('tr')
+    expect(memoryCount).not.toHaveBeenCalledWith('tr_TR')
+    expect(commands.dataClient.manifest).not.toHaveBeenCalled()
+  })
+
+  it('reads the memory step as missing under a wp code when the vault has the slug and the memory is empty', async () => {
+    const commands = fakeCommands({
+      loadConfig: () => ({ ...DEFAULT_CONFIG, defaultLocale: 'tr_TR' }),
+      localeConfigured: () => true,
+      memoryCount: vi.fn(() => 0),
+      dataClient: { manifest: vi.fn(async () => manifestWith({ tm: [tmEntry()] })), download: vi.fn() },
+    })
+    const { lastFrame } = render(<App commands={commands} />)
+    await waitFor(() => vi.mocked(commands.dataClient.manifest).mock.calls.length > 0)
+    await waitForText(lastFrame, /✗ memory/)
   })
 
   it('opens the wizard at the memory step when the vault has the locale and the memory is empty', async () => {

@@ -5,7 +5,8 @@ import { z } from 'zod'
 import { configFile, secretsFile } from './paths.js'
 import { DEFAULT_QWEN_BASE_URL, DEFAULT_QWEN_MODEL } from './draft/qwen.js'
 import { DEFAULT_LOCAL_IDLE_TIMEOUT_SECONDS } from './draft/local-chat.js'
-import type { PolyglotsConfig, Secrets } from './types.js'
+import type { Locale, PolyglotsConfig, Secrets } from './types.js'
+import { resolveLocale } from './wporg/locales.js'
 
 // LM Studio's port: the most common OpenAI-compatible server on a desktop, and
 // the one whose documentation people will have open. llama.cpp's 8080 is the
@@ -161,6 +162,22 @@ function validate(candidate: Record<string, unknown>): PolyglotsConfig {
 
 export function loadConfig(): PolyglotsConfig {
   return validate({ ...DEFAULT_CONFIG, ...readConfigFile() })
+}
+
+/**
+ * The configured locale as the wp.org slug every lookup is keyed by, or
+ * undefined when none is set or the value names no locale.
+ *
+ * config set stores what it is given, and config.json is edited by hand, so
+ * defaultLocale can hold tr_TR where the memory, the glossary and the
+ * polyglots-data manifest all say tr. The CLI resolves it through
+ * requireLocale; the TUI read it raw, and a hand-edited tr_TR hid the memory
+ * fetch and counted the memory step as done while tm fetch worked. This does
+ * what requireLocale does without its refusal, since a screen has its own way
+ * of saying a locale is missing (NeedsLocale) and must not throw while drawing.
+ */
+export function configuredLocale(config: PolyglotsConfig): Locale | undefined {
+  return config.defaultLocale === undefined ? undefined : resolveLocale(config.defaultLocale)?.id
 }
 
 /**

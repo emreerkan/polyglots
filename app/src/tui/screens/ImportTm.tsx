@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Box, Text } from 'ink'
 import type { TmFetchPlan, TmFetchProgress, TmFetchResult } from '../../commands/tm-fetch.js'
 import type { TmImportProgress, TmImportResult } from '../../commands/tm-import.js'
+import { configuredLocale } from '../../config.js'
 import type { DataClient } from '../../data/download.js'
 import { TOKENS } from '../../ui/tokens.js'
 import { useCommands, useConfig } from '../commands.js'
@@ -31,7 +32,8 @@ const n = (v: number) => v.toLocaleString('en-US')
 
 export function ImportTm(props: ImportTmProps) {
   const { config } = useConfig()
-  if (config.defaultLocale === undefined) {
+  const locale = configuredLocale(config)
+  if (locale === undefined) {
     return (
       <NeedsLocale
         title="Import Translation Memory"
@@ -41,7 +43,7 @@ export function ImportTm(props: ImportTmProps) {
       />
     )
   }
-  return <ImportTmInLocale {...props} locale={config.defaultLocale} />
+  return <ImportTmInLocale {...props} locale={locale} />
 }
 
 type Choice = 'fetch' | 'file'

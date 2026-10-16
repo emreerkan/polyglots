@@ -38,6 +38,7 @@ Entries say what changed. For why and how, read the commit.
 ### Fixed
 
 - `tm import --locale` stores memory under the wp.org slug, so `tr_TR` no longer files it where nothing reads it.
+- The app reads a `defaultLocale` written as a wp code (`tr_TR`) as its slug for the memory, glossary and rules steps, as the CLI does.
 - `tm export` writes each row's context, project and long-text weight, so importing the file back keeps them.
 
 ## [0.33.0] - 2026-10-15
