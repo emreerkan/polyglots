@@ -33,7 +33,10 @@ has six steps:
 5. **Translation memory**: your locale's published memory from
    polyglots-data, when it has one: a summary of what would be imported,
    then `y` downloads and imports it. Shown only for a locale polyglots-data
-   has; offline, it is skipped with a note. Optional, like every import. See
+   has; offline, it is skipped with a note. The skip is kept, so the step is
+   not offered again; fetch the memory later from **Tools** (`o`) > **Import
+   Translation Memory**, or with `polyglots tm fetch`. Optional, like every
+   import. See
    [Fetching a locale's memory](translate.md#fetching-a-locales-memory).
 6. **Locale rules**: the checks for your language's conventions. polyglots
    ships none; fetch your locale team's file (**Fetch from polyglots-data**
