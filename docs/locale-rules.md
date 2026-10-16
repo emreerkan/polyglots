@@ -61,6 +61,13 @@ the locale, the built-in checks, formality and register, capitalization,
 guidance and proper nouns, common mistakes, and, behind an advanced
 section, patterns and sentence ends. Every step can be skipped.
 
+```
+polyglots rules builder [locale]
+```
+
+opens it in your browser with the locale chosen, and prints the address, so
+it works over SSH too. The app's Locale rules screen has the same link.
+
 - **Start from the published rules** loads your locale's file from
   polyglots-data, so you change your team's rules rather than start over.
   Its comments are not carried over.

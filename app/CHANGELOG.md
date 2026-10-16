@@ -19,6 +19,7 @@ Entries say what changed. For why and how, read the commit.
 - A rules pattern's `when.notSource` makes it fire only when the source lacks a text.
 - `rules check --file <path> --json` checks any rules file.
 - The rules builder at ada.tools/polyglots/rules-builder writes a locale's rules file in the browser.
+- `polyglots rules builder` and the app's Locale rules screen open the rules builder for a locale.
 - Translate notes each draft a locale rule changed, and counts them.
 - Memory from long-text projects (readmes, release notes) ranks below the rest and alone raises no conflict.
 

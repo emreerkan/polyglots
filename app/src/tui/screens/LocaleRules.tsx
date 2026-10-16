@@ -6,6 +6,7 @@ import { openRulesDraft, saveRulesDraft, type RulesDraft, type RulesValue } from
 import { BUILT_IN_RULES, findingLabel } from '../../rules/names.js'
 import { GUIDANCE_LIMIT } from '../../rules/schema.js'
 import { resolveLocale, wpCodeOf } from '../../wporg/locales.js'
+import { rulesBuilderUrl } from '../../rules/builder-url.js'
 import type { RulesFetchPlan } from '../../commands/rules-fetch.js'
 import { useCommands, useConfig } from '../commands.js'
 import { Hint } from '../components/Hint.js'
@@ -26,7 +27,7 @@ export interface LocaleRulesProps {
   onBack: () => void
 }
 
-type Stage = 'pick' | 'overview' | 'rules' | 'ratio' | 'nouns' | 'nounList' | 'mistakes' | 'patterns' | 'guidance' | 'try' | 'copy' | 'fetch' | 'leave'
+type Stage = 'pick' | 'overview' | 'rules' | 'ratio' | 'nouns' | 'nounList' | 'mistakes' | 'patterns' | 'guidance' | 'try' | 'copy' | 'fetch' | 'builder' | 'leave'
 
 const SECTIONS = [
   'Built-in rules',
@@ -38,8 +39,9 @@ const SECTIONS = [
   'Try the rules',
   'Copy to another locale',
   'Fetch from polyglots-data',
+  'Open the rules builder in your browser',
 ] as const
-const SECTION_STAGE: Stage[] = ['rules', 'ratio', 'nouns', 'mistakes', 'patterns', 'guidance', 'try', 'copy', 'fetch']
+const SECTION_STAGE: Stage[] = ['rules', 'ratio', 'nouns', 'mistakes', 'patterns', 'guidance', 'try', 'copy', 'fetch', 'builder']
 // The rows of the screen around a fetch summary: the frame's header and
 // footer, this screen's title, path and the lines above and below the
 // summary. What is left is the summary's window; a smaller terminal still
@@ -167,6 +169,8 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   const [fetchTop, setFetchTop] = useState(0)
   const [writing, setWriting] = useState(false)
   const [writeError, setWriteError] = useState<string>()
+  // Undefined while the opener is still trying; then whether a browser opened.
+  const [builderOpened, setBuilderOpened] = useState<boolean>()
 
   const dirty = draft !== undefined && JSON.stringify(value) !== JSON.stringify(draft.value)
   // A locale with no file can be saved as it stands: that is how someone
@@ -275,9 +279,16 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
       setWriting(false)
     }
   }
+  const builderUrl = rulesBuilderUrl(wpCodeOf(id) ?? id)
   const openSection = () => {
     const next = SECTION_STAGE[cursor]!
     if (next === 'fetch') openFetch()
+    if (next === 'builder') {
+      // The address is shown either way: over SSH no browser opens, and the
+      // person copies it to the machine they are sitting at.
+      setBuilderOpened(undefined)
+      void commands.openInBrowser(builderUrl).then(setBuilderOpened)
+    }
     if (next === 'copy') setCopyResult(undefined)
     if (next === 'try') {
       setTrial(undefined)
@@ -289,7 +300,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   useKeys({
     back: {
       esc:
-        copyNotice || on('nouns', 'rules', 'ratio', 'leave') || (on('fetch') && !writing)
+        copyNotice || on('nouns', 'rules', 'ratio', 'leave', 'builder') || (on('fetch') && !writing)
           ? toOverview
           : on('pick')
             ? onBack
@@ -387,6 +398,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
           <Text>{`${marker(cursor === 6)}Try the rules      check a sample against the rules as edited`}</Text>
           <Text>{`${marker(cursor === 7)}Copy to another locale`}</Text>
           <Text>{`${marker(cursor === 8)}Fetch from polyglots-data`}</Text>
+          <Text>{`${marker(cursor === 9)}Open the rules builder in your browser`}</Text>
           {dirty && (
             <Text color="yellow">
               Saving changes the rules for {id}: the next review of every {id} file starts over.
@@ -598,6 +610,21 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
               ))}
             </Box>
           )}
+        </>
+      )}
+
+      {draft && stage === 'builder' && (
+        <>
+          <Text>
+            {builderOpened === undefined
+              ? 'Opening the rules builder…'
+              : builderOpened
+                ? 'Opened the rules builder in your browser:'
+                : 'Open this address in your browser:'}
+          </Text>
+          <Text color="cyan">{builderUrl}</Text>
+          <Text dimColor>It writes a rules file for {wpCodeOf(id) ?? id} step by step; save the download as {basename(draft.path)}.</Text>
+          <Hint>esc back to the overview</Hint>
         </>
       )}
 

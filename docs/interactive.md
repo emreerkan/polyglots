@@ -195,7 +195,7 @@ again once stopped.
 | Key | Screen | What it does |
 |---|---|---|
 | `g` | Sync WordPress.org glossary | Downloads your locale's glossary. Run it again when your team changes it. |
-| `r` | Locale rules | Edits your locale's rules: which built-in checks run, proper nouns, common mistakes, patterns, and guidance for the reviewer. `s` saves. **Fetch from polyglots-data** shows what the published file would change and writes it on `y`. |
+| `r` | Locale rules | Edits your locale's rules: which built-in checks run, proper nouns, common mistakes, patterns, and guidance for the reviewer. `s` saves. **Fetch from polyglots-data** shows what the published file would change and writes it on `y`. **Open the rules builder in your browser** opens the website's rules builder for the locale, and shows its address. |
 | `t` | Reply templates | Your locale's [reply templates](reply-templates.md): `e` edits one, `n` creates one from a starter, `d` deletes one, `v` previews it clean or with problems. |
 | `a` | Check AI agents | Shows whether each review agent is installed, signed in and set up for polyglots. `r` checks again. |
 | `m` | Local models | Finds model servers on this machine, such as Ollama or LM Studio, and chooses the drafting model. See [Local models](local-models.md). |

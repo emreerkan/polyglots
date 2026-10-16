@@ -35,7 +35,9 @@ import { DEFAULT_STATS_FILE, serveStats, writeStats } from './commands/stats.js'
 import { openJobsDb } from './jobs/db.js'
 import { stopOwnRuns } from './jobs/runs.js'
 import { stopOnSignal } from './jobs/stop-on-signal.js'
-import { portInUseWarning } from './stats/server.js'
+import { openInBrowser, portInUseWarning } from './stats/server.js'
+import { rulesBuilderUrl } from './rules/builder-url.js'
+import { wpCodeOf } from './wporg/locales.js'
 import { DEFAULT_CONFIG, isHttpUrl, loadConfig, loadSecrets, maskSecret, saveConfig, saveSecret, unsetConfig } from './config.js'
 import {
   UsageError,
@@ -137,6 +139,9 @@ export interface CliDeps {
   // Reads the polyglots-data manifest and downloads the files it lists
   // (src/data). Injected so no test, and no website demo, reaches GitHub.
   dataClient?: DataClient
+  // Opens a URL in the desktop's browser, false when it did not (over SSH,
+  // or with no display). Injected so no test, and no website demo, starts one.
+  openBrowser?: (url: string) => Promise<boolean>
 }
 
 interface Cli {
@@ -159,6 +164,7 @@ interface Cli {
   checkLocalModel: typeof checkLocalModel
   makePot: typeof makePot
   dataClient: DataClient
+  openBrowser: (url: string) => Promise<boolean>
   // Listens for SIGINT and SIGTERM until the returned function is called.
   stopRunsOnSignal: () => () => void
   config: () => PolyglotsConfig
@@ -204,6 +210,7 @@ function createCli(deps: CliDeps): Cli {
     checkLocalModel: deps.checkLocalModel ?? checkLocalModel,
     makePot: deps.makePot ?? makePot,
     dataClient: deps.dataClient ?? dataClient,
+    openBrowser: deps.openBrowser ?? openInBrowser,
     stopRunsOnSignal: () =>
       stopOnSignal({
         // Only installed around a run, so a run is what a signal interrupts.
@@ -1144,6 +1151,17 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .description('Print where the locale rules file lives')
     .action((raw: string | undefined) => {
       cli.out(localeRulesFile(requireLocale(raw, cli.config(), { argument: 'polyglots rules path' })))
+    })
+  rules
+    .command('builder [locale]')
+    .description('Open the rules builder on ada.tools in your browser, with the locale chosen')
+    .action(async (raw: string | undefined) => {
+      const locale = requireLocale(raw, cli.config(), { argument: 'polyglots rules builder' })
+      // The address goes to stdout whether or not a browser opens: over SSH
+      // none will, and the address is what the person copies to their own.
+      const url = rulesBuilderUrl(wpCodeOf(locale) ?? locale)
+      cli.out(url)
+      if (!(await cli.openBrowser(url))) cli.err(hintLine(cli.ui.err, 'No browser opened here; open the address above in yours.'))
     })
 
   // Reply templates take the locale first and as a required argument, unlike

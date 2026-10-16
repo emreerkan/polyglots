@@ -15,7 +15,7 @@ import { isNewer } from '../update/index.js'
 export const WHATS_NEW: Readonly<Record<string, readonly string[]>> = {
   unreleased: [
     'Fetch rules and memory from polyglots-data',
-    'Setup offers your locale\'s translation memory',
+    'Build your rules file in the browser',
     'Translate notes drafts a locale rule fixed',
   ],
   '0.33.0': ['Home shows what is new once, after an update.'],
