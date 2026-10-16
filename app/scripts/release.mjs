@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// npm run release -- <patch|minor> [--no-ship]
+// npm run release -- <patch|minor|major> [--no-ship]
 //
 // Verify, bump, cut the changelog and "What's new", build and commit, in that order. Each step
 // can stop the release, and the order is the point: a version bumped onto a
@@ -7,7 +7,7 @@
 // half-written dist/ to the MCP server its next batch spawns.
 //
 // Two decisions stay with people. The size is passed in, because whether a
-// change is minor is a judgement about what it does to someone already using
+// change is minor or major is a judgement about what it does to someone already using
 // the tool. The changelog lines are written under Unreleased when the work is
 // merged; this only moves them.
 //
@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url'
 import { cutRelease } from './release-changelog.mjs'
 import { cutWhatsNew } from './release-whats-new.mjs'
 import { auditRefusal } from './release-audit.mjs'
+import { releaseArgs } from './release-size.mjs'
 
 const app = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repo = join(app, '..')
@@ -37,9 +38,13 @@ function fail(message) {
   process.exit(1)
 }
 
-const size = process.argv[2]
-const noShip = process.argv.slice(3).includes('--no-ship')
-if (size !== 'patch' && size !== 'minor') fail('Usage: npm run release -- <patch|minor> [--no-ship]')
+let args
+try {
+  args = releaseArgs(process.argv.slice(2))
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error))
+}
+const { size, noShip } = args
 
 // A release commit carries only the release. Anything else uncommitted would
 // either ride along unexplained or be left out of the build that is tagged.
@@ -82,11 +87,11 @@ const before = readFileSync(changelogPath, 'utf8')
 cutRelease(before, '0.0.0', '1970-01-01')
 
 // Said, not refused: a minor can be a CLI flag no TUI user will meet. But a
-// minor is where a line is most often forgotten, so it is said before the
-// slow part, while stopping costs nothing.
+// minor or a major is where a line is most often forgotten, so it is said
+// before the slow part, while stopping costs nothing.
 const whatsNewBefore = readFileSync(whatsNewPath, 'utf8')
 if (!cutWhatsNew(whatsNewBefore, '0.0.0').cut) {
-  console.log(`› No "What's new" lines under unreleased in src/tui/whats-new.ts${size === 'minor' ? ': the home screen will say nothing about this minor.' : '.'}`)
+  console.log(`› No "What's new" lines under unreleased in src/tui/whats-new.ts${size === 'patch' ? '.' : `: the home screen will say nothing about this ${size}.`}`)
 }
 
 const files = ['package.json', 'package-lock.json', 'CHANGELOG.md', 'src/tui/whats-new.ts']

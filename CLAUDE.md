@@ -165,7 +165,7 @@ written for them rather than for the changelog: it is what the home screen
 shows once after the update. The release renames `unreleased` to the version
 it cuts, as it moves the changelog's heading. Most patches have none.
 
-`npm run release -- <patch|minor>` is the whole release: it refuses on a dirty
+`npm run release -- <patch|minor|major>` is the whole release: it refuses on a dirty
 tree or a running job, typechecks, tests, runs the website's demo snapshot,
 bumps, cuts the changelog and "What's new", builds and commits, then ships through
 `scripts/ship.mjs`. Shipping asks once, then pushes main, waits for CI, tags,
@@ -174,7 +174,9 @@ publishing and makes the GitHub Release) and runs `deploy.sh`. It resumes from
 what has already happened, so `npm run ship` carries on after a failure. An
 agent runs the release with `--no-ship` and leaves shipping to the maintainer:
 it publishes and deploys, which are theirs to start. The size is the
-caller's call: minor when the next run behaves differently for someone already
+caller's call: major when the release breaks something a user relies on (a
+removed command, key or flag, a rules-file schema bump, a config format
+change), minor when the next run behaves differently for someone already
 using the tool (a new command, key, provider or rule, different output or
 requester wording, or anything that moves `configHash` or an engine id and so
 prunes the verdict cache, which also gets its own changelog line), patch for
