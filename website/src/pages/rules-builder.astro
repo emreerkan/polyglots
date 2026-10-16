@@ -1,0 +1,360 @@
+---
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import { WPORG_LOCALES, localeDisplayName, localeId } from '../../../app/src/wporg/locales';
+import { CAPITALIZATION_LIMIT, GUIDANCE_LIMIT, REGISTER_LIMIT } from '../../../app/src/rules/schema';
+
+// A client-side tool: the steps below are plain markup, and the script fills
+// the lists and keeps the YAML in step. Nothing leaves the browser unless the
+// person shares the file, and the work is kept in localStorage meanwhile.
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const locales = WPORG_LOCALES.map((l) => ({ wp: l.wp, name: localeDisplayName(localeId(l.slug, l.set)) }));
+const steps = ['Locale and you', 'Basics', 'Writing style', 'Mistakes', 'Advanced', 'Review and share'];
+const PROMPT_HINT = 'Write in English; the model reads it.';
+---
+<Base
+  title="Rules builder · polyglots"
+  description="Build a WordPress locale's polyglots rules file in your browser, without writing YAML or regex, and share it with the polyglots team if you like."
+  path="rules-builder/"
+>
+  <div class="wrap rb" data-rb>
+    <header class="intro">
+      <p class="eyebrow">ada.tools/polyglots/rules-builder</p>
+      <h1>Rules builder</h1>
+      <p class="lede">
+        Build your locale’s rules file without writing YAML. Every step can be skipped. Nothing leaves your browser unless
+        you share the file at the end. See <a href={`${base}docs/locale-rules/`}>Locale rules</a> for what each part does.
+      </p>
+    </header>
+
+    <noscript><p class="note warn">The rules builder runs in your browser and needs JavaScript.</p></noscript>
+
+    <nav class="steps" aria-label="Steps">
+      <ol>
+        {steps.map((s, i) => (
+          <li><button type="button" data-goto={i}><span class="num">{i + 1}</span> {s}</button></li>
+        ))}
+      </ol>
+    </nav>
+
+    <form class="panel" data-form autocomplete="off" novalidate onsubmit="return false">
+      <section data-step="0" aria-labelledby="rb-s0">
+        <h2 id="rb-s0">Locale and you</h2>
+        <p>
+          For GTEs, PTEs and plugin or theme developers who want polyglots to check a locale the way its team does. Pick
+          the locale, then start empty or from the rules the locale team has already published.
+        </p>
+        <div class="field">
+          <label for="rb-locale">Locale</label>
+          <input id="rb-locale" list="rb-locales" data-locale placeholder="tr_TR, de_DE, nl_NL_formal…" spellcheck="false" />
+          <datalist id="rb-locales">
+            {locales.map((l) => <option value={l.wp}>{l.name}</option>)}
+          </datalist>
+          <p class="help" data-locale-status aria-live="polite">Any WordPress locale code from translate.wordpress.org.</p>
+        </div>
+        <div class="row">
+          <button type="button" class="btn" data-fetch>Start from the published rules</button>
+          <button type="button" class="btn quiet" data-reset>Start over</button>
+        </div>
+        <p class="status" data-fetch-status aria-live="polite"></p>
+      </section>
+
+      <section data-step="1" aria-labelledby="rb-s1" hidden>
+        <h2 id="rb-s1">Basics</h2>
+        <h3>Built-in checks</h3>
+        <p class="help">Most checks run for every language. A few run only where a locale turns them on.</p>
+        <ul class="rules" data-rules></ul>
+
+        <h3>Formality</h3>
+        <fieldset class="choice">
+          <legend>How a draft addresses the reader</legend>
+          <label><input type="radio" name="formality" value="" data-bind="formality" checked /> Not set</label>
+          <label><input type="radio" name="formality" value="formal" data-bind="formality" /> Formal</label>
+          <label><input type="radio" name="formality" value="informal" data-bind="formality" /> Informal</label>
+        </fieldset>
+
+        <h3>Register</h3>
+        <p class="help">The tone and form of address. Leave both empty for the register that is standard in WordPress for your language.</p>
+        <div class="field">
+          <label for="rb-reg-audit">For the review prompt</label>
+          <textarea id="rb-reg-audit" rows="2" maxlength={REGISTER_LIMIT} data-bind="register.audit" placeholder="- Address the reader as …"></textarea>
+          <p class="help"><span>{PROMPT_HINT}</span> <span class="count" data-count="register.audit" data-limit={REGISTER_LIMIT}></span></p>
+        </div>
+        <div class="field">
+          <label for="rb-reg-translate">For the draft prompt</label>
+          <textarea id="rb-reg-translate" rows="2" maxlength={REGISTER_LIMIT} data-bind="register.translate" placeholder="- Use the …"></textarea>
+          <p class="help"><span>{PROMPT_HINT}</span> <span class="count" data-count="register.translate" data-limit={REGISTER_LIMIT}></span></p>
+        </div>
+      </section>
+
+      <section data-step="2" aria-labelledby="rb-s2" hidden>
+        <h2 id="rb-s2">Writing style</h2>
+        <div class="field">
+          <label for="rb-cap">Capitalization</label>
+          <textarea id="rb-cap" rows="6" data-bind="capitalization" placeholder="- {language} uses sentence case: only the first word and proper nouns are capitalized."></textarea>
+          <p class="help">
+            <span>{PROMPT_HINT} One “- ” line per point; {'{language}'} becomes the language’s name. Used where title-case runs.</span>
+            <span class="count" data-count="capitalization" data-limit={CAPITALIZATION_LIMIT}></span>
+          </p>
+        </div>
+        <div class="field">
+          <label for="rb-guidance">Guidance</label>
+          <textarea id="rb-guidance" rows="6" data-bind="guidance" placeholder="Button labels are verbs in the imperative."></textarea>
+          <p class="help">
+            <span>{PROMPT_HINT} Your style guide’s few most important lines, added to the AI review prompts.</span>
+            <span class="count" data-count="guidance" data-limit={GUIDANCE_LIMIT}></span>
+          </p>
+        </div>
+        <h3>Proper nouns</h3>
+        <p class="help">Names the title-case check leaves alone. Press enter or type a comma after each.</p>
+        <div class="field">
+          <label for="rb-always">Always capitalized</label>
+          <div class="tags" data-tags="always"><input id="rb-always" data-tag-input placeholder="Türkiye" /></div>
+        </div>
+        <div class="field">
+          <label for="rb-dateonly">Only inside a date</label>
+          <div class="tags" data-tags="dateOnly"><input id="rb-dateonly" data-tag-input placeholder="Pazartesi" /></div>
+        </div>
+      </section>
+
+      <section data-step="3" aria-labelledby="rb-s3" hidden>
+        <h2 id="rb-s3">Mistakes</h2>
+        <p class="help">
+          Wordings your team rejects. Each is found anywhere in a translation, without regard to case, and reaches the
+          reviewer as a hint with your note. The suggested wording and the note: {PROMPT_HINT.toLowerCase()}
+        </p>
+        <ol class="rows" data-list="mistakes"></ol>
+        <button type="button" class="btn" data-add="mistakes">Add a mistake</button>
+      </section>
+
+      <section data-step="4" aria-labelledby="rb-s4" hidden>
+        <h2 id="rb-s4">Advanced</h2>
+        <p class="help">Patterns and how a sentence ends. Most locales need neither.</p>
+        <details data-advanced>
+          <summary>Show the advanced settings</summary>
+          <h3>Patterns</h3>
+          <p class="help">
+            Literal text or a regular expression. A hint is weighed by the reviewer, an error is always wrong, a fix is
+            replaced automatically. Conditions are plain text the English source must contain, or must not. Notes:
+            {' '}{PROMPT_HINT.toLowerCase()}
+          </p>
+          <ol class="rows" data-list="patterns"></ol>
+          <button type="button" class="btn" data-add="patterns">Add a pattern</button>
+
+          <h3>Try your mistakes and patterns</h3>
+          <div class="tester">
+            <div class="field">
+              <label for="rb-try-source">English source</label>
+              <textarea id="rb-try-source" rows="2" data-try="source"></textarea>
+            </div>
+            <div class="field">
+              <label for="rb-try-translation">Translation</label>
+              <textarea id="rb-try-translation" rows="2" data-try="translation"></textarea>
+            </div>
+          </div>
+          <ul class="results" data-try-results aria-live="polite"></ul>
+
+          <h3>Sentence ends</h3>
+          <p class="help">For scripts whose final mark is not a full stop. Each value is a regular expression.</p>
+          <label class="check"><input type="checkbox" data-bind="sentenceEnd.unmarked" /> The language writes no final mark</label>
+          <div class="field">
+            <label for="rb-not-ending">A mark that looks like a full stop and is not one</label>
+            <input id="rb-not-ending" data-bind="sentenceEnd.notEnding" spellcheck="false" class="mono" />
+          </div>
+          <p class="label">Marks that answer the source’s final mark</p>
+          <ol class="rows" data-list="answers"></ol>
+          <button type="button" class="btn" data-add="answers">Add a final mark</button>
+
+          <h3>Glossary match</h3>
+          <div class="field narrow">
+            <label for="rb-ratio">How much of a glossary term an inflected form must keep</label>
+            <input id="rb-ratio" type="number" min="0.05" max="1" step="0.05" placeholder="0.7" data-bind="glossaryStemRatio" />
+            <p class="help">Between 0 and 1. Leave it empty for the default, 0.7.</p>
+          </div>
+        </details>
+      </section>
+
+      <section data-step="5" aria-labelledby="rb-s5" hidden>
+        <h2 id="rb-s5">Review and share</h2>
+        <p class="status" data-validity aria-live="polite"></p>
+        <div class="yaml">
+          <div class="row">
+            <button type="button" class="btn primary" data-download><Icon name="download" /> Download</button>
+            <button type="button" class="btn" data-copy-yaml><Icon name="copy" /> <span data-copy-label>Copy</span></button>
+          </div>
+          <pre data-yaml tabindex="0" aria-label="The rules file"></pre>
+        </div>
+        <p class="help" data-install></p>
+
+        <div class="share">
+          <button type="button" class="btn" data-share-toggle aria-expanded="false" aria-controls="rb-share">Share with the polyglots team</button>
+          <fieldset id="rb-share" class="share-form" data-share hidden>
+            <legend class="sr-only">Share with the polyglots team</legend>
+            <p class="help">The maintainer reviews shared files and proposes good ones to polyglots-data. Add at least one of Slack, GitHub or email.</p>
+            <div class="grid">
+              <div class="field">
+                <label for="rb-wporg">WordPress.org username (optional)</label>
+                <input id="rb-wporg" maxlength="60" data-share-field="wporg" autocomplete="username" spellcheck="false" />
+              </div>
+              <div class="field">
+                <label for="rb-slack">Slack username</label>
+                <input id="rb-slack" maxlength="60" data-share-field="slack" spellcheck="false" />
+              </div>
+              <div class="field">
+                <label for="rb-github">GitHub username</label>
+                <input id="rb-github" maxlength="60" data-share-field="github" spellcheck="false" />
+              </div>
+              <div class="field">
+                <label for="rb-email">Email</label>
+                <input id="rb-email" type="email" maxlength="254" data-share-field="email" autocomplete="email" />
+              </div>
+            </div>
+            <div class="hp" aria-hidden="true">
+              <label for="rb-website">Website</label>
+              <input id="rb-website" tabindex="-1" autocomplete="off" data-share-field="website" />
+            </div>
+            <label class="check">
+              <input type="checkbox" data-share-field="consent" />
+              I understand this information is saved by the polyglots team and can be deleted on request on Slack.
+            </label>
+            <p class="help">The submission is emailed to the maintainer through Mailjet, so a copy stays in that mail history even after a delete on request.</p>
+            <div class="row">
+              <button type="button" class="btn primary" data-send>Send</button>
+            </div>
+            <p class="status" data-share-status aria-live="polite"></p>
+          </fieldset>
+        </div>
+      </section>
+
+      <div class="step-nav">
+        <button type="button" class="btn quiet" data-prev>Back</button>
+        <button type="button" class="btn" data-next>Next <Icon name="arrow" /></button>
+      </div>
+    </form>
+  </div>
+</Base>
+
+<style is:global>
+  /* Global, under .rb: the script builds rows, tags and results that
+     scoped styles would never reach. */
+  /* The script hides steps and buttons with the hidden attribute, which a
+     display rule such as .btn's would otherwise override. */
+  .rb [hidden] { display: none !important; }
+  .rb { padding-top: 3rem; display: grid; gap: 1.5rem; }
+  .rb .intro { max-width: 46rem; }
+  .rb h2 { font-size: 1.5rem; }
+  .rb h3 { margin-top: 1.75rem; }
+  .rb .note.warn { color: var(--warn); }
+
+  .rb .steps ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .rb .steps button {
+    font: inherit; font-size: 0.9rem; color: var(--fg-2); background: transparent;
+    border: 1px solid var(--rule); border-radius: 999px; padding: 0.3rem 0.8rem 0.3rem 0.35rem;
+    display: inline-flex; align-items: center; gap: 0.45rem; cursor: pointer;
+  }
+  .rb .steps button:hover { color: var(--fg); border-color: var(--muted); }
+  .rb .steps .num {
+    display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 999px;
+    background: var(--bg-2); font-family: var(--font-mono); font-size: 0.75rem;
+  }
+  .rb .steps button[aria-current='step'] { color: var(--fg); border-color: var(--accent); background: var(--accent-soft); }
+  .rb .steps button[aria-current='step'] .num { background: var(--accent); color: var(--bg); }
+
+  .rb .panel {
+    border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg);
+    padding: clamp(1rem, 3vw, 2rem); min-width: 0;
+  }
+  .rb section { min-width: 0; }
+  .rb .help { font-size: 0.875rem; color: var(--muted); margin: 0.3rem 0 0; display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; justify-content: space-between; }
+  .rb .label { font-size: 0.95rem; font-weight: 600; margin: 1rem 0 0.4rem; }
+  .rb .status { min-height: 1.6em; margin: 0.75rem 0 0; font-size: 0.95rem; }
+  .rb .status[data-tone='ok'] { color: var(--accent); }
+  .rb .status[data-tone='warn'] { color: var(--warn); }
+  .rb .count { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rb .count[data-over] { color: var(--warn); font-weight: 700; }
+
+  .rb .field { display: grid; gap: 0.3rem; margin-top: 1rem; min-width: 0; }
+  .rb .field.narrow { max-width: 22rem; }
+  .rb .field > label, .rb .check, .rb .choice legend { font-weight: 600; font-size: 0.95rem; }
+  .rb input:not([type='checkbox']):not([type='radio']), .rb textarea, .rb select {
+    font: inherit; font-size: 0.95rem; color: var(--fg); background: var(--bg);
+    border: 1px solid var(--rule); border-radius: 8px; padding: 0.5rem 0.65rem; width: 100%; min-width: 0;
+  }
+  .rb textarea { resize: vertical; line-height: 1.5; }
+  .rb input:focus, .rb textarea:focus, .rb select:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  .rb .mono, .rb [data-mono] { font-family: var(--font-mono) !important; font-size: 0.875rem !important; }
+  .rb .check { display: flex; gap: 0.55rem; align-items: flex-start; margin-top: 1rem; font-weight: 400; }
+  .rb .check input { margin-top: 0.35rem; flex: none; }
+  .rb .choice { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+  .rb .choice legend { margin-bottom: 0.5rem; padding: 0; }
+  .rb .choice label { display: inline-flex; gap: 0.4rem; align-items: center; }
+
+  .rb .row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
+  .rb .btn {
+    font: inherit; font-size: 0.95rem; display: inline-flex; align-items: center; gap: 0.45rem;
+    color: var(--fg); background: var(--bg-2); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 0.5rem 0.9rem; cursor: pointer;
+  }
+  .rb .btn:hover { border-color: var(--muted); }
+  .rb .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .rb .btn.quiet { background: transparent; }
+  .rb .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .rb .rules { list-style: none; padding: 0; margin: 1rem 0 0; display: grid; gap: 0.5rem; }
+  .rb .rules li { border: 1px solid var(--rule); border-radius: 8px; padding: 0.65rem 0.8rem; }
+  .rb .rules label { display: flex; gap: 0.6rem; align-items: flex-start; cursor: pointer; }
+  .rb .rules input { margin-top: 0.35rem; flex: none; }
+  .rb .rules .rule-name { font-weight: 600; }
+  .rb .rules .rule-key { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); margin-left: 0.4rem; }
+  .rb .rules .rule-default { font-size: 0.8rem; color: var(--muted); margin-left: 0.4rem; }
+  .rb .rules .rule-text { margin: 0.15rem 0 0; font-size: 0.9rem; color: var(--fg-2); }
+  .rb .rules .rule-example { margin: 0.15rem 0 0; font-size: 0.85rem; color: var(--muted); }
+
+  .rb .rows { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: 0.75rem; }
+  .rb .rows li {
+    border: 1px solid var(--rule); border-radius: 8px; padding: 0.75rem; position: relative;
+    display: grid; gap: 0.6rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  }
+  .rb .rows li .field { margin-top: 0; }
+  .rb .rows .remove { position: absolute; top: 0.4rem; right: 0.4rem; }
+  .rb .rows li > :first-child { padding-right: 2.5rem; }
+  .rb .rows .row-error { grid-column: 1 / -1; margin: 0; color: var(--warn); font-size: 0.875rem; }
+  .rb .icon-btn {
+    display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 6px;
+    border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .rb .icon-btn:hover { color: var(--fg); background: var(--bg-2); }
+
+  .rb .tags {
+    display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center;
+    border: 1px solid var(--rule); border-radius: 8px; padding: 0.35rem;
+  }
+  .rb .tags:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .rb .tags input { border: 0 !important; outline: none !important; flex: 1 1 8rem; width: auto !important; padding: 0.25rem 0.35rem !important; }
+  .rb .tags .tag {
+    display: inline-flex; align-items: center; gap: 0.15rem; background: var(--bg-2);
+    border: 1px solid var(--rule); border-radius: 999px; padding: 0.1rem 0.15rem 0.1rem 0.6rem; font-size: 0.9rem;
+  }
+  .rb .tags .tag .icon-btn { width: 1.5rem; height: 1.5rem; }
+
+  .rb details summary { cursor: pointer; font-weight: 600; margin-top: 1rem; }
+  .rb .tester { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+  .rb .results { list-style: none; padding: 0; margin: 0.75rem 0 0; display: grid; gap: 0.35rem; font-size: 0.9rem; }
+  .rb .results li { border-left: 3px solid var(--rule); padding: 0.15rem 0 0.15rem 0.6rem; overflow-wrap: anywhere; }
+  .rb .results li[data-tone='hit'] { border-color: var(--accent); }
+  .rb .results li[data-tone='warn'] { border-color: var(--warn); color: var(--warn); }
+  .rb .results li[data-tone='quiet'] { color: var(--muted); }
+
+  .rb .yaml pre { margin: 1rem 0 0; max-height: 32rem; white-space: pre; }
+  .rb .share { margin-top: 2rem; border-top: 1px solid var(--rule); padding-top: 1.25rem; }
+  .rb .share-form { border: 0; padding: 0; margin: 0.5rem 0 0; min-width: 0; }
+  .rb .grid { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+  .rb .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+
+  .rb .step-nav { display: flex; justify-content: space-between; gap: 0.6rem; margin-top: 2rem; border-top: 1px solid var(--rule); padding-top: 1rem; }
+</style>
+
+<script>
+  import { start } from '../components/rules-builder/main';
+  start();
+</script>

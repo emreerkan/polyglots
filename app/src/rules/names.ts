@@ -24,6 +24,31 @@ export const BUILT_IN_RULES = [
   'control',
 ] as const
 
+// These depend on nothing about a particular language: a dropped placeholder, a
+// missing tag or a lost trailing space is wrong everywhere. `glossary` is here
+// too because it runs off each locale's own approved terms. Kept here beside
+// the names rather than in the profile, so the website's rules builder can say
+// which rules run by default without bundling the rules file loader.
+export const UNIVERSAL_RULES: readonly string[] = [
+  'placeholder',
+  'html',
+  'plural-count',
+  'whitespace',
+  'untranslated',
+  // How a .po line spells its string, which no language's orthography touches.
+  'escaping',
+  // An email body has the same shape in every language.
+  'line-breaks',
+  'punctuation',
+  'glossary',
+  'inconsistent',
+  // The memory is per locale and says nothing about a language's orthography,
+  // so a conflict with it is worth reporting wherever polyglots is used.
+  'tm-conflict',
+  // A setting the code reads ("on" for a font switch) is one in every locale.
+  'control',
+] satisfies BuiltInRule[]
+
 // Mistakes and patterns from a locale file. Never switched on by name: it runs
 // whenever the file has any.
 export const CUSTOM_RULE = 'custom'

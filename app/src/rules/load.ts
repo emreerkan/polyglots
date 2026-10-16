@@ -2,29 +2,16 @@ import { readFileSync, statSync } from 'node:fs'
 import { localeFileTag, wpCodeOf } from '../wporg/locales.js'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
-import { LineCounter, parseDocument } from 'yaml'
 import { configDir } from '../paths.js'
 import type { Locale } from '../types.js'
 import { PATTERN_BUDGET_MS, runRegexOps, skippedFor, type RegexOp } from './sandbox.js'
-import { localeRulesSchema, MAX_SCHEMA, normalise, type LocaleRules } from './schema.js'
+import { parseRulesDocument, RulesFileError } from './parse.js'
+import type { LocaleRules } from './schema.js'
 
-export class RulesFileError extends Error {
-  readonly path: string
-  readonly line: number | undefined
-  readonly col: number | undefined
-  // The message without the path and position in front of it, for a caller
-  // that reports those in fields of their own (rules check --json).
-  readonly reason: string
-
-  constructor(path: string, message: string, line?: number, col?: number) {
-    super(`${path}${line === undefined ? '' : `:${line}${col === undefined ? '' : `:${col}`}`} ${message}`)
-    this.name = 'RulesFileError'
-    this.path = path
-    this.line = line
-    this.col = col
-    this.reason = message
-  }
-}
+// The parser itself lives in parse.ts, which the website's rules builder
+// bundles for the browser. Re-exported so every reader of a rules file keeps
+// importing from one place.
+export { RulesFileError } from './parse.js'
 
 // Named by the WordPress code (tr_TR.yaml, nl_NL_formal.yaml): the name
 // translators recognise, and always a valid file name, which nl/formal is not.
@@ -34,12 +21,8 @@ export function localeRulesFile(locale: Locale): string {
 }
 
 /**
- * Parses and validates a rules file's text.
- *
- * A syntax error carries the line and column yaml reports. A schema error is
- * placed on the line of the value it is about, when the document can resolve
- * that path, so "patterns.2.find is not a valid regular expression" points at
- * the line to fix rather than leaving the person to count list items.
+ * Parses and validates a rules file's text: parse.ts's parser, which places a
+ * syntax or schema error on its line.
  *
  * With `probe`, every regex the file carries is also run once over PROBES in
  * the sandbox, and one that runs past the budget is an error on its line.
@@ -48,47 +31,14 @@ export function localeRulesFile(locale: Locale): string {
  * probing every time.
  */
 export function parseLocaleRules(text: string, path: string, opts: { probe?: boolean } = {}): LocaleRules {
-  const lines = new LineCounter()
-  const doc = parseDocument(text, { lineCounter: lines, prettyErrors: false })
-  const syntax = doc.errors[0]
-  if (syntax) {
-    const at = lines.linePos(syntax.pos[0])
-    throw new RulesFileError(path, syntax.message.split('\n')[0] ?? 'invalid YAML', at.line, at.col)
-  }
-  const js: unknown = doc.toJS() ?? {}
-  const declared = typeof js === 'object' && js !== null && 'schema' in js ? (js as { schema: unknown }).schema : undefined
-  if (declared !== undefined) {
-    const node = doc.get('schema', true) as { range?: [number, number, number] } | undefined
-    const line = node?.range ? lines.linePos(node.range[0]).line : undefined
-    const whole = typeof declared === 'number' && Number.isInteger(declared)
-    // Checked before the shape: a newer file may use keys this polyglots has
-    // never heard of, and "update polyglots" is the useful answer, not the
-    // first unknown key it happens to reach.
-    if (whole && declared > MAX_SCHEMA) {
-      throw new RulesFileError(path, `needs rules schema ${declared}; this polyglots reads up to ${MAX_SCHEMA}. Update polyglots.`, line)
-    }
-    if (!whole || declared < 1) {
-      throw new RulesFileError(path, `schema must be a whole number from 1 to ${MAX_SCHEMA}`, line)
-    }
-  }
-  const parsed = localeRulesSchema.safeParse(js)
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0]!
-    const dotted = issue.path.join('.')
-    const node = issue.path.length > 0 ? doc.getIn(issue.path, true) : undefined
-    const range = (node as { range?: [number, number, number] } | undefined)?.range
-    const line = range ? lines.linePos(range[0]).line : undefined
-    throw new RulesFileError(path, `${dotted ? `${dotted} ` : ''}${issue.message}`, line)
-  }
-  const rules = normalise(parsed.data)
+  const { rules, lineOf } = parseRulesDocument(text, path)
   if (opts.probe) {
     const runaway = probe(rules)
     if (runaway) {
-      const range = (doc.getIn(runaway, true) as { range?: [number, number, number] } | undefined)?.range
       throw new RulesFileError(
         path,
         `${runaway.join('.')} took longer than ${PATTERN_BUDGET_MS} ms on a test string (a regex that can run away)`,
-        range ? lines.linePos(range[0]).line : undefined,
+        lineOf(runaway),
       )
     }
   }

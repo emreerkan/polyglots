@@ -1,0 +1,208 @@
+# polyglots rules for tr_TR (tr)
+#
+# Sources:
+#   - The polyglots tr pack (rules, proper nouns, the two grammar patterns,
+#     and the capitalization guidance with the exception for menu labels,
+#     screen and section names and headings, TDK madde D).
+#   - The tr_TR general translation guide by a tr_TR GTE (sections cited as §).
+#   - The tr_TR glossary on translate.wordpress.org.
+#
+# Each pattern was measured against 141,730 approved tr strings in the
+# maintainer's translation memory. "TM: N" is how many approved strings it
+# matches today. A high number means approved work breaks the rule too, not
+# that the rule is wrong; the guide and TDK decide.
+#
+# Any change re-reviews files of this locale from scratch on their next run.
+# Check the file with: polyglots rules check --file locales/tr_TR/rules.yaml
+
+schema: 2
+
+rules:
+  enable: [title-case, apostrophe, ampersand, number-format]
+  disable: []
+
+glossaryStemRatio: 0.7
+
+# A list written here replaces the built-in one, so the pack's names are all
+# repeated. Added from §1: Türk Dil Kurumu, and the names of religions.
+properNouns:
+  always:
+    - Türk
+    - Türkçe
+    - Türkiye
+    - Türk Dil Kurumu
+    - İngiliz
+    - İngilizce
+    - Almanca
+    - Alman
+    - Fransızca
+    - Fransız
+    - İspanyolca
+    - İspanyol
+    - İtalyanca
+    - İtalyan
+    - Rusça
+    - Rus
+    - Arapça
+    - Arap
+    - Japonca
+    - Japon
+    - Çince
+    - Çin
+    - Korece
+    - Portekizce
+    - Hollandaca
+    - Lehçe
+    - İbranice
+    - Farsça
+    - Yunanca
+    - Yunan
+    - Kürtçe
+    - Kürt
+    - Müslüman
+    - Hristiyan
+    - Yahudi
+  dateOnly: [Pazartesi, Salı, Çarşamba, Perşembe, Cuma, Cumartesi, Pazar, Ocak, Şubat, Mart, Nisan, Mayıs, Haziran, Temmuz, Ağustos, Eylül, Ekim, Kasım, Aralık]
+
+# Literal, case-insensitive, found anywhere in a translation.
+mistakes:
+  - wrong: önizle
+    right: ön izle
+    note: The glossary and TDK write it as two words (ön izle, ön izleme). TM 377 önizle / 301 ön izle.
+  - wrong: herşey
+    right: her şey
+    note: TDK writes it as two words (§5). TM 7.
+  - wrong: birşey
+    right: bir şey
+    note: TDK writes it as two words (§5); hiçbir şey keeps hiçbir joined. TM 15.
+  - wrong: halbuki
+    right: hâlbuki
+    note: Joined ki, written with the circumflex (§5, §9).
+  - wrong: kağıt
+    right: kâğıt
+    note: A circumflex marks the soft k (§9). TM 14.
+  - wrong: kağıd
+    right: kâğıd
+    note: A circumflex marks the soft k, also in kâğıdı (§9). TM 4.
+
+patterns:
+  # From the pack. A suffix glued to a placeholder has to agree in vowel
+  # harmony with a value the translator never sees (§2).
+  - find: '(?<![\p{L}\p{M}\p{N}])(?:%(?:\d+\$)?[-+0#]?\d*(?:\.\d+)?[sdfu]|\{[\w-]+\})[''’]\p{L}+'
+    level: hint
+    note: A suffix on a placeholder cannot agree with every value; rephrase so it lands on a word, as in "%s adlı eklentide"
+
+  # From the pack. Turkish keeps the noun singular after a number.
+  - find: '%(?:\d+\$)?[du](?:</[a-z]+>)?\s+(?!(?:dolar|lari|taler|popüler|modüler|seküler|moleküler|selüler|vasküler|regüler|tübüler|angüler|oküler|kapiler|skaler|polar|bipolar|solar|kiler|keler|çalar|galeri|ileri)\p{L}{0,4}(?![\p{L}\p{M}]))\p{L}+(?:lar(?:ı(?:mız|nız)?|ım|ın)?(?:n?a|ya|n?[dt]an?|n?ın|n?ı|y?la|dır|ca|[dt]aki)?|ler(?:i(?:miz|niz)?|im|in)?(?:n?e|ye|n?[dt]en?|n?in|n?i|y?le|dir|ce|[dt]eki)?)(?![\p{L}\p{M}])'
+    level: hint
+    note: Turkish keeps the noun singular after a number, as in "%d dosya"
+
+  # §7. The ellipsis follows the source: three full stops where the source has
+  # them, the character where the source has it. Never changed automatically.
+  # TM: 601 strings use three full stops, 363 the character.
+  - find: '(?<!\.)\.\.\.(?!\.)'
+    level: hint
+    when: { source: '…' }
+    note: The source uses the ellipsis character (…); use it too, not three full stops
+  - text: '…'
+    level: hint
+    when: { source: '...' }
+    note: The source uses three full stops; keep them as in the source
+
+  # §5. "yada" is never the conjunction, so it is replaced. A find with a
+  # capture rather than a text fix: a text fix matches inside words and would
+  # turn Antalyada into "Antalya da". $1 keeps the capital of a sentence start.
+  # TM: 86.
+  - find: '(?<![\p{L}\p{M}''’])([Yy])ada(?![\p{L}\p{M}])'
+    replace: '$1a da'
+    level: fix
+    note: The conjunction is two words, "ya da"
+
+  # §5. The conjunction da/de is never ta/te. Apostrophes and entities before it
+  # are skipped, so Mac'te and WordPress&#8217;te stay quiet. TM: 3, Lorem
+  # ipsum and French names.
+  - find: '(?<![\p{L}\p{M}''’;&-])(?:te|ta)(?![\p{L}\p{M}-])'
+    level: hint
+    note: The conjunction is "da/de", written separately and never "ta/te"
+
+  # §4. The vowels of içeri, dışarı, yukarı and ileri do not drop. TM: 20.
+  - find: '(?<![\p{L}\p{M}])(?:[İi]çerde|[Dd]ışarda|[Yy]ukarda|[İi]lerde)'
+    level: hint
+    note: The vowel does not drop in içeri, dışarı, yukarı, ileri; write içeride, dışarıda, yukarıda, ileride
+
+  # §4. Narrowing is not written before -acak/-ecek and -an/-en. Only the
+  # negative form is checked: in okuyacak or yürüyecek the ı/i/u/ü belongs to
+  # the stem, so a general check would be wrong. TM: 0.
+  - find: '\p{L}m[ıi]y(?:acak|ecek|an|en)(?![\p{L}\p{M}])'
+    level: hint
+    note: Narrowing is not written before -acak/-ecek and -an/-en; write gelmeyecek, gelmeyen, not gelmiyecek, gelmiyen
+
+  # §5. The question particle is written separately. Checked only after the
+  # third person imperative, where a joined "mi" cannot be part of the word.
+  # TM: 0.
+  - find: '\p{L}s[ıiuü]nm[ıiuü](?:\?|(?![\p{L}\p{M}]))'
+    level: hint
+    note: The question particle is written separately, as in "Silinsin mi?"
+
+  # §7. No comma before "ve". TM: 32.
+  - find: ',\s+ve(?![\p{L}\p{M}])'
+    level: hint
+    note: Turkish puts no comma before "ve"
+
+  # §9. "hala" means aunt; "still" is "hâlâ". TM: 81 hala, 30 hâlâ.
+  - find: '(?<![\p{L}\p{M}])[Hh]ala(?![\p{L}\p{M}])'
+    level: hint
+    note: '"Still" is written "hâlâ"; "hala" means aunt'
+
+  # §6. An ordinal is "15." or "15'inci", not both. TM: 0.
+  - find: '\d\.[''’]?n?[ıiuü]?nc[ıiuü]'
+    level: hint
+    note: Write an ordinal as "15." or "15'inci", not both
+
+  # §6. Distributive numerals are written in words. TM: 0.
+  - find: '\d[''’](?:şer|şar|er|ar)(?![\p{L}\p{M}])'
+    level: hint
+    note: Write distributive numerals in words, as "ikişer", not "2'şer"
+
+  # §6. Thousands are grouped with a full stop and decimals take a comma. A
+  # value like 1,234 can also be a correct Turkish decimal, hence a hint. TM: 10.
+  - find: '(?<![\p{L}\p{M}\p{N},.])\d{1,3},\d{3}(?:,\d{3})*(?:\.\d+)?(?![\p{N}]|,\d)'
+    level: hint
+    note: Turkish groups thousands with a full stop and writes decimals with a comma, as 1.000,5
+
+  # §7. One space between words. Some of these copy a double space in the
+  # source, which is why this asks rather than fixes. TM: 304.
+  - find: '\S {2,}\S'
+    level: hint
+    note: One space between words, unless the source has two in the same place
+
+# §2, §2b, §3, §5, §6, §7, §9, §10. What a pattern cannot check. At most 1500
+# characters. Capitalization is not repeated here: the capitalization section
+# below covers it, with the exception for menu labels and headings.
+guidance: |
+  Never attach a suffix to a placeholder: write "%s silinsin mi?", "Düzenle: %s", not "%s'yi sil". If a suffix is unavoidable, quote the value. Reorder with %1$s/%2$s freely.
+  Keep tags and structural attributes (href, src, class, id, target, rel) as they are; translate visible ones (title, alt, aria-label, placeholder) and never delete them. Tags and placeholders may move to fit Turkish word order.
+  Apostrophe: inflectional suffixes on proper nouns, abbreviations and numbers (WordPress'te, URL'yi, 2024'te). None on derivational suffixes, plurals, institution names or common nouns (Türkçe, Türk Dil Kurumundan, sitede).
+  Written separately: the conjunctions da/de and ki, and the question particle mi with its endings (Verecek misin?). The locative -da/-de is joined. Fixed forms join: belki, çünkü, sanki, mademki.
+  Circumflex only where it changes meaning or softens g, k, l: hâlâ, kâğıt, millî, resmî.
+  Numbers: digits for time, money, measures; no space after %; 15. or 15'inci, never both.
+  Keep the source's final punctuation. Buttons are imperative without a full stop; confirmations are questions with a separate mi; info messages are full sentences.
+  Address the user as siz, but do not add a subject the source does not need.
+  Keep line breaks, empty lines and HTML structure of long texts; translate sentence by sentence.
+
+# Turkish WordPress addresses the reader as "siz". These are the lines
+# polyglots used for every locale without a register of its own.
+register:
+  audit: '- Use the formal, neutral register standard in WordPress {language}. No slang, no over-familiar address.'
+  translate: '- Use the formal/neutral register that is standard in WordPress {language}.'
+
+# Drafts address the reader as "siz" (DeepL formality and the draft prompt).
+formality: formal
+
+# Added to the review prompt when title-case runs. From the polyglots tr pack,
+# word for word. {language} is replaced with the language name.
+capitalization: |
+  - {language} does NOT use English Title Case. Only the first word and proper nouns are capitalized. "Tüm Değişiklikleri Kaydet" is wrong; "Tüm değişiklikleri kaydet" is right. Brand names (WordPress, WooCommerce) and acronyms keep their own casing.
+  - A capital mid-string is legitimate when the word is a proper noun. In {language} that includes place and person names, names of languages and peoples, day and month names inside a specific date, titles of works, and institution names, where every word is capitalized (Türk Dil Kurumu). An automated check cannot recognize most of these, so when a title-case finding is really one of them, clear it.
+  - Menu labels, screen and section names, and section headings in help or documentation pages are a deliberate exception. TDK madde D capitalizes the words of sign-like labels, and the locale team does not reject a submission over capitalization in those places, so do NOT report title-case for them. This exception covers labels and headings only. Commands, buttons, confirmations, error messages and running prose keep sentence case, and an English calque there is still a problem worth reporting.
+  - The two kinds of title-case check are not equal evidence. A finding that says the translation "mirrors the English source" means the source itself was Title Case and the translation copied its shape word for word; that is close to proof of an English calque. A finding that only says a word is capitalized mid-string is much weaker: measured against approved WordPress {language} translations it is roughly four times as likely to be a false alarm, and the usual reason is that the capitalized words name a thing, most often a feature, widget, block or key ("Etiket Bulutu bileşeninde", "Hızlı Düzenleme'de göster", "Site Logosu bloğu", "Shift + Ok tuşları"). Check what the capitalized words refer to before confirming that kind.

@@ -53,6 +53,28 @@ your team should have in polyglots-data itself.
 The file is written exactly as downloaded, comments included. To fetch from
 a fork or a test release, point `POLYGLOTS_DATA_URL` at its `index.json`.
 
+## Building a rules file in the browser
+
+The [rules builder](https://ada.tools/polyglots/rules-builder/) writes a
+rules file for you, step by step, without YAML or regular expressions:
+the locale, the built-in checks, formality and register, capitalization,
+guidance and proper nouns, common mistakes, and, behind an advanced
+section, patterns and sentence ends. Every step can be skipped.
+
+- **Start from the published rules** loads your locale's file from
+  polyglots-data, so you change your team's rules rather than start over.
+  Its comments are not carried over.
+- The file is checked as you type, with the same checks polyglots runs, and
+  shown in full in the last step. Download it, or copy it.
+- A tester runs your mistakes and patterns on a sample source and
+  translation, and says which ones fire. Like a review, it stops a regular
+  expression after 100 ms and leaves it out.
+- Nothing leaves your browser unless you share the file. Your work is kept
+  in the browser, so a reload does not lose it.
+
+Save the download as the file `polyglots rules path <locale>` prints, then
+run `polyglots rules check <locale>`.
+
 ## The rules file
 
 ```
@@ -198,3 +220,8 @@ served verdicts formed under the old rules.
 A rules file that works for your team is worth sharing. Locale files live in
 [polyglots-data](https://github.com/emreerkan/polyglots-data); its
 contributing guide says how to propose one for your locale.
+
+The rules builder can also send your file to the polyglots team. Give a
+Slack or GitHub username, or an email, so the maintainer can reach you; a
+WordPress.org username alone is not enough. What you send is saved by the
+team and emailed to the maintainer, and is deleted on request on Slack.

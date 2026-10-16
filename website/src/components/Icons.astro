@@ -1,7 +1,8 @@
 ---
-// One inline sprite for every icon on the site, referenced with <use>. Fewer
-// than ten icons, so no icon library: each is a 24px stroke drawing in the
-// style of Lucide, using currentColor.
+// One inline sprite for every icon on the site, referenced with <use>. A
+// handful of icons, so no icon library: each is a 24px stroke drawing in the
+// style of Lucide, using currentColor. The rules builder's script draws x
+// from here too, for the rows and tags it adds.
 ---
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <defs>
@@ -31,6 +32,12 @@
     </symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M5 12h14M13 6l6 6-6 6" />
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18M6 6l12 12" />
     </symbol>
   </defs>
 </svg>

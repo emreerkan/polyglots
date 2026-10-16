@@ -1,6 +1,6 @@
 import { loadLocaleRules } from '../../rules/load.js'
 import type { LocaleRules } from '../../rules/schema.js'
-import { CUSTOM_RULE } from '../../rules/names.js'
+import { CUSTOM_RULE, UNIVERSAL_RULES } from '../../rules/names.js'
 import type { Locale } from '../../types.js'
 
 export interface RuleProfile {
@@ -12,31 +12,12 @@ export interface RuleProfile {
   glossaryStemRatio: number
 }
 
-// These depend on nothing about a particular language: a dropped placeholder, a
-// missing tag or a lost trailing space is wrong everywhere. `glossary` is here
-// too because it runs off each locale's own approved terms.
-const UNIVERSAL = [
-  'placeholder',
-  'html',
-  'plural-count',
-  'whitespace',
-  'untranslated',
-  // How a .po line spells its string, which no language's orthography touches.
-  'escaping',
-  // An email body has the same shape in every language.
-  'line-breaks',
-  'punctuation',
-  'glossary',
-  'inconsistent',
-  // The memory is per locale and says nothing about a language's orthography,
-  // so a conflict with it is worth reporting wherever polyglots is used.
-  'tm-conflict',
-  // A setting the code reads ("on" for a font switch) is one in every locale.
-  'control',
-] as const
+// The universal set lives in rules/names.ts beside the rule names, where the
+// website's rules builder can import it without this module's loader.
+export { UNIVERSAL_RULES }
 
 export const DEFAULT_PROFILE: RuleProfile = {
-  rules: new Set(UNIVERSAL),
+  rules: new Set(UNIVERSAL_RULES),
   glossaryStemRatio: 0.7,
 }
 
@@ -53,8 +34,6 @@ export const DEFAULT_PROFILE: RuleProfile = {
 export function builtInProfileFor(_locale: Locale): RuleProfile {
   return DEFAULT_PROFILE
 }
-
-export const UNIVERSAL_RULES: readonly string[] = UNIVERSAL
 
 /**
  * The rules that run for a locale: the built-in profile, overridden by the
@@ -77,7 +56,7 @@ export function profileFor(locale: Locale): RuleProfile {
 export function mergeProfile(base: RuleProfile, file: LocaleRules | undefined): RuleProfile {
   if (!file) return base
   const rules = file.rules
-    ? new Set([...UNIVERSAL, ...file.rules.enable].filter((name) => !file.rules!.disable.includes(name)))
+    ? new Set([...UNIVERSAL_RULES, ...file.rules.enable].filter((name) => !file.rules!.disable.includes(name)))
     : new Set(base.rules)
   if (file.patterns.length > 0) rules.add(CUSTOM_RULE)
   return { rules, glossaryStemRatio: file.glossaryStemRatio ?? base.glossaryStemRatio }
