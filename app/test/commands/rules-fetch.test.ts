@@ -164,6 +164,30 @@ describe('planRulesFetch', () => {
     expect(plan.summary.at(-1)).toBe('status: maintained · maintainers (wordpress.org): evil\\u{1b}[2K, tab\\u{9}here')
   })
 
+  // The summary and the write are separated by a question the person can
+  // leave open as long as they like. An edit made in that time is not in the
+  // summary, so replacing it would lose work nobody was shown.
+  it('refuses to write over a local file edited after the summary, and keeps the edit', async () => {
+    await publish(served)
+    const path = await writeLocal('guidance: a\n')
+    const plan = await planRulesFetch('tr', dataClient)
+    expect(plan.state).toBe('changed')
+    await writeFile(path, 'guidance: edited meanwhile\n')
+    const err = await writeRulesFetch(plan).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(DataError)
+    expect((err as Error).message).toBe(`${path} changed since the summary; nothing was written. Run rules fetch again.`)
+    expect(await readFile(path, 'utf8')).toBe('guidance: edited meanwhile\n')
+  })
+
+  it('refuses to write over a local file created after a summary that found none', async () => {
+    await publish(served)
+    const plan = await planRulesFetch('tr', dataClient)
+    expect(plan.state).toBe('new')
+    const path = await writeLocal('guidance: made meanwhile\n')
+    await expect(writeRulesFetch(plan)).rejects.toThrow(`${path} changed since the summary; nothing was written. Run rules fetch again.`)
+    expect(await readFile(path, 'utf8')).toBe('guidance: made meanwhile\n')
+  })
+
   it('summarises prompt text, fix patterns and sentenceEnd', async () => {
     const after = [
       'schema: 2',

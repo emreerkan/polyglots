@@ -18,6 +18,11 @@ export interface RulesFetchPlan {
   path: string
   entry: RulesManifestEntry
   text: string
+  /**
+   * The local file's bytes when the summary was made, absent when there was
+   * none. writeRulesFetch compares the file against them before replacing it.
+   */
+  local?: Buffer
   state: 'new' | 'same' | 'changed'
   summary: string[]
 }
@@ -74,7 +79,7 @@ export async function planRulesFetch(locale: Locale, client: DataClient): Promis
   }
   const status = `status: ${entry.status} · maintainers (wordpress.org): ${entry.maintainers.length > 0 ? entry.maintainers.join(', ') : 'none listed'}`
   if (local === undefined) return { locale, path, entry, text, state: 'new', summary: visible([...diffRules(undefined, after), status]) }
-  if (local.equals(downloaded)) return { locale, path, entry, text, state: 'same', summary: [] }
+  if (local.equals(downloaded)) return { locale, path, entry, text, local, state: 'same', summary: [] }
 
   // A local file that no longer parses is the case fetching most often
   // repairs, so it must not refuse the fetch. It is compared against nothing,
@@ -88,7 +93,7 @@ export async function planRulesFetch(locale: Locale, client: DataClient): Promis
     if (!(err instanceof RulesFileError)) throw err
     notes.push(`The local file is not valid (${err.message}); compared against nothing.`)
   }
-  return { locale, path, entry, text, state: 'changed', summary: visible([...notes, ...diffRules(before, after), status]) }
+  return { locale, path, entry, text, local, state: 'changed', summary: visible([...notes, ...diffRules(before, after), status]) }
 }
 
 // Every summary line carries text from a file and a manifest someone else
@@ -109,8 +114,24 @@ const visible = (lines: string[]) =>
  * the manifest. Temp file and rename in the same folder, as saveTemplate
  * does: a review reading the rules part way through a write sees the old
  * file or the new one, never half of each.
+ *
+ * The summary the person agreed to described the file as it was when the plan
+ * was made, and the question in between can stay open for as long as they
+ * like, long enough to edit the file in another window. So the file is read
+ * again first, and anything other than the bytes the summary saw (a changed
+ * file, or one created after a summary that found none) refuses the write
+ * rather than replacing work nobody was shown. The read and the rename are
+ * still two steps; what is left between them is milliseconds, not a prompt.
  */
 export async function writeRulesFetch(plan: RulesFetchPlan): Promise<void> {
+  let now: Buffer | undefined
+  try {
+    now = await readFile(plan.path)
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+  }
+  const unchanged = now === undefined ? plan.local === undefined : plan.local !== undefined && now.equals(plan.local)
+  if (!unchanged) throw new DataError(`${plan.path} changed since the summary; nothing was written. Run rules fetch again.`)
   await mkdir(dirname(plan.path), { recursive: true })
   const temp = `${plan.path}.tmp-${randomUUID()}`
   try {
