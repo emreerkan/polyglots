@@ -117,6 +117,49 @@ describe('saveRulesDraft', () => {
     expect(await readFile(localeRulesFile('tr'), 'utf8')).toBe(HAND_WRITTEN)
   })
 
+  // The editor offers "When source lacks", which only a schema-2 file may
+  // use, but has no field for the schema itself. Most hand-written files
+  // predate the schema line, and refusing the save would send the person out
+  // of the editor to add one line by hand.
+  it('declares schema 2 at the top when a pattern needs it and the file has no schema line', async () => {
+    await writeRules(HAND_WRITTEN)
+    const draft = openRulesDraft('tr')
+    await saveRulesDraft(draft, {
+      ...draft.value,
+      patterns: [{ text: 'blog', when: { notSource: 'blog' }, level: 'hint' }],
+    })
+    const text = await readFile(localeRulesFile('tr'), 'utf8')
+    expect(text).toContain('# My own notes about this file.')
+    expect(text.split('\n').find((l) => /^[a-z]/i.test(l))).toBe('schema: 2')
+    // The file's own title stays its first line, and the comment that
+    // described mistakes still sits right above it.
+    expect(text.split('\n')[0]).toBe('# polyglots rules for tr_TR (tr)')
+    expect(text).toMatch(/# Things contributors keep getting wrong\.\nmistakes:/)
+    const rules = loadLocaleRules('tr')!
+    expect(rules.schema).toBe(2)
+    expect(rules.patterns.find((p) => p.text === 'blog')?.whenNotSource).toBe('blog')
+  })
+
+  it('raises an explicit schema: 1 to 2 in place when a pattern needs it', async () => {
+    await writeRules('schema: 1\n' + HAND_WRITTEN)
+    const draft = openRulesDraft('tr')
+    await saveRulesDraft(draft, {
+      ...draft.value,
+      patterns: [{ text: 'blog', when: { notSource: 'blog' }, level: 'hint' }],
+    })
+    const text = await readFile(localeRulesFile('tr'), 'utf8')
+    expect(text.match(/^schema:.*$/gm)).toEqual(['schema: 2'])
+  })
+
+  // A save that needs nothing from schema 2 leaves the file's schema alone:
+  // declaring 2 would make an older polyglots refuse a file it can read.
+  it('leaves the schema alone when nothing needs schema 2', async () => {
+    await writeRules(HAND_WRITTEN)
+    const draft = openRulesDraft('tr')
+    await saveRulesDraft(draft, { ...draft.value, patterns: [{ text: 'blog', when: { source: 'blog' }, level: 'hint' }] })
+    expect(await readFile(localeRulesFile('tr'), 'utf8')).not.toMatch(/^schema:/m)
+  })
+
   // Edited elsewhere while the menu was open: saving would silently lose that.
   it('refuses to overwrite a file changed on disk since it was opened', async () => {
     await writeRules(HAND_WRITTEN)

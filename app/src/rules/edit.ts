@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { parseDocument, Scalar } from 'yaml'
+import { isMap, isNode, parseDocument, Scalar } from 'yaml'
 import { builtInProfileFor } from '../audit/rules/profiles.js'
 import { builtInProperNounsFor, type ProperNouns } from '../audit/rules/proper-nouns.js'
 import type { Locale } from '../types.js'
@@ -94,6 +94,37 @@ export async function saveRulesDraft(draft: RulesDraft, next: RulesValue): Promi
     } else {
       doc.set(key, doc.createNode(after))
     }
+  }
+
+  // The editor offers "When source lacks", which only a schema-2 file may
+  // use, but has no field for the schema itself, and most hand-written files
+  // predate the schema line. Refusing such a save would send the person out
+  // to add one line by hand, so the line is added for them, at the top where
+  // the loader's message says it belongs. It is added only when something in
+  // the saved value needs it: declaring 2 on a file that does not use it
+  // would make an older polyglots refuse a file it can read.
+  const needsSchema2 = next.patterns.some((p) => p.when?.notSource !== undefined)
+  const declared = doc.get('schema')
+  if (needsSchema2 && !(typeof declared === 'number' && declared >= 2)) {
+    if (doc.has('schema')) doc.set('schema', 2)
+    else if (isMap(doc.contents)) {
+      // A file's opening comment block, when a blank line separates it from
+      // the first key's own comment, parses as one comment on that first
+      // key. Put in front of it unsplit, the schema line would sit above the
+      // file's title; the part before the last blank line is the file's
+      // header, so it moves above the schema line and the rest stays with
+      // the key it describes.
+      const pair = doc.createPair('schema', 2)
+      const first = doc.contents.items[0]?.key
+      const comment = isNode(first) ? first.commentBefore : undefined
+      const split = comment?.lastIndexOf('\n\n') ?? -1
+      if (isNode(first) && comment && split >= 0) {
+        (pair.key as Scalar).commentBefore = comment.slice(0, split)
+        first.commentBefore = comment.slice(split + 2)
+        first.spaceBefore = true
+      }
+      doc.contents.items.unshift(pair as (typeof doc.contents.items)[number])
+    } else doc.set('schema', 2)
   }
 
   const text = doc.toString()
