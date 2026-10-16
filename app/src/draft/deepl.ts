@@ -5,6 +5,7 @@ import { chunk } from '../batch.js'
 import type { DraftEngine, DraftResult, Locale, TranslationUnit } from '../types.js'
 import { DraftQuotaError, DraftRateLimitError } from './errors.js'
 import { warnMissingPlaceholders, type WarningSink } from './placeholders.js'
+import { formalityOf } from './prompt.js'
 
 export interface DeepLClientLike {
   translateText(
@@ -58,12 +59,16 @@ export function createDeepLEngine(opts: DeepLEngineOptions): DraftEngine {
 
       const texts = units.flatMap((u) => (u.msgidPlural === undefined ? [u.msgid] : [u.msgid, u.msgidPlural]))
       const target = toDeepLTarget(locale)
-      // A formal or informal set is exactly what DeepL's formality option is
-      // for. "prefer_" so a language DeepL has no formality for still works.
-      const { set } = splitLocale(locale)
+      // The rules file's formality, or a formal or informal set when the file
+      // says nothing, is exactly what DeepL's formality option is for. "prefer_"
+      // so a language DeepL has no formality for still works rather than
+      // failing the batch. The draft cache needs nothing extra for this: a
+      // file formality also adds a line to draftSystemPrompt, which is what
+      // draftConfigHash hashes, so changing it prunes DeepL drafts too.
+      const f = formalityOf(locale)
       const options: TranslateTextOptions = {
         preserveFormatting: true,
-        ...(set === 'formal' ? { formality: 'prefer_more' as const } : set === 'informal' ? { formality: 'prefer_less' as const } : {}),
+        ...(f === 'formal' ? { formality: 'prefer_more' as const } : f === 'informal' ? { formality: 'prefer_less' as const } : {}),
       }
 
       const translated: string[] = []
