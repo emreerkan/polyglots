@@ -242,6 +242,26 @@ test('validity: ordinary regexes pass the probes', async () => {
   assert.equal(await probeProblem(parseRulesText(yaml, 'tr_TR.yaml'), sandboxRun), undefined)
 })
 
+// RegexRunner builds its Worker inside run's promise chain, so a constructor
+// that throws (a worker-src refusal, say) arrives as a rejection. Left to
+// escape, it rejected the page's probe unhandled: the validity line stayed on
+// "Checking the regular expressions…" and Send, awaiting the probe, did
+// nothing. A thrown run is an untested file, the same as a worker that would
+// not start, and gets the same answer.
+test('validity: a run that throws is reported as untested, not left hanging', async () => {
+  const yaml = emitRulesYaml({ ...emptyBuilderState('tr_TR'), patterns: [pattern({ mode: 'find', value: '\\s{2,}' })] })
+  const rules = parseRulesText(yaml, 'tr_TR.yaml')
+  const refused = new Error('Refused to create a worker')
+  const rejecting = (): Promise<never> => Promise.reject(refused)
+  const throwing = (): never => {
+    throw refused
+  }
+  for (const run of [rejecting, throwing]) {
+    const problem = await probeProblem(rules, run)
+    assert.match(problem ?? '', /could not be tested in this browser \(Refused to create a worker\)/)
+  }
+})
+
 // The app's link names a locale in the address. Saved work for another
 // locale must not be relabelled to it, or de_DE rules leave the page as tr_TR.
 test('store: an address locale does not relabel saved work for another locale', () => {

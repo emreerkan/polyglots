@@ -26,7 +26,16 @@ export async function probeProblem(
     const key = RegexRunner.key(regex);
     if (passed.has(key)) continue;
     for (const text of PROBES) {
-      const outcome = await run({ source: regex.source, flags: regex.flags, text });
+      // A run that throws, such as a Worker constructor refused by the
+      // page's policy, has tested nothing, like a worker that never started.
+      // Let through, it rejected the page's probe with nobody to catch it,
+      // and the page sat on "Checking" with a Send that did nothing.
+      let outcome: Outcome;
+      try {
+        outcome = await run({ source: regex.source, flags: regex.flags, text });
+      } catch (err) {
+        outcome = { error: err instanceof Error ? err.message : String(err) };
+      }
       if ('runaway' in outcome) return `${runawayReason(regex.at, PATTERN_BUDGET_MS)}: “${regex.source}”`;
       // The worker would not start, so nothing was tested. Saying Valid here
       // is the claim this check exists to stop making.

@@ -636,7 +636,10 @@ export function start(): void {
   if (request.conflict) {
     const { saved: kept, asked: wanted } = request.conflict;
     const restart = el('button', { type: 'button', class: 'btn quiet', text: `Start over for ${wanted}` });
+    // The saved work for the other locale is all the page keeps, and load
+    // overwrites it in storage at once, so this asks as the reset does.
     restart.addEventListener('click', () => {
+      if (hasContent(state) && !confirm(`Clear your ${kept} work and start over for ${wanted}?`)) return;
       load(emptyBuilderState(wanted));
       say(fetchStatus, `Started over for ${wanted}.`);
     });
