@@ -8,6 +8,7 @@ import { openJobsDb } from '../../src/jobs/db.js'
 import type { CachedVerdict, VerdictKey } from '../../src/jobs/verdicts.js'
 import { openDb, replaceGlossary } from '../../src/storage/index.js'
 import { reviewFile } from '../../src/commands/review.js'
+import { replyCaution } from '../../src/reply/templates.js'
 import { localeRulesFile } from '../../src/rules/load.js'
 import { isSkipFinding } from '../../src/rules/custom.js'
 import { resetSandbox } from '../../src/rules/sandbox.js'
@@ -144,5 +145,42 @@ describe('review with a model and a runaway locale pattern', () => {
     const second = vi.fn(clean)
     await auditEntries({ ...opts, adjudicate: second })
     expect(second).not.toHaveBeenCalled()
+  })
+})
+
+// Maintainer ruling 2026-10-16, second half: a rules-file fault reaches
+// nothing a contributor reads. The reply's caution and its verdict branch
+// count needsReview, and the requester message counts byGroup, so a skip
+// left in either would tell a contributor their entry was doubted, or fixed
+// for "smaller issues", over a regex they never wrote.
+describe('a runaway locale pattern and what the contributor is told', () => {
+  it('does not make a rules-only run count the entry as a guess, and still writes the skip', async () => {
+    const summary = await reviewFile({ file, locale: 'tr', db, jobsDb, noAi: true })
+    expect(summary.needsReview).toBe(0)
+    expect(replyCaution(summary)).toBeUndefined()
+    const out = await readFile(summary.problemsFile!, 'utf8')
+    expect(block(out, 'First')).toContain('locale rule skipped: nested repetition took longer than 100 ms')
+  })
+
+  it('does not count the entry among the suspects the rules report, with or without a model', async () => {
+    const entries: AuditEntry[] = [{ key: 'First', msgid: 'First', msgstr: [RUNAWAY], comments: [], references: [], fuzzy: false }]
+    const suspects: number[] = []
+    const opts = { locale: 'tr' as const, nplurals: 2, glossary: [], entries, onRules: (r: { suspects: number }) => void suspects.push(r.suspects) }
+    await auditEntries({ ...opts, noAi: true })
+    resetSandbox()
+    await auditEntries({ ...opts, adjudicate: async (batch) => batch.map((c) => ({ id: c.id, problem: false, categories: [], reason: '' })) })
+    expect(suspects).toEqual([0, 0])
+  })
+
+  it('leaves the skip out of the groups the requester message counts', async () => {
+    const fixFirst: Adjudicator = async (batch) =>
+      batch.map((c) =>
+        c.msgid === 'First'
+          ? { id: c.id, problem: true, categories: ['glossary'], reason: 'wrong term', fix: ['Birinci'] }
+          : { id: c.id, problem: false, categories: [], reason: '' },
+      )
+    const summary = await reviewFile({ file, locale: 'tr', db, jobsDb, adjudicate: fixFirst })
+    expect(summary.repaired).toBe(1)
+    expect(summary.byGroup).toEqual({ glossary: 1 })
   })
 })

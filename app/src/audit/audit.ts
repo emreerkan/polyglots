@@ -135,6 +135,16 @@ export const adjudicateWithAgent: Adjudicator = async (batch, opts) => {
   return mapAuditResults(batch, payload)
 }
 
+// Whether a finding leaves a question open about the contributor's text. A
+// mechanical repair is decided, so it is nobody's open question. A locale rule
+// skipped as a runaway is a question about the rules file, which the person
+// reads in the problems file; counted here, it would make the entry a guess,
+// and a guess reaches the contributor through the reply's caution and its
+// verdict sentence (maintainer ruling 2026-10-16).
+function leavesOpen(f: Finding): boolean {
+  return f.rule !== 'repaired' && !isSkipFinding(f)
+}
+
 function ruleReason(findings: Finding[]): string {
   return findings.map((f) => f.message).join('; ')
 }
@@ -223,8 +233,10 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
     }
     if (opts.noAi) {
       // A mechanical repair is a settled fix, not an unadjudicated guess, so it
-      // alone must not mark the entry as needing a human decision.
-      const undecided = findings.filter((f) => f.rule !== 'repaired')
+      // alone must not mark the entry as needing a human decision, and nor
+      // does a skipped locale rule. The entry still reaches the problems file
+      // with the skip on it: reviewFile writes any verdict that carries one.
+      const undecided = findings.filter(leavesOpen)
       verdicts.set(entry.key, {
         key: entry.key,
         problem: false,
@@ -268,10 +280,11 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
   // entire output is what the rules were unsure about.
   opts.onRules?.({
     flagged: candidates.filter((c) => c.condemned).length + [...verdicts.values()].filter((v) => v.problem).length,
-    // A mechanical repair is decided, so an entry whose only hint is that one is
-    // nobody's open question and does not belong in the count.
+    // An entry whose only hints are a mechanical repair or a skipped locale
+    // rule is nobody's open question about the text and does not belong in
+    // the count.
     suspects:
-      candidates.filter((c) => !c.condemned && c.hints.some((f) => f.rule !== 'repaired')).length +
+      candidates.filter((c) => !c.condemned && c.hints.some(leavesOpen)).length +
       [...verdicts.values()].filter((v) => v.needsReview).length,
     memoryApproved,
     memoryRepaired,

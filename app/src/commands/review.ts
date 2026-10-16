@@ -158,6 +158,11 @@ function submitted(entry: AuditEntry): boolean {
   return entry.msgstr.some((s) => s !== '')
 }
 
+// byRule: how often each rule fired over the flagged entries, for the reviewer
+// and the stats page, never for the requester. A locale rule skipped as a
+// runaway is counted here, under `custom`, on an entry flagged for something
+// else: the maintainer's own statistic should show the rules file misbehaving.
+// An entry whose only finding is the skip is not flagged, so it is not counted.
 function tally(verdicts: Verdict[]): Record<string, number> {
   const counts: Record<string, number> = {}
   for (const verdict of verdicts) {
@@ -184,9 +189,11 @@ function groupTally(verdicts: Verdict[]): Record<string, number> {
     // A fix-suspect is what the model's own fix broke, so it is no fault of the
     // contributor's and the message posted back to them must not count it. Left
     // in, it would land in `other`, which claims every rule the named groups do
-    // not, and add a fault to the public tally that nobody they wrote made.
+    // not, and add a fault to the public tally that nobody they wrote made. A
+    // locale rule skipped as a runaway is left out for the same reason: the
+    // fault is the rules file's (maintainer ruling 2026-10-16).
     const groups = new Set(
-      verdict.findings.filter((f) => f.rule !== FIX_SUSPECT_RULE).map((f) => groupFor(f.rule)),
+      verdict.findings.filter((f) => f.rule !== FIX_SUSPECT_RULE && !isSkipFinding(f)).map((f) => groupFor(f.rule)),
     )
     // A repaired entry with no findings is a mechanical fix nothing named. It
     // still happened, so it lands in `other` rather than leaving the groups
