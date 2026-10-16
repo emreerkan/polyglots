@@ -43,6 +43,52 @@ export function upsertTm(db: Database.Database, entries: TmEntry[]): number {
 }
 
 /**
+ * Adds the rows the memory does not hold yet and leaves every other row as it
+ * is: project, updated_at, everything. The insert-only counterpart of
+ * upsertTm, for tm fetch.
+ *
+ * A row the person already has may be one they imported and tagged
+ * themselves, and the vault re-tagging or re-dating it would quietly change
+ * which alternative findMemory puts first. So a match is skipped, never
+ * refreshed. New rows take `updatedAt` from the caller rather than now: the
+ * build time of the vault, so a vault wording does not outrank the person's
+ * own alternatives merely because it arrived later.
+ *
+ * One transaction per chunk rather than one for the lot, so a review writing
+ * to the same database waits for one chunk at most, inside SQLite's busy
+ * timeout, instead of for the whole import.
+ */
+export function insertTmIfAbsent(
+  db: Database.Database,
+  entries: TmEntry[],
+  updatedAt: string,
+  chunk = 5000,
+): { added: number; present: number } {
+  const stmt = db.prepare(`
+    INSERT INTO tm (source, target, locale, context, project, updated_at)
+    VALUES (@source, @target, @locale, @context, @project, @updatedAt)
+    ON CONFLICT (source, locale, context, target) DO NOTHING
+  `)
+  const run = db.transaction((batch: TmEntry[]) => {
+    let added = 0
+    for (const e of batch) {
+      added += stmt.run({
+        source: e.source,
+        target: e.target,
+        locale: e.locale,
+        context: e.context ?? '',
+        project: e.project ?? null,
+        updatedAt,
+      }).changes
+    }
+    return added
+  })
+  let added = 0
+  for (let i = 0; i < entries.length; i += chunk) added += run(entries.slice(i, i + chunk))
+  return { added, present: entries.length - added }
+}
+
+/**
  * Every translation the locale approved for this exact source, most recently
  * updated first.
  *

@@ -42,6 +42,27 @@ describe('parseTmx with the PoEdit-style fixture', () => {
     }
   })
 
+  // polyglots-data tags every unit with the projects it came from, first
+  // the one it was taken from; a unit in two projects carries two props.
+  it('takes the first x-project', () => {
+    const tmx = `<tmx><header srclang="en"/><body><tu><prop type="x-project">wp/dev</prop><prop type="x-project">woo</prop><tuv xml:lang="en"><seg>A</seg></tuv><tuv xml:lang="tr-TR"><seg>B</seg></tuv></tu></body></tmx>`
+    expect(parseTmx(tmx, { targetLocale: 'tr' })[0]).toMatchObject({ project: 'wp/dev', locale: 'tr' })
+  })
+
+  it('leaves the project undefined without an x-project or a project option', () => {
+    expect(parseTmx(tmx(tu('A', 'B')), { targetLocale: 'tr' })[0]?.project).toBeUndefined()
+  })
+
+  it('prefers the project option to an x-project', () => {
+    const body = tu('A', 'B', 'en', 'tr', '<prop type="x-project">wp/dev</prop>')
+    expect(parseTmx(tmx(body), { targetLocale: 'tr', project: 'mine' })[0]?.project).toBe('mine')
+  })
+
+  it('skips an empty x-project for the next one', () => {
+    const body = tu('A', 'B', 'en', 'tr', '<prop type="x-project"> </prop><prop type="x-project">woo</prop>')
+    expect(parseTmx(tmx(body), { targetLocale: 'tr' })[0]?.project).toBe('woo')
+  })
+
   it('selects the de pair when de is the target locale', async () => {
     const xml = await readFile(FIXTURE, 'utf8')
     expect(parseTmx(xml, { targetLocale: 'de' })).toEqual([

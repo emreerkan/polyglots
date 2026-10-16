@@ -21,6 +21,7 @@ import { describeTemplates, editTemplate, renderReply, resolveReplyTemplate } fr
 import { DEFAULT_TEMPLATE, deleteTemplate, fillBatchReply, listTemplates, normaliseRequester, templateFile, templatesDir } from './reply/templates.js'
 import { loadLocaleRules, localeRulesFile } from './rules/load.js'
 import { planRulesFetch, writeRulesFetch } from './commands/rules-fetch.js'
+import { formatBytes, planTmFetch, runTmFetch } from './commands/tm-fetch.js'
 import { openRulesDraft, saveRulesDraft, type RulesDraft } from './rules/edit.js'
 import { moveLegacyProperNouns } from './rules/legacy-names.js'
 import { syncGlossary } from './commands/glossary-sync.js'
@@ -1208,6 +1209,38 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
         onProgress: (e) => cli.err(hintLine(cli.ui.err, `${e.file}: ${e.entries} entries, ${e.upserted} upserted`)),
       })
       cli.out(okLine(cli.ui.out, `Imported ${result.files} file(s): ${result.entries} entries, ${result.upserted} upserted (locale ${locale}).`))
+    })
+
+  tm.command('fetch [locale]')
+    .description("Download the locale's translation memory from polyglots-data and add what is new (never changes or deletes a row)")
+    .option('--yes', 'Download and import without asking (required when stdin or stderr is not a terminal)')
+    .action(async (raw: string | undefined, flags: { yes?: boolean }) => {
+      const locale = requireLocale(raw, cli.config(), { argument: 'polyglots tm fetch' })
+      const plan = await planTmFetch(locale, cli.dataClient)
+      for (const line of plan.summary) cli.out(line)
+      // Asked every time, unlike rules fetch's new file: the import cannot
+      // be undone, it is tens of MiB, and the summary is the one place the
+      // person sees how many rows it will add to a memory they cannot
+      // regenerate. Checked before the download, so a refusal costs nothing.
+      if (flags.yes !== true) {
+        const interactive = cli.streams.stdin.isTTY === true && cli.streams.stderr.isTTY === true
+        if (!interactive) throw new UsageError('tm fetch needs --yes when stdin or stderr is not a terminal')
+        if (!(await confirm(cli.streams, 'Download and import? [y/N] '))) {
+          cli.err(warnLine(cli.ui.err, 'Nothing downloaded.'))
+          return
+        }
+      }
+      const result = await runTmFetch(plan, cli.dataClient, {
+        onProgress: (e) =>
+          cli.err(hintLine(cli.ui.err, e.phase === 'downloading' ? `Downloading ${formatBytes(plan.entry.bytes)}` : `Imported ${e.done.toLocaleString('en-US')} of ${e.total.toLocaleString('en-US')}`)),
+      })
+      const n = (v: number) => v.toLocaleString('en-US')
+      cli.out(
+        okLine(
+          cli.ui.out,
+          `Imported ${n(result.added)} new strings (${n(result.present)} already present) from ${n(result.projects)} projects in ${(result.ms / 1000).toFixed(1)}s.`,
+        ),
+      )
     })
 
   program

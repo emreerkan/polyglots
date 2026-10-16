@@ -86,8 +86,24 @@ function readTu(tu: Node, headerSrc: string | undefined, target: string, opts: T
   const entry: TmEntry = { source: sourceSeg, target: targetSeg, locale: target }
   const context = readContext(tuChildren)
   if (context) entry.context = context
-  if (opts.project) entry.project = opts.project
+  const project = opts.project || readProject(tuChildren)
+  if (project) entry.project = project
   return entry
+}
+
+// polyglots-data tags each unit with every project it was taken from, the
+// first being the one it came from; a unit in two projects carries two props.
+// One project per row is what the memory stores, so the first is kept. An
+// explicit project option still wins: tm import --project is the person
+// saying what the file is, and they know better than its tags.
+function readProject(tuChildren: Node[]): string | undefined {
+  for (const child of tuChildren) {
+    if ('prop' in child && attrs(child)['type'] === 'x-project') {
+      const text = textOf(children(child, 'prop')).trim()
+      if (text) return text
+    }
+  }
+  return undefined
 }
 
 function readContext(tuChildren: Node[]): string | undefined {

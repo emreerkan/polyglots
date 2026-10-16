@@ -84,6 +84,39 @@ The memory is built from your own work over time and cannot be downloaded
 again, so it is worth backing up:
 `~/.local/share/polyglots/polyglots.db`.
 
+### Fetching a locale's memory
+
+[polyglots-data](https://github.com/emreerkan/polyglots-data) publishes a
+translation memory for some locales. Add it to your memory with:
+
+```
+polyglots tm fetch tr
+```
+
+Without a locale it uses your default one. Before downloading, it shows the
+number of strings, the download size, the build date, the number of projects
+and how many strings your memory already holds for the locale, then asks. Add
+`--yes` to skip the question; it is required when stdin or stderr is not a
+terminal.
+
+The download is checked against the size and sha512 in the polyglots-data
+manifest, and refused when it does not match. Strings land under the locale
+slug (`tr`), the same as your own imports. Each string keeps the first project
+polyglots-data tags it with, or `polyglots-data` when it has none.
+
+The fetch only adds. A string your memory already holds, with the same
+context and the same translation, is left as it is: its project and date do
+not change. New strings carry the date of the polyglots-data build, so they do
+not rank above your own alternatives only because they arrived later. So:
+
+- A second fetch adds the strings that are new in polyglots-data. It does not
+  refresh the strings you already have.
+- A string that polyglots-data removes stays in your memory. Removals never
+  reach a memory that already holds the string.
+
+`POLYGLOTS_DATA_URL` points the command at another manifest, as for
+`polyglots rules fetch`.
+
 ## The glossary
 
 `polyglots glossary sync` downloads your locale's glossary from

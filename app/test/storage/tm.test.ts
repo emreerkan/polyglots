@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import DatabaseCtor from 'better-sqlite3'
 import type Database from 'better-sqlite3'
 import { openDb } from '../../src/storage/db.js'
-import { findExactTm, findMemory, searchTm, upsertTm } from '../../src/storage/tm.js'
+import { findExactTm, findMemory, insertTmIfAbsent, searchTm, upsertTm } from '../../src/storage/tm.js'
 
 describe('tm', () => {
   let home: string
@@ -192,6 +192,55 @@ describe('tm', () => {
 
     it('respects the limit', () => {
       expect(searchTm(db, 'changes', 'tr', 1)).toHaveLength(1)
+    })
+  })
+
+  describe('insertTmIfAbsent', () => {
+    const rows = () =>
+      db.prepare('SELECT source, target, locale, context, project, updated_at FROM tm ORDER BY source, target').all()
+
+    it('keeps a row the user has untouched, project and updated_at', () => {
+      upsertTm(db, [{ source: 'Save', target: 'Kaydet', locale: 'tr', project: 'mine' }])
+      const before = rows()
+      const r = insertTmIfAbsent(
+        db,
+        [
+          { source: 'Save', target: 'Kaydet', locale: 'tr', project: 'wp/dev' },
+          { source: 'Edit', target: 'Düzenle', locale: 'tr', project: 'wp/dev' },
+        ],
+        '2026-10-16T03:00:00Z',
+      )
+      expect(r).toEqual({ added: 1, present: 1 })
+      const after = rows() as { source: string; project: string; updated_at: string }[]
+      expect(after.find((x) => x.source === 'Save')).toEqual(before[0])
+      expect(after.find((x) => x.source === 'Edit')).toMatchObject({ project: 'wp/dev', updated_at: '2026-10-16T03:00:00Z' })
+    })
+
+    it('counts a duplicate inside the same list as present', () => {
+      const e = { source: 'Save', target: 'Kaydet', locale: 'tr' }
+      expect(insertTmIfAbsent(db, [e, e], 't')).toEqual({ added: 1, present: 1 })
+    })
+
+    it('gives the same rows in small chunks as in one', () => {
+      const entries = Array.from({ length: 23 }, (_, i) => ({ source: `S${i % 17}`, target: `T${i}`, locale: 'tr', project: 'p' }))
+      const r = insertTmIfAbsent(db, entries, 't', 4)
+      const chunked = rows()
+      const other = openDb(join(home, 'other.db'))
+      try {
+        expect(insertTmIfAbsent(other, entries, 't')).toEqual(r)
+        expect(other.prepare('SELECT source, target, locale, context, project, updated_at FROM tm ORDER BY source, target').all()).toEqual(chunked)
+      } finally {
+        other.close()
+      }
+    })
+
+    it('finds what it inserted through the full-text index', () => {
+      insertTmIfAbsent(db, [{ source: 'Discard changes', target: 'Değişiklikleri at', locale: 'tr' }], 't')
+      expect(searchTm(db, 'Discard changes', 'tr')[0]?.target).toBe('Değişiklikleri at')
+    })
+
+    it('adds nothing for an empty list', () => {
+      expect(insertTmIfAbsent(db, [], 't')).toEqual({ added: 0, present: 0 })
     })
   })
 })
