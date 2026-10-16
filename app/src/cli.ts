@@ -14,7 +14,7 @@ import { runLint, type LintFlags } from './cli/lint.js'
 import { CONFIG_FILE } from './lint/config.js'
 import { makePot } from './lint/make-pot.js'
 import { warnAboutLocalModel, warnAboutLocalReview, warnUniversalOnly } from './cli/run-notices.js'
-import { copyRules, describeRules, editRules, openInEditor, type OpenEditor } from './cli/rules.js'
+import { copyRules, editRules, NO_SUCH_FILE, noRulesFileLines, openInEditor, renderRulesReport, rulesReport, type OpenEditor } from './cli/rules.js'
 import type { ProjectEnd } from './commands/fetch-report.js'
 import { describeTemplates, editTemplate, renderReply, resolveReplyTemplate } from './cli/templates.js'
 import { DEFAULT_TEMPLATE, deleteTemplate, fillBatchReply, listTemplates, normaliseRequester, templateFile, templatesDir } from './reply/templates.js'
@@ -1069,10 +1069,32 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     })
   rules
     .command('check [locale]')
-    .description('Validate the locale rules file and summarise what it sets')
-    .action((raw: string | undefined) => {
-      const locale = requireLocale(raw, cli.config(), { argument: 'polyglots rules check' })
-      for (const line of describeRules(locale, cli.ui.out)) cli.out(line)
+    .description('Validate a locale rules file and summarise what it sets')
+    .option('--file <path>', 'Check this file instead of the locale\'s file in the config folder')
+    .option('--json', 'Print the result as one JSON object')
+    .action((raw: string | undefined, flags: { file?: string; json?: boolean }) => {
+      if (flags.file !== undefined && raw !== undefined) throw new UsageError('rules check takes a locale or --file, not both')
+      // --file reads no config: a locale team checks a file before publishing
+      // it, often on a machine where polyglots has never been set up.
+      const locale = flags.file === undefined ? requireLocale(raw, cli.config(), { argument: 'polyglots rules check' }) : undefined
+      const report = rulesReport(flags.file ?? localeRulesFile(locale!))
+      if (flags.json) {
+        cli.out(JSON.stringify(report))
+        if (!report.valid) setExitCode(EXIT_ERROR)
+        return
+      }
+      // A locale without a file is an answer, not a fault: it runs the
+      // universal checks, as it always has. A path named with --file that is
+      // not there is a mistake in the command, and says so.
+      if (locale !== undefined && !report.valid && report.error === NO_SUCH_FILE) {
+        for (const line of noRulesFileLines(locale, cli.ui.out)) cli.out(line)
+        return
+      }
+      if (report.valid) for (const line of renderRulesReport(report, cli.ui.out)) cli.out(line)
+      else {
+        for (const line of renderRulesReport(report, cli.ui.err)) cli.err(line)
+        setExitCode(EXIT_ERROR)
+      }
     })
   rules
     .command('copy <from> <to>')

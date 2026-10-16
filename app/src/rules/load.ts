@@ -10,12 +10,18 @@ import { localeRulesSchema, MAX_SCHEMA, normalise, type LocaleRules } from './sc
 export class RulesFileError extends Error {
   readonly path: string
   readonly line: number | undefined
+  readonly col: number | undefined
+  // The message without the path and position in front of it, for a caller
+  // that reports those in fields of their own (rules check --json).
+  readonly reason: string
 
   constructor(path: string, message: string, line?: number, col?: number) {
     super(`${path}${line === undefined ? '' : `:${line}${col === undefined ? '' : `:${col}`}`} ${message}`)
     this.name = 'RulesFileError'
     this.path = path
     this.line = line
+    this.col = col
+    this.reason = message
   }
 }
 
