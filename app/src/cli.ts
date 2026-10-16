@@ -1091,8 +1091,13 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
       if (flags.file !== undefined && raw !== undefined) throw new UsageError('rules check takes a locale or --file, not both')
       // --file reads no config: a locale team checks a file before publishing
       // it, often on a machine where polyglots has never been set up.
-      const locale = flags.file === undefined ? requireLocale(raw, cli.config(), { argument: 'polyglots rules check' }) : undefined
-      const report = rulesReport(flags.file ?? localeRulesFile(locale!))
+      let locale: string | undefined
+      let path = flags.file
+      if (path === undefined) {
+        locale = requireLocale(raw, cli.config(), { argument: 'polyglots rules check' })
+        path = localeRulesFile(locale)
+      }
+      const report = rulesReport(path)
       if (flags.json) {
         cli.out(JSON.stringify(report))
         if (!report.valid) setExitCode(EXIT_ERROR)
