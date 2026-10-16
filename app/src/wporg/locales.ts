@@ -107,6 +107,19 @@ export function wpCodeOf(id: Locale): string | undefined {
   return WPORG_LOCALES.find((l) => l.slug === slug && l.set === set)?.wp
 }
 
+/**
+ * The locale id a WordPress code names, read as a code only. resolveLocale
+ * would also accept a slug, which is right for what a person types and wrong
+ * for a code another program wrote down: a polyglots-data entry whose
+ * `locale` says `tr` instead of `tr_TR` is malformed, and reading it as
+ * agreeing with the slug `tr` would hide that.
+ */
+export function localeOfWpCode(code: string): Locale | undefined {
+  const wanted = code.trim().toLowerCase()
+  const row = WPORG_LOCALES.find((l) => l.wp.toLowerCase() === wanted)
+  return row ? localeId(row.slug, row.set) : undefined
+}
+
 /** Close matches for an unknown locale, for the error that refuses it. */
 export function suggestLocales(input: string, limit = 5): string[] {
   const language = input.trim().toLowerCase().split(/[-_/]/)[0] ?? ''

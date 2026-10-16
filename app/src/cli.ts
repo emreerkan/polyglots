@@ -13,6 +13,7 @@ import { runFetch, type FetchFlags } from './cli/fetch.js'
 import { runLint, type LintFlags } from './cli/lint.js'
 import { CONFIG_FILE } from './lint/config.js'
 import { makePot } from './lint/make-pot.js'
+import { dataClient, type DataClient } from './data/download.js'
 import { warnAboutLocalModel, warnAboutLocalReview, warnUniversalOnly } from './cli/run-notices.js'
 import { copyRules, editRules, NO_SUCH_FILE, noRulesFileLines, openInEditor, renderRulesReport, rulesReport, type OpenEditor } from './cli/rules.js'
 import type { ProjectEnd } from './commands/fetch-report.js'
@@ -131,6 +132,9 @@ export interface CliDeps {
   // Turns a plugin or theme folder into a .pot (src/lint/make-pot.ts).
   // Injected so no test, and no website demo, runs WP-CLI or downloads it.
   makePot?: typeof makePot
+  // Reads the polyglots-data manifest and downloads the files it lists
+  // (src/data). Injected so no test, and no website demo, reaches GitHub.
+  dataClient?: DataClient
 }
 
 interface Cli {
@@ -152,6 +156,7 @@ interface Cli {
   discoverModels: typeof discoverModels
   checkLocalModel: typeof checkLocalModel
   makePot: typeof makePot
+  dataClient: DataClient
   // Listens for SIGINT and SIGTERM until the returned function is called.
   stopRunsOnSignal: () => () => void
   config: () => PolyglotsConfig
@@ -196,6 +201,7 @@ function createCli(deps: CliDeps): Cli {
     discoverModels: deps.discoverModels ?? discoverModels,
     checkLocalModel: deps.checkLocalModel ?? checkLocalModel,
     makePot: deps.makePot ?? makePot,
+    dataClient: deps.dataClient ?? dataClient,
     stopRunsOnSignal: () =>
       stopOnSignal({
         // Only installed around a run, so a run is what a signal interrupts.

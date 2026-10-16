@@ -47,7 +47,7 @@ process.env.FORCE_COLOR = '1'
 
 const { main } = await import('../../app/src/cli.js')
 const { ansiToHtml, ansiToText, Screen } = await import('./ansi.js')
-const { SCENARIOS } = await import('./demos.js')
+const { SCENARIOS, offlineData } = await import('./demos.js')
 const { recordTui } = await import('./tui.js')
 const { TUI_SCENARIOS } = await import('./tui-demos.js')
 type Clock = import('./demos.js').Clock
@@ -81,6 +81,7 @@ const INJECTABLE = {
   checkUpdate: true,
   checkGlossary: true,
   makePot: true,
+  dataClient: true,
 } satisfies Record<Exclude<keyof CliDeps, 'streams' | 'env'>, true>
 
 function refuseUnfaked(what: string): CliDeps {
@@ -161,6 +162,7 @@ async function record(scenario: (typeof SCENARIOS)[number]): Promise<Demo> {
   try {
     exitCode = await main(scenario.argv, {
       ...refuseUnfaked(`The ${scenario.name} demo`),
+      dataClient: offlineData,
       ...scenario.deps(clock),
       streams: { stdin, stdout: tty, stderr: tty },
       env: { LANG: 'en_US.UTF-8' },

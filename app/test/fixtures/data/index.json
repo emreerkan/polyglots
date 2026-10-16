@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "generated": "2026-10-16T03:00:00Z",
+  "tm": [
+    {
+      "locale": "tr_TR",
+      "slug": "tr",
+      "url": "https://github.com/emreerkan/polyglots-data/releases/download/2026-10-16/tr_TR.tmx.gz",
+      "bytes": 27103,
+      "bytesUncompressed": 224643,
+      "sha512": "759fe4cb82f5a397b0be48e7d0efc67d204d2621d745e5076762aafe7f23289eac64309da36ade9d4e4608526b2006182ab41024894a0b3fed95dd517c65a350",
+      "units": 1002,
+      "built": "2026-10-16T03:00:00Z",
+      "projects": [
+        {
+          "path": "wp/dev/admin/network",
+          "units": 330
+        },
+        {
+          "path": "wp/dev/cc",
+          "units": 528
+        },
+        {
+          "path": "wp-plugins/debug-bar/dev",
+          "units": 84,
+          "stale": "2026-10-09T03:00:00Z"
+        },
+        {
+          "path": "wp-plugins/debug-bar/dev-readme",
+          "units": 62,
+          "kind": "long-text"
+        }
+      ]
+    }
+  ],
+  "rules": []
+}

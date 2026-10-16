@@ -8,6 +8,7 @@ import {
   intlTag,
   languageOf,
   localeFileTag,
+  localeOfWpCode,
   resolveLocale,
   splitLocale,
   wpCodeOf,
@@ -102,5 +103,16 @@ describe('locale parts', () => {
     expect(wpCodeOf('nl/formal')).toBe('nl_NL_formal')
     expect(wpCodeOf('tr')).toBe('tr_TR')
     expect(wpCodeOf('zz')).toBeUndefined()
+  })
+
+  // The reverse, for a WordPress code someone else wrote down: only a code,
+  // never a slug, since a manifest that puts a slug where the code belongs
+  // is wrong and must not be read as agreeing with itself.
+  it('maps a WordPress code back to the locale id', () => {
+    expect(localeOfWpCode('nl_NL_formal')).toBe('nl/formal')
+    expect(localeOfWpCode('tr_TR')).toBe('tr')
+    expect(localeOfWpCode('az')).toBe('az')
+    expect(localeOfWpCode('tr')).toBeUndefined()
+    expect(localeOfWpCode('xx_YY')).toBeUndefined()
   })
 })

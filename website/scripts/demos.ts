@@ -3,6 +3,7 @@ import type { Resolution, Fetched } from '../../app/src/commands/fetch.js'
 import type { TranslateEvent, TranslateSummary } from '../../app/src/commands/translate.js'
 import type { StatsSummary } from '../../app/src/commands/stats.js'
 import type { ReviewEvent, ReviewSummary } from '../../app/src/types.js'
+import type { DataClient } from '../../app/src/data/download.js'
 
 // The scenarios the site's terminal panels play. Each is a real command line,
 // run through the real cli.ts with only the slow, networked part swapped out:
@@ -191,6 +192,17 @@ export const stats: Scenario = {
       clock.advance(1800, 0)
     },
   }),
+}
+
+// polyglots-data as the demos see it: a manifest with nothing in it, and a
+// download that refuses. No panel fetches rules or a TM, so neither is ever
+// reached today; a panel that starts to would show "no entry" rather than
+// reach GitHub during a build, and its demo would then fake its own.
+export const offlineData: DataClient = {
+  manifest: async () => ({ schema: 1, generated: '', tm: [], rules: [] }),
+  download: async () => {
+    throw new Error('not in a demo')
+  },
 }
 
 export const SCENARIOS: readonly Scenario[] = [review, translate, fetch, stats]
