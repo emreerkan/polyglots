@@ -1,6 +1,6 @@
 import { repairMechanically } from '../audit/repair.js'
 import { buildRuleContext, glossaryMatches, runRules, type GlossaryMatch, type RuleContext } from '../audit/rules/index.js'
-import { applyFixPatterns } from '../rules/custom.js'
+import { applyFixPatterns, isSkipFinding } from '../rules/custom.js'
 import { CUSTOM_RULE } from '../rules/names.js'
 import type { AuditEntry, Finding, GlossaryEntry, Locale, ReviewResult, TranslationUnit } from '../types.js'
 
@@ -101,7 +101,10 @@ export function createDraftChecker(opts: DraftCheckerOptions): DraftChecker {
       const fixed = fix(unit, drafts)
       if (fixed.notes.length > 0) prepared.set(unit.key, fixed.notes)
       else prepared.delete(unit.key)
-      return { drafts: fixed.forms, checks: findings(unit, fixed.forms).map((f) => `${f.rule}: ${f.message}`) }
+      // A pattern that ran away on this draft is the rules file's fault, not
+      // the draft's, and the AI cannot answer for a regex it never sees.
+      const checks = findings(unit, fixed.forms).filter((f) => !isSkipFinding(f))
+      return { drafts: fixed.forms, checks: checks.map((f) => `${f.rule}: ${f.message}`) }
     },
     terms(unit) {
       return glossaryMatches(unit.msgid, ctx)

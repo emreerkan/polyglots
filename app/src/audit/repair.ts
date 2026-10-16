@@ -1,5 +1,6 @@
 import type { AuditEntry, Finding } from '../types.js'
 import { matchSourceEscaping } from '../po/escapes.js'
+import { isSkipFinding } from '../rules/custom.js'
 import { runRules, type RuleContext } from './rules/index.js'
 
 // Rules whose correct output is computable from the source, so no judgment and
@@ -126,7 +127,10 @@ function broughtIn(before: Finding[], after: Finding[]): Finding | undefined {
   const had = new Set(before.flatMap((f) => offendingItems(f).map((item) => `${f.rule}\0${item}`)))
   const added = new Map<string, string[]>()
   for (const finding of after) {
-    if (WHOLE_FILE_RULES.has(finding.rule)) continue
+    // A pattern that first ran away on the fix would read as new here only
+    // because it was never tried that far on the submission. It is the rules
+    // file's fault, and the run summary already names it.
+    if (WHOLE_FILE_RULES.has(finding.rule) || isSkipFinding(finding)) continue
     for (const item of offendingItems(finding)) {
       if (had.has(`${finding.rule}\0${item}`)) continue
       const items = added.get(finding.rule) ?? []

@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { judgeFix, REPAIRABLE_RULES, repairMechanically } from '../../src/audit/repair.js'
 import { buildRuleContext } from '../../src/audit/rules/index.js'
+import { resetSandbox } from '../../src/rules/sandbox.js'
 import type { AuditEntry, GlossaryEntry } from '../../src/types.js'
 import { useLocaleFixture } from '../locale-fixture.js'
 
@@ -231,6 +232,29 @@ describe('judgeFix and what an accepted fix brought in', () => {
     expect(ctx.translationsByMsgid.get('Open the menu')?.size).toBe(2)
     const verdict = judgeFix({ entry: e, fix: ['Menüyü açın'], nplurals: 2, ctx })
     expect(verdict).toEqual({ accepted: ['Menüyü açın'] })
+  })
+
+  // A locale pattern that first runs away on the fix text is a fault of the
+  // rules file, found by chance on this entry. It is not something the model
+  // brought in, and naming it as such would send the reviewer after the model.
+  describe('with a locale pattern that runs away only on the fix', () => {
+    afterEach(() => resetSandbox())
+
+    it('does not name the skip as brought in', () => {
+      resetSandbox()
+      const e = entry('Save', ['Kaydet'])
+      const base = buildRuleContext({ locale: 'tr', glossary, nplurals: 2, entries: [e] })
+      const ctx = {
+        ...base,
+        profile: { ...base.profile, rules: new Set([...base.profile.rules, 'custom']) },
+        customPatterns: [{ kind: 'pattern' as const, find: '^(a+)+$', ignoreCase: false, level: 'hint' as const, note: 'nested repetition' }],
+      }
+      const fix = ['a'.repeat(30) + 'b']
+      const verdict = judgeFix({ entry: e, fix, nplurals: 2, ctx })
+      expect(verdict).toMatchObject({ accepted: fix })
+      const suspect = 'accepted' in verdict ? verdict.suspect : undefined
+      expect(suspect?.message ?? '').not.toContain('locale rule skipped')
+    })
   })
 
   it('adds nothing when the fix brings in nothing the submission did not have', () => {

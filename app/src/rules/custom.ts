@@ -120,6 +120,17 @@ function message(p: CustomPattern, matched: string): string {
 const patternId = (p: CustomPattern, index: number) => `${index}:${p.find ?? p.text}`
 const patternLabel = (p: CustomPattern) => p.note ?? p.find ?? p.text ?? ''
 
+const SKIP_PREFIX = 'locale rule skipped: '
+
+/**
+ * Whether a finding is the notice that a locale pattern ran away on this
+ * entry. It speaks of the rules file, not of the text it was found on, so a
+ * caller weighing a text, the model's fix or a draft, leaves it out.
+ */
+export function isSkipFinding(f: Finding): boolean {
+  return f.rule === CUSTOM_RULE && f.message.startsWith(SKIP_PREFIX)
+}
+
 function labelsOf(patterns: readonly CustomPattern[]): (id: string) => string {
   return (id) => {
     const index = Number(id.slice(0, id.indexOf(':')))
@@ -178,7 +189,7 @@ export function customFindings(entry: Text, patterns: readonly CustomPattern[], 
       findings.push({
         rule: CUSTOM_RULE,
         severity: 'suspect',
-        message: `locale rule skipped: ${patternLabel(p)} took longer than ${PATTERN_BUDGET_MS} ms`,
+        message: `${SKIP_PREFIX}${patternLabel(p)} took longer than ${PATTERN_BUDGET_MS} ms`,
       })
     }
   }
