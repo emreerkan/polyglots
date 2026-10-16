@@ -27,8 +27,12 @@ export function localeSupport(locale: Locale): LocaleSupport {
  * language, so the person reading the output can tell an absent finding from
  * a passed check. Undefined otherwise. Never a refusal: the universal checks
  * are worth running on their own.
+ *
+ * It points at rules fetch, as rules check does: most locales that have rules
+ * have them from their team's published file, and writing one by hand is for
+ * the locale whose team has published none.
  */
 export function supportNotice(locale: Locale): string | undefined {
   if (!isUniversalOnly(profileFor(locale))) return undefined
-  return `No locale rules for ${locale}; only the universal checks run. Add some with: polyglots rules edit ${locale}`
+  return `No locale rules for ${locale}; only the universal checks run. Fetch your locale team's file with: polyglots rules fetch ${locale}`
 }

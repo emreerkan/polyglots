@@ -1477,7 +1477,7 @@ describe('local models', () => {
 // nobody could tell an absent finding from a passed check. Told once, before
 // the run, and never a refusal.
 describe('universal-only notice', () => {
-  const NOTICE = '! No locale rules for de; only the universal checks run. Add some with: polyglots rules edit de'
+  const NOTICE = "! No locale rules for de; only the universal checks run. Fetch your locale team's file with: polyglots rules fetch de"
 
   it('is printed to stderr before a review of a locale with no rules of its own', async () => {
     const h = harness()
