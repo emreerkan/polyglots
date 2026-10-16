@@ -1,10 +1,10 @@
 import type { AuditEntry, Finding, GlossaryEntry, Locale } from '../../types.js'
 import { controlFindings, controlSpec } from '../control.js'
-import { languageOf, localeDisplayName } from '../../wporg/locales.js'
+import { localeDisplayName } from '../../wporg/locales.js'
 import { customFindings } from '../../rules/custom.js'
 import { loadLocaleRules } from '../../rules/load.js'
 import { CUSTOM_RULE } from '../../rules/names.js'
-import type { CustomPattern } from '../../rules/schema.js'
+import type { CustomPattern, SentenceEndRules } from '../../rules/schema.js'
 import { missingPlaceholders } from '../../draft/placeholders.js'
 import {
   acronymStem,
@@ -43,6 +43,10 @@ export interface RuleContext {
   // Mistakes and patterns from the locale's rules file. Resolved once here
   // rather than read per entry; absent when the locale has no file.
   customPatterns?: readonly CustomPattern[]
+  // How the locale ends a sentence, from the same file and compiled here for
+  // the same reason. Absent when the file says nothing about it, which leaves
+  // the generic Unicode check alone.
+  sentenceEnd?: CompiledSentenceEnd
 }
 
 export interface BuildRuleContextOptions {
@@ -79,7 +83,9 @@ const DEFAULT_BRANDS = [
 ]
 
 export function buildRuleContext(opts: BuildRuleContextOptions): RuleContext {
-  const customPatterns = loadLocaleRules(opts.locale)?.patterns
+  const file = loadLocaleRules(opts.locale)
+  const customPatterns = file?.patterns
+  const sentenceEnd = compileSentenceEnd(file?.sentenceEnd)
   const brands = new Set(DEFAULT_BRANDS.map((b) => lower(b, opts.locale)))
   const localeNouns = properNounsFor(opts.locale)
   // The rules file's list holds single words and names of several words in
@@ -161,6 +167,21 @@ export function buildRuleContext(opts: BuildRuleContextOptions): RuleContext {
     ...(opts.tm ? { tm: opts.tm } : {}),
     translationsByMsgid,
     ...(customPatterns && customPatterns.length > 0 ? { customPatterns } : {}),
+    ...(sentenceEnd ? { sentenceEnd } : {}),
+  }
+}
+
+// The file's sources were already compiled with the same flag when it was
+// loaded, so this cannot throw on a file that passed the schema.
+function compileSentenceEnd(rules: SentenceEndRules | undefined): CompiledSentenceEnd | undefined {
+  if (!rules) return undefined
+  return {
+    answers: (rules.answers ?? []).map((a) => ({
+      text: new RegExp(a.text, 'u'),
+      ...(a.source === undefined ? {} : { source: new RegExp(a.source, 'u') }),
+    })),
+    unmarked: rules.unmarked === true,
+    ...(rules.notEnding === undefined ? {} : { notEnding: new RegExp(rules.notEnding, 'u') }),
   }
 }
 
@@ -324,53 +345,41 @@ const punctuation: Rule = (entry) => {
 }
 
 /**
- * How a language ends a sentence where the Unicode property above cannot say,
- * keyed by language so a regional locale or a formal set inherits its
- * language's entry.
+ * How a language ends a sentence where the Unicode property above cannot say.
+ * It used to be a table here, keyed by language; it now comes from the
+ * locale's rules file (sentenceEnd), compiled once in buildRuleContext, so a
+ * team can state its own convention without a polyglots release. The values
+ * that were in the table live in the polyglots-data files for el, bo, dzo and
+ * th. A rules file is per locale, so unlike the table a formal or regional set
+ * does not inherit its language's convention; none of those four has one.
  *
  * Each case is narrower than an extra mark, because a mark added to the class
  * would count in both directions and in every context. Measured over approved
- * wp/dev and wp/dev/admin before this table existed: 246 Greek, 2,331 Tibetan,
+ * wp/dev and wp/dev/admin before the table existed: 246 Greek, 2,331 Tibetan,
  * 350 Dzongkha and 2,975 Thai translations were reported as dropped stops,
  * and nearly all of them were correct.
  *
  * - `answers` ends a sentence only as the reply to a source that ends one.
  *   Counted the other way it would be read as a sentence the translation
- *   invented, on strings that are no such thing.
+ *   invented, on strings that are no such thing: Tibetan closes a phrase with
+ *   the shad too, and counting it both ways reported 2,357 Tibetan and 863
+ *   Dzongkha labels, weekday names among them, as invented sentences. A bare
+ *   ཀ or ག implies the shad (Unicode's notes on Tibetan line breaking) and may
+ *   carry a tsheg, which many keyboards type for the space bar; four approved
+ *   translations end that way. An
+ *   answer's `source`, when given, must match the source as well, which is
+ *   how Greek pairs its semicolon with the source's question rather than with
+ *   an HTML entity or a line of untranslated code.
  * - `unmarked` says the language writes no final mark, so a translation
- *   without one has dropped nothing.
- * - `notEnding` is a final mark that looks like a stop and is not one.
+ *   without one has dropped nothing. Thai ends a sentence with a space.
+ * - `notEnding` is a final mark that looks like a stop and is not one: Thai
+ *   uses the full stop only to abbreviate a month, a weekday, or น. after a
+ *   time.
  */
-interface SentenceStyle {
-  answers?: (source: string, text: string) => boolean
-  unmarked?: true
+export interface CompiledSentenceEnd {
+  answers: { text: RegExp; source?: RegExp }[]
+  unmarked: boolean
   notEnding?: RegExp
-}
-
-// The shad, the double shad that closes a section, or a bare ཀ or ག, after
-// which the shad is implied and not written (Unicode's notes on Tibetan line
-// breaking). All of them only as an answer: Tibetan closes a phrase with the
-// shad too, and counting it the other way reported 2,357 Tibetan and 863
-// Dzongkha labels, weekday names among them, as invented sentences. The ཀ or
-// ག may carry a tsheg after it, because many Tibetan keyboards type one for
-// the space bar; four approved translations end that way.
-const TIBETAN: SentenceStyle = {
-  answers: (_source, text) => /(?:[\u0F0D\u0F0E]|[\u0F40\u0F42]\u0F0B?)\s*$/u.test(text),
-}
-
-const SENTENCE_STYLES: Record<string, SentenceStyle> = {
-  // Greek asks with a semicolon, U+037E by name and U+003B in practice, since
-  // NFC folds one to the other. Paired with the source's question rather than
-  // counted on its own: a final semicolon is also an HTML entity or a line of
-  // untranslated code, and neither ends a sentence.
-  el: { answers: (source, text) => /\?\s*$/.test(source) && /[;\u037E]\s*$/u.test(text) },
-  bo: TIBETAN,
-  dzo: TIBETAN,
-  // Thai ends a sentence with a space. It uses the full stop only to
-  // abbreviate: every approved translation the check reported as inventing a
-  // stop was a month, a weekday, or น. after a time. A stop after a Latin word
-  // is still a sentence end.
-  th: { unmarked: true, notEnding: /\p{Script=Thai}\p{M}*\.\s*$/u },
 }
 
 // Single letters each closed by a dot, as in a.m., π.μ. or the Lao month ທ.ວ.,
@@ -386,15 +395,17 @@ const DOTTED_ABBREVIATION = /(?:^|[\s(])(?:\p{L}\p{M}*\.){2,}\s*$/u
 const sentenceEnd: Rule = (entry, ctx) => {
   const text = entry.msgstr.find(Boolean)
   if (!text) return []
-  const style = SENTENCE_STYLES[languageOf(ctx.locale)]
+  const style = ctx.sentenceEnd
   // The source is English, so only the translation is read in its own style.
   const source = endsSentence(entry.msgid)
+  const answers = (source: string, text: string) =>
+    style?.answers.some((a) => a.text.test(text) && (a.source === undefined || a.source.test(source))) === true
   // Where the source ends a sentence, the abbreviation's dot ends it too, as
   // English writes "at 9 a.m." without a second stop.
   const target =
     style?.notEnding?.test(text) === true || (!source && DOTTED_ABBREVIATION.test(text))
       ? false
-      : endsSentence(text) || (source && style?.answers?.(entry.msgid, text) === true)
+      : endsSentence(text) || (source && answers(entry.msgid, text))
   if (source === target) return []
   if (source && style?.unmarked) return []
   return [

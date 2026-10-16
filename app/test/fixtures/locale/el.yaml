@@ -1,0 +1,21 @@
+# polyglots rules for el
+#
+# Draft: the sentence-end convention polyglots carried for Greek. Not yet
+# confirmed by the el locale team.
+#
+# Greek asks with a semicolon: U+037E by name, U+003B in practice, since NFC
+# folds one to the other. Paired with the source's question, because a final
+# semicolon is also an HTML entity or a line of untranslated code.
+#
+# Measured over approved wp/dev and wp/dev/admin before polyglots had this
+# convention: 246 Greek translations were reported as dropped stops, and
+# nearly all of them were correct.
+#
+# Check the file with: polyglots rules check --file locales/el/rules.yaml
+
+schema: 2
+
+sentenceEnd:
+  answers:
+    - source: '\?\s*$'
+      text: '[;\u037E]\s*$'

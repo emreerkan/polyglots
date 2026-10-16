@@ -1,0 +1,22 @@
+# polyglots rules for bo
+#
+# Draft: the sentence-end convention polyglots carried for Tibetan. Not yet
+# confirmed by the bo locale team.
+#
+# The shad (U+0F0D), the double shad that closes a section (U+0F0E), or a bare
+# KA or GA (U+0F40, U+0F42), after which the shad is implied and not written.
+# The KA or GA may carry a tsheg (U+0F0B), because many keyboards type one for
+# the space bar. Only as an answer: Tibetan closes a phrase with the shad too,
+# and counting it the other way reported 2,357 Tibetan labels as invented sentences.
+#
+# Measured over approved wp/dev and wp/dev/admin before polyglots had this
+# convention: 2,331 Tibetan translations were reported as dropped stops, and
+# nearly all of them were correct.
+#
+# Check the file with: polyglots rules check --file locales/bo/rules.yaml
+
+schema: 2
+
+sentenceEnd:
+  answers:
+    - text: '(?:[\u0F0D\u0F0E]|[\u0F40\u0F42]\u0F0B?)\s*$'

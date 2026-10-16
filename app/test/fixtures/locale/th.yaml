@@ -1,0 +1,20 @@
+# polyglots rules for th
+#
+# Draft: the sentence-end convention polyglots carried for Thai. Not yet
+# confirmed by the th locale team.
+#
+# Thai ends a sentence with a space and writes no final mark. It uses the
+# full stop only to abbreviate (a month, a weekday, or น. after a time). A stop
+# after a Latin word still ends a sentence.
+#
+# Measured over approved wp/dev and wp/dev/admin before polyglots had this
+# convention: 2,975 Thai translations were reported as dropped stops, and
+# nearly all of them were correct.
+#
+# Check the file with: polyglots rules check --file locales/th/rules.yaml
+
+schema: 2
+
+sentenceEnd:
+  unmarked: true
+  notEnding: '\p{Script=Thai}\p{M}*\.\s*$'
