@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
@@ -76,6 +76,36 @@ function reason(err: unknown): string {
   return err.message
 }
 
+const PARTIAL_PREFIX = '.polyglots-data-'
+const PARTIAL_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+// download's catch removes its file on every refusal, but a Ctrl-C ends the
+// process before the catch runs, and tm fetch downloads into the data folder,
+// where a hidden partial TM of tens of MiB would then stay for good. Nothing
+// records which downloads are in flight, and a second polyglots may be in the
+// middle of one in the same folder, so age is the only safe test: a file
+// nobody has written to for a day is no live download's. Best effort
+// throughout; a folder that cannot be listed is no reason to refuse a fetch.
+async function removeAbandoned(dir: string): Promise<void> {
+  let names: string[]
+  try {
+    names = await readdir(dir)
+  } catch {
+    return
+  }
+  const cutoff = Date.now() - PARTIAL_MAX_AGE_MS
+  for (const name of names) {
+    if (!name.startsWith(PARTIAL_PREFIX)) continue
+    const path = join(dir, name)
+    try {
+      const info = await stat(path)
+      if (info.isFile() && info.mtimeMs < cutoff) await rm(path, { force: true })
+    } catch {
+      // Gone already, or not ours to read: either way, not this fetch's concern.
+    }
+  }
+}
+
 /**
  * Streams `url` into a new file in `dir`, hashing as it goes, and returns the
  * file's path once its sha512 matches. Any refusal (a failed request, more
@@ -88,7 +118,8 @@ export async function download(url: string, opts: { maxBytes: number; sha512: st
   const expected = opts.sha512.toLowerCase()
   // A name of its own per download, so two runs at once never share a file,
   // and a leading dot, so a folder listing does not show a half-written one.
-  const path = join(dir, `.polyglots-data-${randomUUID()}`)
+  await removeAbandoned(dir)
+  const path = join(dir, `${PARTIAL_PREFIX}${randomUUID()}`)
   const dog = watchdog(STALL_MS)
   try {
     const res = await get(url, 'application/octet-stream', maxBytes, dog.signal)

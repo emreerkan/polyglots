@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,6 +33,24 @@ describe('download', () => {
     expect(path.startsWith(dir)).toBe(true)
     expect(await readFile(path)).toEqual(body)
     expect(server.requests[0]!.userAgent).toBe(USER_AGENT)
+  })
+
+  // A Ctrl-C mid-download skips the cleanup in download's catch, and tm fetch
+  // writes into the data folder, where a hidden 40 MiB file would stay for
+  // good. A fresh one may belong to a run still going, so only a day-old one
+  // is taken to be abandoned.
+  it('removes a partial download a day old, and keeps a fresh one and other files', async () => {
+    const old = join(dir, '.polyglots-data-old')
+    const fresh = join(dir, '.polyglots-data-fresh')
+    const other = join(dir, '.other-old')
+    for (const f of [old, fresh, other]) await writeFile(f, 'partial')
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+    await utimes(old, twoDaysAgo, twoDaysAgo)
+    await utimes(other, twoDaysAgo, twoDaysAgo)
+    const body = 'x'
+    server = await serve({ '/f': bytes(body) })
+    const path = await download(server.url('/f'), { maxBytes: MiB, sha512: sha512(body), dir })
+    expect((await readdir(dir)).sort()).toEqual(['.other-old', '.polyglots-data-fresh', path.slice(dir.length + 1)].sort())
   })
 
   it('creates the folder it is asked to write into', async () => {
