@@ -7,6 +7,7 @@ import { BUILT_IN_RULES, findingLabel } from '../../rules/names.js'
 import { GUIDANCE_LIMIT } from '../../rules/schema.js'
 import { resolveLocale, wpCodeOf } from '../../wporg/locales.js'
 import { rulesBuilderUrl } from '../../rules/builder-url.js'
+import { RulesFileError } from '../../rules/parse.js'
 import type { RulesFetchPlan } from '../../commands/rules-fetch.js'
 import { useCommands, useConfig } from '../commands.js'
 import { Hint } from '../components/Hint.js'
@@ -29,19 +30,12 @@ export interface LocaleRulesProps {
 
 type Stage = 'pick' | 'overview' | 'rules' | 'ratio' | 'nouns' | 'nounList' | 'mistakes' | 'patterns' | 'guidance' | 'try' | 'copy' | 'fetch' | 'builder' | 'leave'
 
-const SECTIONS = [
-  'Built-in rules',
-  'Glossary match',
-  'Proper nouns',
-  'Common mistakes',
-  'Patterns',
-  'Guidance',
-  'Try the rules',
-  'Copy to another locale',
-  'Fetch from polyglots-data',
-  'Open the rules builder in your browser',
-] as const
 const SECTION_STAGE: Stage[] = ['rules', 'ratio', 'nouns', 'mistakes', 'patterns', 'guidance', 'try', 'copy', 'fetch', 'builder']
+// What the overview offers for a file that does not parse: the two ways to a
+// valid one that do not start from its contents. Editing would start from a
+// value the file does not hold, and saving it would write over whatever the
+// person meant to keep, so neither is offered until the file reads.
+const REPAIR_STAGE: Stage[] = ['fetch', 'builder']
 // The rows of the screen around a fetch summary: the frame's header and
 // footer, this screen's title, path and the lines above and below the
 // summary. What is left is the summary's window; a smaller terminal still
@@ -156,6 +150,9 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   // else's rules on enter.
   const [input, setInput] = useState(config.defaultLocale ?? '')
   const [draft, setDraft] = useState<RulesDraft>()
+  // Set instead of draft when the locale's file exists but is not a valid
+  // rules file: the overview then shows the error and offers only the repairs.
+  const [broken, setBroken] = useState<{ locale: string; path: string }>()
   const [value, setValue] = useState<RulesValue>({ mistakes: [], patterns: [] })
   const [error, setError] = useState<string>()
   const [notice, setNotice] = useState<string>()
@@ -177,7 +174,9 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   // content with the built-in rules says so, and what the setup step counts.
   // The defaults are written commented out, so nothing is re-reviewed.
   const savable = dirty || (draft !== undefined && !draft.exists)
-  const id = draft?.locale ?? ''
+  const id = draft?.locale ?? broken?.locale ?? ''
+  const rulesPath = draft?.path ?? broken?.path
+  const rows = broken ? REPAIR_STAGE : SECTION_STAGE
 
   const activeRules = (): Set<string> =>
     value.rules
@@ -199,6 +198,14 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
       setStage('overview')
     } catch (err) {
       setError(errorText(err))
+      // A file that does not parse still opens, to the repairs: stopping at
+      // the prompt left fetching the published file, the natural mend, to
+      // the CLI alone. Anything else (an unreadable file) stays here.
+      if (err instanceof RulesFileError) {
+        setBroken({ locale: resolved.id, path: err.path })
+        setCursor(0)
+        setStage('overview')
+      }
     }
   }
 
@@ -270,6 +277,10 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
       const opened = openRulesDraft(plan.locale)
       setDraft(opened)
       setValue(opened.value)
+      setBroken(undefined)
+      // From the repairs the cursor was on their first row; in the full
+      // overview it stays on the fetch it came from.
+      setCursor(SECTION_STAGE.indexOf('fetch'))
       setError(undefined)
       setNotice(`Wrote ${basename(plan.path)}.`)
       setStage('overview')
@@ -281,7 +292,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   }
   const builderUrl = rulesBuilderUrl(wpCodeOf(id) ?? id)
   const openSection = () => {
-    const next = SECTION_STAGE[cursor]!
+    const next = rows[cursor]!
     if (next === 'fetch') openFetch()
     if (next === 'builder') {
       // The address is shown either way: over SSH no browser opens, and the
@@ -311,7 +322,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
     },
     localeRules: {
       move: on('overview')
-        ? (_ch, key) => (key.upArrow ? setCursor((c) => Math.max(0, c - 1)) : setCursor((c) => Math.min(SECTIONS.length - 1, c + 1)))
+        ? (_ch, key) => (key.upArrow ? setCursor((c) => Math.max(0, c - 1)) : setCursor((c) => Math.min(rows.length - 1, c + 1)))
         : undefined,
       open: on('overview') ? openSection : undefined,
       save: on('overview') && savable ? () => void save() : undefined,
@@ -356,7 +367,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   })
 
   const marker = (selected: boolean) => (selected ? '❯ ' : '  ')
-  const header = draft ? `${wpCodeOf(id) ?? id} (${id})` : ''
+  const header = draft || broken ? `${wpCodeOf(id) ?? id} (${id})` : ''
 
   return (
     <Box flexDirection="column">
@@ -385,6 +396,18 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
             ? draft.path
             : `No file yet: only the universal checks run. s saves these rules as ${basename(draft.path)}, which completes this setup step.`}
         </Text>
+      )}
+
+      {broken && !draft && stage !== 'pick' && <Text dimColor>{broken.path}</Text>}
+
+      {broken && !draft && stage === 'overview' && (
+        <>
+          {error && <Text color="red">{error}</Text>}
+          <Text>Not a valid rules file, so it cannot be edited here. Mend it by hand, or replace it:</Text>
+          <Text>{`${marker(cursor === 0)}Fetch from polyglots-data`}</Text>
+          <Text>{`${marker(cursor === 1)}Open the rules builder in your browser`}</Text>
+          <Hint>↑↓ move · enter open · esc back</Hint>
+        </>
       )}
 
       {draft && (stage === 'overview' || stage === 'leave') && (
@@ -575,7 +598,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
         </>
       )}
 
-      {draft && stage === 'fetch' && (
+      {(draft || broken) && stage === 'fetch' && (
         <FetchPanel
           id={id}
           dirty={dirty}
@@ -619,7 +642,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
         </>
       )}
 
-      {draft && stage === 'builder' && (
+      {(draft || broken) && stage === 'builder' && (
         <>
           <Text>
             {builderOpened === undefined
@@ -629,7 +652,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
                 : 'Open this address in your browser:'}
           </Text>
           <Text color="cyan">{builderUrl}</Text>
-          <Text dimColor>It writes a rules file for {wpCodeOf(id) ?? id} step by step; save the download as {basename(draft.path)}.</Text>
+          <Text dimColor>It writes a rules file for {wpCodeOf(id) ?? id} step by step; save the download as {basename(rulesPath ?? '')}.</Text>
           <Hint>esc back to the overview</Hint>
         </>
       )}

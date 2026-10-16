@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { saveConfig } from '../../src/config.js'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -7,10 +7,10 @@ import { profileFor } from '../../src/audit/rules/profiles.js'
 import { localeRulesFile, loadLocaleRules, rulesFingerprint } from '../../src/rules/load.js'
 import { hasLocaleRules } from '../../src/tui/setup.js'
 import { App } from '../../src/tui/App.js'
-import { CommandsProvider } from '../../src/tui/commands.js'
+import { CommandsProvider, type TuiCommands } from '../../src/tui/commands.js'
 import { LocaleRules } from '../../src/tui/screens/LocaleRules.js'
 import { installLocaleFixture } from '../locale-fixture.js'
-import { ESC_DELAY, fakeCommands, flat, openFromHome, keys, makeHome, render, tick, waitFor, waitForText, cleanup, type Home } from './helpers.js'
+import { ESC_DELAY, fakeCommands, flat, openFromHome, keys, makeHome, render, rulesEntry, tick, waitFor, waitForText, cleanup, type Home } from './helpers.js'
 
 let home: Home
 
@@ -584,5 +584,87 @@ describe('Menu entry', () => {
     await tick()
     await openFromHome(view.stdin, 'locale-rules')
     await waitForText(view.lastFrame, /Locale rules/)
+  })
+})
+
+// A file that does not parse used to stop the screen at the locale prompt
+// with the error, so the one repair the screen offers, fetching the
+// published file, was out of reach and only the CLI could mend it.
+describe('LocaleRules: an invalid rules file', () => {
+  const BROKEN = 'schema: 2\nmistakes: [\n'
+
+  async function writeBroken() {
+    const path = localeRulesFile('tr')
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, BROKEN)
+    return path
+  }
+
+  function mountWith(overrides: Partial<TuiCommands>) {
+    const commands = fakeCommands(overrides)
+    const view = render(
+      <CommandsProvider value={commands}>
+        <LocaleRules onBack={() => undefined} />
+      </CommandsProvider>,
+    )
+    return { ...view, commands }
+  }
+
+  it('shows the error with the fetch and builder rows, and nothing to edit', async () => {
+    const path = await writeBroken()
+    const view = mountWith({})
+    await waitForText(view.lastFrame, /Locale/)
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, 'Fetch from polyglots-data')
+    const frame = flat(view.lastFrame())
+    expect(frame).toContain(path)
+    expect(frame).toContain('Open the rules builder in your browser')
+    expect(frame).not.toContain('Built-in rules')
+    expect(frame).not.toContain('Common mistakes')
+    expect(frame).not.toMatch(/s save/)
+    // Nothing was written over the file the person has to mend.
+    expect(await readFile(path, 'utf8')).toBe(BROKEN)
+  })
+
+  it('starts the fetch plan on enter and writes the fetched file over the broken one', async () => {
+    const path = await writeBroken()
+    const fetched = 'schema: 2\nguidance: Use siz.\n'
+    const planRulesFetch = vi.fn(async () => ({
+      locale: 'tr',
+      path,
+      entry: rulesEntry(),
+      text: fetched,
+      state: 'changed' as const,
+      summary: ['guidance changed:', '  Use siz.'],
+    }))
+    const writeRulesFetch = vi.fn(async (p: { path: string; text: string }) => {
+      await writeFile(p.path, p.text)
+    })
+    const view = mountWith({ planRulesFetch, writeRulesFetch })
+    await waitForText(view.lastFrame, /Locale/)
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, '❯ Fetch from polyglots-data')
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, 'guidance changed:')
+    expect(planRulesFetch).toHaveBeenCalledTimes(1)
+    expect((planRulesFetch.mock.calls[0] as unknown[])[0]).toBe('tr')
+    view.stdin.write('y')
+    await waitForText(view.lastFrame, 'Built-in rules')
+    expect(await readFile(path, 'utf8')).toBe(fetched)
+    expect(flat(view.lastFrame())).toMatch(/Guidance\s+8 of/)
+  })
+
+  it('esc from the fetch returns to the reduced overview', async () => {
+    await writeBroken()
+    const view = mountWith({})
+    await waitForText(view.lastFrame, /Locale/)
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, '❯ Fetch from polyglots-data')
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, 'No polyglots-data entry for tr')
+    view.stdin.write(keys.esc)
+    await tick(ESC_DELAY)
+    await waitForText(view.lastFrame, '❯ Fetch from polyglots-data')
+    expect(flat(view.lastFrame())).toContain('Open the rules builder in your browser')
   })
 })
