@@ -1,11 +1,8 @@
 import { isUniversalOnly, profileFor } from '../audit/rules/profiles.js'
 import type { Locale } from '../types.js'
-import { localeDisplayName } from '../wporg/locales.js'
 import { loadLocaleRules } from './load.js'
-import { packFor } from './packs/index.js'
 
 export interface LocaleSupport {
-  pack?: { language: string; status: 'maintained' | 'defaults' }
   // Whether the locale has a rules file. Throws, through the loader, when it
   // has one that does not parse, exactly as a review would.
   file: boolean
@@ -13,27 +10,16 @@ export interface LocaleSupport {
   universalOnly: boolean
 }
 
-/** What polyglots knows about a locale's language, for the surfaces that say so. */
+/**
+ * What polyglots knows about a locale, for the surfaces that say so. Only what
+ * its rules file says: the code ships no locale's data, so there is nothing
+ * built in to report beside it.
+ */
 export function localeSupport(locale: Locale): LocaleSupport {
-  const pack = packFor(locale)
   return {
-    ...(pack ? { pack: { language: pack.language, status: pack.status } } : {}),
     file: loadLocaleRules(locale) !== undefined,
     universalOnly: isUniversalOnly(profileFor(locale)),
   }
-}
-
-/**
- * The one line rules check, the Locale rules screen and the rules edit
- * template all use, so the three cannot describe the same pack differently.
- */
-export function packLine(locale: Locale): string {
-  const pack = packFor(locale)
-  if (!pack) return `No built-in pack for ${locale}: only the universal rules run unless this file adds some.`
-  const name = localeDisplayName(pack.language)
-  return pack.status === 'maintained'
-    ? `Built-in pack: ${name} (maintained)`
-    : `Built-in pack: ${name} (defaults for the locale team to confirm)`
 }
 
 /**

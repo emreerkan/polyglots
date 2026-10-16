@@ -6,10 +6,9 @@ import { localeSupport, supportNotice } from '../../src/rules/support.js'
 import { useLocaleFixture } from '../locale-fixture.js'
 
 describe('localeSupport', () => {
-  it('describes a locale with a pack and no file', () => {
-    // The pack no longer adds a rule: without its rules file Swedish runs the
-    // universal checks only, like any other language.
-    expect(localeSupport('sv')).toEqual({ pack: { language: 'sv', status: 'defaults' }, file: false, universalOnly: true })
+  it('knows nothing about Turkish without its rules file', () => {
+    // Nothing Turkish ships in the code: without the file, tr is any locale.
+    expect(localeSupport('tr')).toEqual({ file: false, universalOnly: true })
   })
 
   it('describes a locale with neither', () => {

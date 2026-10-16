@@ -51,10 +51,10 @@ describe('rules path', () => {
 })
 
 describe('rules check', () => {
-  it('says the built-in defaults apply when there is no file', async () => {
+  it('says only the universal checks run when there is no file', async () => {
     const r = await run(['rules', 'check'])
     expect(r.code).toBe(0)
-    expect(r.stdout).toMatch(/no rules file.*built-in/i)
+    expect(r.stdout).toMatch(/no rules file.*only the universal checks run/i)
   })
 
   it('summarises a valid file', async () => {
@@ -125,33 +125,15 @@ describe('rules copy', () => {
   })
 
   // The template's opening lines describe the locale it was written for. Left
-  // as they were, a copy from Swedish told the Danish team about the Swedish
-  // pack and how to check the Swedish file.
+  // as they were, a copy from Swedish told the Danish team how to check the
+  // Swedish file.
   it('rewrites the template lines that name the source locale', async () => {
     expect((await run(['rules', 'edit', 'sv'], { openEditor: async () => {} })).code).toBe(0)
     await run(['rules', 'copy', 'sv', 'da'])
     const copied = (await readFile(localeRulesFile('da'), 'utf8')).split('\n')
-    expect(copied.slice(0, 2)).toEqual([
-      '# polyglots rules for da_DK (da)',
-      '# No built-in pack for da: only the universal rules run unless this file adds some.',
-    ])
+    expect(copied.slice(0, 2)).toEqual(['# polyglots rules for da_DK (da)', '#'])
     expect(copied).toContain('# Check the file with: polyglots rules check da')
-    expect(copied.join('\n')).not.toMatch(/Built-in pack: Swedish|rules check sv/)
-  })
-
-  it('drops the pack line when the target has a maintained pack, and adds one when it leaves one', async () => {
-    await run(['rules', 'edit', 'sv'], { openEditor: async () => {} })
-    await run(['rules', 'copy', 'sv', 'tr'])
-    const toTurkish = (await readFile(localeRulesFile('tr'), 'utf8')).split('\n')
-    expect(toTurkish.slice(0, 2)).toEqual(['# polyglots rules for tr_TR (tr)', '#'])
-
-    await run(['rules', 'copy', 'tr', 'de'])
-    const fromTurkish = (await readFile(localeRulesFile('de'), 'utf8')).split('\n')
-    expect(fromTurkish.slice(0, 3)).toEqual([
-      '# polyglots rules for de_DE (de)',
-      '# No built-in pack for de: only the universal rules run unless this file adds some.',
-      '#',
-    ])
+    expect(copied.join('\n')).not.toMatch(/sv_SE|rules check sv/)
   })
 
   it('copies to a translation set, accepting any spelling of the locales', async () => {
@@ -186,21 +168,21 @@ describe('rules copy', () => {
 })
 
 
-describe('rules check: built-in pack', () => {
-  it('names a maintained pack', async () => {
-    expect((await run(['rules', 'check', 'tr'])).stdout).toContain('Built-in pack: Turkish (maintained)')
+describe('rules check: no rules file', () => {
+  // With no pack to fall back on, a locale without a file runs the universal
+  // checks and nothing else, and the way out is to fetch its team's file.
+  it('says only the universal checks run, and how to get a file', async () => {
+    const out = (await run(['rules', 'check', 'tr'])).stdout
+    expect(out).toContain('No rules file for tr; only the universal checks run.')
+    expect(out).toContain('polyglots rules fetch tr')
+    expect(out).toContain('polyglots rules edit tr')
+    expect(out).not.toMatch(/pack/i)
   })
 
-  it('names a pack of defaults for the team to confirm', async () => {
-    expect((await run(['rules', 'check', 'sv'])).stdout).toContain('Built-in pack: Swedish (defaults for the locale team to confirm)')
-  })
-
-  it('says when there is no pack, with or without a file', async () => {
-    const line = 'No built-in pack for de: only the universal rules run unless this file adds some.'
-    expect((await run(['rules', 'check', 'de'])).stdout).toContain(line)
+  it('names no pack over a file either', async () => {
     await writeRules('de', 'guidance: Kurz.\n')
     const r = await run(['rules', 'check', 'de'])
-    expect(r.stdout).toContain(line)
+    expect(r.stdout).not.toMatch(/pack/i)
     expect(r.stdout).toMatch(/^✓ \S+ is valid\.$/m)
   })
 })

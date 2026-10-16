@@ -30,8 +30,8 @@ has five steps:
    Skip this if you only review.
 4. **Glossary sync**: downloads your locale's glossary from
    translate.wordpress.org. A review will not start without it.
-5. **Locale rules**: the checks for your language's conventions. Some
-   locales ship a pack; for the rest this is where you start one. See
+5. **Locale rules**: the checks for your language's conventions. polyglots
+   ships none; fetch your locale team's file or start one here. See
    [Locale rules](locale-rules.md).
 
 Last, it asks once whether to share a few anonymous totals for the website.

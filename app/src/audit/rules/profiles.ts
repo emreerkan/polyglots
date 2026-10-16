@@ -88,7 +88,7 @@ export function mergeProfile(base: RuleProfile, file: LocaleRules | undefined): 
  * beyond the universal set, and no mistakes or patterns, which would have
  * added `custom`.
  *
- * Decided by the effective profile, not by whether a pack exists. A German
+ * Decided by the effective profile, not by whether a rules file exists. A German
  * team that enables one rule or writes one mistake has language checks; a
  * Turkish file that switches every extra off has none, and its prompt should
  * say so. A file that disables a universal rule is still universal-only:

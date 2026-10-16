@@ -6,22 +6,20 @@ sentence is a mistake depends on the language: German capitalises every noun,
 Turkish only proper nouns. So each locale can have a rules file that says which
 checks apply, and adds the conventions its own team enforces.
 
-## Built-in packs
+## Where locale rules come from
 
-Some languages ship with a pack: the rules a reviewer of that language would
-turn on, written down.
+polyglots ships no locale's rules. The rules for a language are written and
+kept by its locale team, in
+[polyglots-data](https://github.com/emreerkan/polyglots-data), one file per
+locale. Get yours with:
 
-| Language | Status | Adds |
-|---|---|---|
-| Turkish | Maintained by the tr_TR locale team | `title-case`, `apostrophe`, `ampersand`, `number-format`, and Turkish proper nouns |
-| Swedish | Defaults, waiting for the sv_SE team to confirm | `title-case` |
+```
+polyglots rules fetch tr
+```
 
-The Turkish rules file also carries two grammar checks as example patterns,
-off until you uncomment them: [Suffixes and plurals](suffixes-and-plurals.md).
-
-A locale with no pack runs the universal checks only, and every review says
-so, so an absent finding is never mistaken for a passed check. A rules file
-fills the gap.
+A locale with no rules file runs the universal checks only, and every review
+says so, so an absent finding is never mistaken for a passed check. If your
+locale has no file in polyglots-data yet, write one (below).
 
 ## The rules file
 
@@ -35,6 +33,9 @@ does for that locale, commented out, with an example of every section. A file
 that sets nothing changes nothing.
 
 ```yaml
+# The rules format version. polyglots refuses a file newer than it reads.
+schema: 2
+
 # Rules that always run unless disabled: placeholder, html, plural-count, ...
 rules:
   enable: [title-case]
@@ -64,10 +65,22 @@ patterns:
 # Guidance added to the AI review prompts, at most 1500 characters.
 guidance: |
   Button labels are verbs in the imperative.
+
+capitalization: |
+  - {language} uses sentence case ...
+register: '- Address the reader as ...'
+formality: informal
+sentenceEnd:
+  unmarked: true
 ```
 
 Every section is optional.
 
+- **`schema`** is the version of the file format. Leave it out and the file
+  is read as schema 1, which has every section here except the last four.
+  Those need `schema: 2` at the top of the file. A file with a schema newer
+  than your polyglots reads is refused with a request to update polyglots,
+  rather than reviewed on half-understood rules.
 - **`rules`** turns built-in checks on or off by name. The names are in
   [Reviewing submissions](review.md#what-the-checks-look-for).
 - **`properNouns`** are names `title-case` leaves alone: `always` everywhere,
@@ -90,6 +103,23 @@ Every section is optional.
   `text` for a fix if the letters in it can be stored both ways.
 - **`guidance`** is prose added to the reviewer's instructions: your style
   guide's few most important lines.
+- **`capitalization`** tells the reviewer how your language capitalizes, at
+  most 2500 characters, one `- ` line per point. It is used only where
+  `title-case` runs; without it, those locales get a generic paragraph about
+  sentence case. `{language}` is replaced with the language's name.
+- **`register`** is the line both AI prompts use for tone and form of address,
+  at most 500 characters. One string sets both; `{ audit: ..., translate: ... }`
+  sets the review prompt and the draft review prompt apart. Without it, both
+  ask for the register that is standard in WordPress for your language.
+- **`formality`** is `formal` or `informal`: how a draft addresses the reader.
+  DeepL is asked for more or less formal text, and the AI engines are told the
+  same. It overrides the formality a locale's name implies, as in
+  `de_DE_formal`.
+- **`sentenceEnd`** says how a sentence ends in your script, for the
+  punctuation check. `unmarked: true` is for a language that writes no final
+  mark. `answers` lists regular expressions for a final mark that answers the
+  source's (`text`, and optionally the `source` it answers). `notEnding` is a
+  regular expression for a mark that looks like a full stop and is not one.
 
 Check a file after editing it:
 
@@ -112,9 +142,8 @@ Any change to a locale's rules changes what the reviewer is told, so files of
 that locale are reviewed again from scratch on their next run rather than
 served verdicts formed under the old rules.
 
-## Sharing a pack
+## Sharing your rules
 
-A rules file that works for your team is worth sharing. Open an issue or a
-pull request on [GitHub](https://github.com/emreerkan/polyglots) with it, and
-say whether your locale team has agreed to it: a pack is marked maintained
-only when the team behind it is.
+A rules file that works for your team is worth sharing. Locale files live in
+[polyglots-data](https://github.com/emreerkan/polyglots-data); its
+contributing guide says how to propose one for your locale.

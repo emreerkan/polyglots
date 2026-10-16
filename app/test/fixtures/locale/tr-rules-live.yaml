@@ -5,6 +5,9 @@
 # Any change re-reviews files of this locale from scratch on their next run.
 # Check the file with: polyglots rules check tr
 
+# The rules format version. polyglots refuses a file newer than it reads.
+schema: 2
+
 # Rules that always run unless disabled: placeholder, html, plural-count, whitespace, untranslated, escaping, line-breaks, punctuation, glossary, inconsistent, tm-conflict, control
 rules:
   enable: []
@@ -21,25 +24,36 @@ properNouns:
 # Common mistakes: found anywhere in a translation, case-insensitive.
 # The AI review weighs each match with your note.
 mistakes: []
-#  - wrong: önizleme
-#    right: ön izleme
-#    note: TDK writes it as two words
+#  - wrong: a wording your team rejects
+#    right: the wording it uses instead
+#    note: Why, for the reviewer
 
 # Patterns: "text" (a literal) or "find" (a regular expression).
 # level: hint (the AI judges), error (always wrong, the AI must fix) or fix (replaced automatically).
 # "when: { source: ... }" applies a pattern only when the English source contains that text.
 patterns: []
-#  - find: '\.\.\.'
-#    replace: '…'
+#  - find: ' {2,}'
+#    replace: ' '
 #    level: fix
-#    note: Use the ellipsis character
-#  - find: '(?<![\p{L}\p{M}\p{N}])(?:%(?:\d+\$)?[-+0#]?\d*(?:\.\d+)?[sdfu]|\{[\w-]+\})[''’]\p{L}+'
-#    level: hint
-#    note: A suffix on a placeholder cannot agree with every value; rephrase so it lands on a word, as in "%s adlı eklentide"
-#  - find: '%(?:\d+\$)?[du](?:</[a-z]+>)?\s+(?!(?:dolar|lari|taler|popüler|modüler|seküler|moleküler|selüler|vasküler|regüler|tübüler|angüler|oküler|kapiler|skaler|polar|bipolar|solar|kiler|keler|çalar|galeri|ileri)\p{L}{0,4}(?![\p{L}\p{M}]))\p{L}+(?:lar(?:ı(?:mız|nız)?|ım|ın)?(?:n?a|ya|n?[dt]an?|n?ın|n?ı|y?la|dır|ca|[dt]aki)?|ler(?:i(?:miz|niz)?|im|in)?(?:n?e|ye|n?[dt]en?|n?in|n?i|y?le|dir|ce|[dt]eki)?)(?![\p{L}\p{M}])'
-#    level: hint
-#    note: Turkish keeps the noun singular after a number, as in "%d dosya"
+#    note: One space between words
 
 # Guidance added to the AI review prompts, at most 1500 characters.
 # guidance: |
 #   Button labels are verbs in the imperative.
+
+# How the language capitalizes, told to the AI review when title-case runs, at most 2500 characters.
+# {language} is replaced with the language name.
+# capitalization: |
+#   - {language} uses sentence case ...
+
+# The register the AI prompts ask for, at most 500 characters.
+# One line for both prompts, or { audit: ..., translate: ... } for each.
+# register: '- Address the reader as ...'
+
+# formal or informal: how a draft addresses the reader, in DeepL and the AI engines.
+# formality: informal
+
+# How a sentence ends in the language, for the punctuation check.
+# unmarked: the language writes no final mark. Also answers and notEnding.
+# sentenceEnd:
+#   unmarked: true

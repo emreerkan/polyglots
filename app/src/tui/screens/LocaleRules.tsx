@@ -12,7 +12,6 @@ import { ListEditor } from '../components/ListEditor.js'
 import { Form } from '../components/Form.js'
 import { MultilineInput } from '../components/MultilineInput.js'
 import { copyRules } from '../../cli/rules.js'
-import { packLine } from '../../rules/support.js'
 import { tryRules, type TryResult } from '../../rules/try.js'
 import { glossaryRows } from '../setup.js'
 import type { GlossaryEntry } from '../../types.js'
@@ -292,8 +291,6 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
 
       {draft && (stage === 'overview' || stage === 'leave') && (
         <>
-          {/* What the file is layered over, in rules check's own words. */}
-          <Text dimColor>{packLine(draft.locale)}</Text>
           <Text>
             {marker(cursor === 0)}Built-in rules     {activeRules().size} on
           </Text>

@@ -6,8 +6,6 @@ import { dirname } from 'node:path'
 import { renderDefaultRules, rulesHeader } from '../rules/defaults.js'
 import { loadLocaleRules, localeRulesFile } from '../rules/load.js'
 import { GUIDANCE_LIMIT } from '../rules/schema.js'
-import { packFor } from '../rules/packs/index.js'
-import { packLine } from '../rules/support.js'
 import { okLine, hintLine } from '../ui/messages.js'
 import { plainPainter, type Painter } from '../ui/paint.js'
 import type { Locale } from '../types.js'
@@ -30,11 +28,16 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 export function describeRules(locale: Locale, p: Painter = plainPainter): string[] {
   const file = localeRulesFile(locale)
   const rules = loadLocaleRules(locale)
-  // First, because it says what the file is layered over: a pack's profile,
-  // or nothing but the universal set.
-  const pack = p.paint('muted', packLine(locale))
+  // Without a file there is nothing language-specific at all: polyglots ships
+  // no locale's rules, so "the built-in defaults" would promise more than the
+  // universal checks. Fetching the team's file is the usual way out; writing
+  // one is for a locale whose team has published none.
   if (!rules) {
-    return [pack, `No rules file for ${locale}; the built-in defaults apply.`, hintLine(p, `Create one with: polyglots rules edit ${locale}`)]
+    return [
+      `No rules file for ${locale}; only the universal checks run.`,
+      hintLine(p, `Fetch your locale team's file with: polyglots rules fetch ${locale}`),
+      hintLine(p, `Or write one with: polyglots rules edit ${locale}`),
+    ]
   }
   const mistakes = rules.patterns.filter((p) => p.kind === 'mistake').length
   const patterns = rules.patterns.length - mistakes
@@ -43,7 +46,6 @@ export function describeRules(locale: Locale, p: Painter = plainPainter): string
     .filter(([, n]) => n > 0)
     .map(([level, n]) => `${n} ${level}`)
   return [
-    pack,
     okLine(p, `${file} is valid.`),
     rules.rules
       ? `  rules: ${plural(rules.rules.enable.length, 'enabled extra')}, ${plural(rules.rules.disable.length, 'disabled')}`
@@ -57,28 +59,21 @@ export function describeRules(locale: Locale, p: Painter = plainPainter): string
 
 /**
  * The template lines that describe the locale a file was written for, made to
- * describe `to` instead: the header, the pack line under it, and the command
- * that checks the file. Renaming only the header left a copy from Swedish
- * telling the Danish team about the Swedish pack.
+ * describe `to` instead: the header and the command that checks the file.
+ * Renaming only the header left a copy from Swedish telling the Danish team
+ * how to check the Swedish file.
  *
  * Only lines exactly as renderDefaultRules wrote them for `from` are touched,
  * and only in a file whose first line is the generated header. Anything the
  * team has reworded is theirs and stays verbatim, the commented examples
- * included. The pack line follows the template's rule, dropped for a
- * maintained pack and present otherwise, but only where the source followed
- * it too: a file with no pack line under a pack that would have had one was
- * edited that way on purpose, and is left as it is.
+ * included.
  */
 function retarget(text: string, from: Locale, to: Locale): string {
   const [first = '', ...rest] = text.split('\n')
   if (!first.startsWith('# polyglots rules for ')) return text
-  const hadLine = rest[0] === `# ${packLine(from)}`
-  const templated = hadLine || packFor(from)?.status === 'maintained'
-  const body = hadLine ? rest.slice(1) : rest
-  const pack = templated && packFor(to)?.status !== 'maintained' ? [`# ${packLine(to)}`] : []
   const check = `# Check the file with: polyglots rules check ${from}`
-  const lines = body.map((line) => (line === check ? `# Check the file with: polyglots rules check ${to}` : line))
-  return [rulesHeader(to), ...pack, ...lines].join('\n')
+  const lines = rest.map((line) => (line === check ? `# Check the file with: polyglots rules check ${to}` : line))
+  return [rulesHeader(to), ...lines].join('\n')
 }
 
 /**

@@ -43,9 +43,9 @@ interface Row {
 
 const KNOWN_FINDINGS = new Set(FINDING_KEYS)
 
-// The built-in rules that are not universal run only where a locale's pack
-// or rules file turns them on: apostrophe for Turkish, title-case for Turkish
-// and Swedish. With few installs, a count under one of those names would say
+// The built-in rules that are not universal run only where a locale's rules
+// file turns them on: apostrophe for Turkish, title-case for Turkish and
+// Swedish. With few installs, a count under one of those names would say
 // which locale someone reviews, which the payload promises never to carry.
 // They are summed under one key; the universal rules and the AI categories
 // run the same for every locale and keep their names.

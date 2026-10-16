@@ -1,17 +1,18 @@
 import { builtInProfileFor, UNIVERSAL_RULES } from '../audit/rules/profiles.js'
 import { wpCodeOf } from '../wporg/locales.js'
 import { builtInProperNounsFor } from '../audit/rules/proper-nouns.js'
-import { packFor } from './packs/index.js'
-import { packLine } from './support.js'
 import type { Locale } from '../types.js'
-import { GUIDANCE_LIMIT } from './schema.js'
+import { CAPITALIZATION_LIMIT, GUIDANCE_LIMIT, REGISTER_LIMIT } from './schema.js'
 
 /** The first line of a rules file, which rules copy rewrites for the target. */
 export const rulesHeader = (locale: Locale) => `# polyglots rules for ${wpCodeOf(locale) ?? locale} (${locale})`
 
 const list = (items: readonly string[]) => `[${items.map((i) => JSON.stringify(i)).join(', ')}]`
 
-// For a locale with no pack: examples that name no language, so a German team
+// Examples that name no language, for every locale. The Turkish and Swedish
+// templates once showed their own pack's examples; with the packs gone, a
+// locale's real mistakes and patterns come from its team's file in
+// polyglots-data, and the template only has to show the shape. A German team
 // is not shown a Turkish spelling rule as the model of what to write.
 const NEUTRAL_EXAMPLES = {
   mistakes: ['  - wrong: a wording your team rejects', '    right: the wording it uses instead', '    note: Why, for the reviewer'],
@@ -24,8 +25,12 @@ const NEUTRAL_EXAMPLES = {
  *
  * Written with the built-in values commented out by default. A file that sets
  * nothing fingerprints as empty, so opening the editor and closing it again
- * changes no cache key and re-reviews nothing. `commented: false` writes the
- * same values live, which is how a test proves they match the code.
+ * changes no cache key and re-reviews nothing. The schema line is live even
+ * so, and is safe there: the fingerprint leaves the schema number out, and
+ * declaring 2 up front means uncommenting a schema-2 example below works
+ * instead of being refused for want of a line nobody remembered to add.
+ * `commented: false` writes the same values live, which is how a test proves
+ * they match the code.
  */
 export function renderDefaultRules(locale: Locale, opts: { commented?: boolean } = {}): string {
   const live = opts.commented === false
@@ -33,20 +38,18 @@ export function renderDefaultRules(locale: Locale, opts: { commented?: boolean }
   const profile = builtInProfileFor(locale)
   const nouns = builtInProperNounsFor(locale)
   const extras = [...profile.rules].filter((r) => !UNIVERSAL_RULES.includes(r))
-  const pack = packFor(locale)
-  const examples = pack?.examples ?? NEUTRAL_EXAMPLES
+  const examples = NEUTRAL_EXAMPLES
 
   return [
     rulesHeader(locale),
-    // Said only when there is something to qualify. A maintained pack needs no
-    // caveat, and leaving the line out keeps the Turkish template exactly as
-    // every existing tr_TR.yaml was written from.
-    ...(pack?.status === 'maintained' ? [] : [`# ${packLine(locale)}`]),
     '#',
     '# Every section is optional. A section left out keeps the built-in behaviour.',
     '# The built-in values are shown commented out; uncomment a section to change it.',
     '# Any change re-reviews files of this locale from scratch on their next run.',
     '# Check the file with: polyglots rules check ' + locale,
+    '',
+    '# The rules format version. polyglots refuses a file newer than it reads.',
+    'schema: 2',
     '',
     `# Rules that always run unless disabled: ${UNIVERSAL_RULES.join(', ')}`,
     c('rules:'),
@@ -75,6 +78,23 @@ export function renderDefaultRules(locale: Locale, opts: { commented?: boolean }
     `# Guidance added to the AI review prompts, at most ${GUIDANCE_LIMIT} characters.`,
     '# guidance: |',
     '#   Button labels are verbs in the imperative.',
+    '',
+    `# How the language capitalizes, told to the AI review when title-case runs, at most ${CAPITALIZATION_LIMIT} characters.`,
+    '# {language} is replaced with the language name.',
+    '# capitalization: |',
+    '#   - {language} uses sentence case ...',
+    '',
+    `# The register the AI prompts ask for, at most ${REGISTER_LIMIT} characters.`,
+    '# One line for both prompts, or { audit: ..., translate: ... } for each.',
+    "# register: '- Address the reader as ...'",
+    '',
+    '# formal or informal: how a draft addresses the reader, in DeepL and the AI engines.',
+    '# formality: informal',
+    '',
+    '# How a sentence ends in the language, for the punctuation check.',
+    '# unmarked: the language writes no final mark. Also answers and notEnding.',
+    '# sentenceEnd:',
+    '#   unmarked: true',
     '',
   ].join('\n')
 }

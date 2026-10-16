@@ -13,7 +13,7 @@ import { useLocaleFixture } from '../locale-fixture.js'
 // were captured from the code as it stood before locale packs existed (#2);
 // they now load every Turkish rule from test/fixtures/locale/tr_TR.yaml, which
 // holds what the pack carried, so a pass proves the file says exactly what the
-// pack did. A diff here means a Turkish prompt, finding or template moved,
+// pack did. A diff here means a Turkish prompt or finding moved,
 // which re-reviews every Turkish file a reviewer has cached; regenerate them
 // only when that is the intended change.
 
@@ -140,7 +140,11 @@ describe('Turkish findings, byte for byte', () => {
   })
 })
 
-describe('Turkish rules template, byte for byte', () => {
+// The template is no longer Turkish: since the packs went, every locale gets
+// the same neutral examples and only the header names the locale. It is still
+// pinned byte for byte, because a template change is what every new rules file
+// is written from. Rendered for tr only because that is where the fixtures were.
+describe('rules template, byte for byte', () => {
   it('keeps the commented template', async () => {
     await expect(renderDefaultRules('tr')).toMatchFileSnapshot(fixture('tr-rules-commented.yaml'))
   })

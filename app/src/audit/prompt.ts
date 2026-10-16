@@ -58,9 +58,10 @@ function languageName(locale: Locale): string {
   return localeDisplayName(locale)
 }
 
-// For a locale that turns title-case on without a pack to say how its own
-// orthography works: what sentence case means, and nothing about TDK or any
-// other language's institutions and examples.
+// For a locale that turns title-case on with no capitalization paragraph in
+// its rules file to say how its own orthography works: what sentence case
+// means, and nothing about TDK or any other language's institutions and
+// examples.
 const GENERIC_CAPITALIZATION = `- {language} capitalizes only the first word of a sentence and proper nouns, not every word as English Title Case does. Brand names (WordPress, WooCommerce) and acronyms keep their own casing.
 - A capital mid-string is legitimate when the word is a proper noun in {language}. An automated check cannot recognize most proper nouns, so when a title-case finding is really one of them, clear it.
 - A title-case finding that says the translation "mirrors the English source" is close to proof of an English calque. One that only says a word is capitalized mid-string is weaker: check what the word refers to before confirming it.

@@ -1,25 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { customFindings } from '../../src/rules/custom.js'
-import { renderDefaultRules } from '../../src/rules/defaults.js'
+import { readFileSync } from 'node:fs'
 import { parseLocaleRules } from '../../src/rules/load.js'
 
-// The Turkish template ships two grammar checks as commented example
-// patterns rather than as rules: a suffix glued to a placeholder, and a plural
-// noun after a count. A team turns them on by uncommenting, so what is tested
-// here is the template itself, uncommented the way a person would do it, read
-// by the same loader and matched by the same engine a review uses.
-function uncommentedPatterns() {
-  const lines = renderDefaultRules('tr').split('\n')
-  const start = lines.indexOf('patterns: []')
-  const out = [...lines.slice(0, start), 'patterns:']
-  let i = start + 1
-  for (; i < lines.length && lines[i]!.startsWith('#  '); i++) out.push(lines[i]!.slice(1))
-  out.push(...lines.slice(i))
-  return parseLocaleRules(out.join('\n'), 'tr_TR.yaml').patterns
+// Two Turkish grammar checks written as patterns rather than rules: a suffix
+// glued to a placeholder, and a plural noun after a count. The Turkish
+// template used to carry them as commented examples; with the packs gone they
+// live in the tr_TR rules file in polyglots-data, and the fixture is a verbatim
+// copy of those two entries. What is tested is still the file a team ships,
+// read by the same loader and matched by the same engine a review uses.
+function grammarPatterns() {
+  const path = new URL('../fixtures/locale/tr-grammar-patterns.yaml', import.meta.url)
+  return parseLocaleRules(readFileSync(path, 'utf8'), 'tr_TR.yaml').patterns
 }
 
 const notes = (msgstr: string) =>
-  customFindings({ msgid: 'source', msgstr: [msgstr] }, uncommentedPatterns(), 'tr').map((f) => f.message)
+  customFindings({ msgid: 'source', msgstr: [msgstr] }, grammarPatterns(), 'tr').map((f) => f.message)
 const SUFFIX = /suffix on a placeholder/
 const PLURAL = /singular after a number/
 

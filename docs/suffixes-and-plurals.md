@@ -1,10 +1,11 @@
 # Suffixes and plurals
 
 Two Turkish mistakes only show once a placeholder is filled in: a suffix glued
-to a placeholder, and a plural noun after a number. The Turkish rules file
-carries a pattern for each, commented out. Once you turn them on, each match
-reaches the AI review as a hint with its note, and the model decides in
-context; the pattern alone never rejects a translation.
+to a placeholder, and a plural noun after a number. The tr_TR rules file in
+[polyglots-data](https://github.com/emreerkan/polyglots-data) carries a
+pattern for each, turned on. Each match reaches the AI review as a hint with
+its note, and the model decides in context; the pattern alone never rejects a
+translation.
 
 They are patterns rather than built-in checks because what they look for is
 Turkish spelling: the apostrophe before a suffix, and the `-lar`/`-ler`
@@ -14,12 +15,12 @@ write its own pattern the same way (see [Other languages](#other-languages)).
 ## Turning them on
 
 ```
-polyglots rules edit tr
+polyglots rules fetch tr
 ```
 
-opens the rules file. Under `# Patterns`, change `patterns: []` to
-`patterns:`, then remove the `#` from the lines of each pattern you want,
-keeping the two spaces of indentation. With both on, the section reads:
+downloads the tr_TR rules file with both patterns in it. To add them to a file
+of your own instead, open it with `polyglots rules edit tr` and put them under
+`patterns:`, keeping the two spaces of indentation:
 
 ```yaml
 patterns:
@@ -31,11 +32,10 @@ patterns:
     note: Turkish keeps the noun singular after a number, as in "%d dosya"
 ```
 
-A rules file made by an earlier version has no such lines: copy the block
-above into it instead. `polyglots rules check tr` confirms the file reads.
+`polyglots rules check tr` confirms the file reads.
 
 Turning a pattern on changes the rules, so the next review of every Turkish
-file starts over. To turn one off again, delete its lines or put the `#` back.
+file starts over. To turn one off again, delete its lines or put a `#` before each.
 
 ## A suffix glued to a placeholder
 

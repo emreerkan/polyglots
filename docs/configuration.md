@@ -38,9 +38,9 @@ The two context lengths are cleared with an empty value:
 
 ## Names the checks should leave alone
 
-Where the `title-case` check runs (in a language whose built-in pack turns it
-on, and in any locale whose [rules](locale-rules.md) do), a capital in the
-middle of a sentence is flagged. Places, people and institutions are the
+Where the `title-case` check runs (a locale whose
+[rules file](locale-rules.md) enables it), a capital in the middle of a
+sentence is flagged. Places, people and institutions are the
 exceptions, so add them per locale:
 
 ```
@@ -54,13 +54,10 @@ single word also covers its suffixed forms, so `Kadıköy` covers `Kadıköy'de`
 
 The names go in the `properNouns.always` list of the locale's
 [rules file](locale-rules.md), the list the app shows as **Always
-capitalized** under Configuration › Locale rules › Proper nouns. The list
-starts with the language's built-in names, so the first name you add writes
-those out with it.
+capitalized** under Configuration › Locale rules › Proper nouns.
 
-`polyglots config list-names` prints the whole list with numbers, built-in
-names included. `polyglots config remove-name` takes those numbers, or the
-names themselves:
+`polyglots config list-names` prints the whole list with numbers.
+`polyglots config remove-name` takes those numbers, or the names themselves:
 
 ```
 polyglots config list-names --locale tr
