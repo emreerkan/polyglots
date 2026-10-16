@@ -237,7 +237,17 @@ export const OFFLINE_NOTE = 'Could not reach polyglots-data; skipped.'
 // and moves straight on; offline, the step is skipped with a note, since
 // there is nothing to offer then either and the person should not have to
 // press a key to learn that.
-function MemoryStep({ onSkip, onUnlisted, onOffline, onDone }: { onSkip: () => void; onUnlisted: () => void; onOffline: () => void; onDone: () => void }) {
+function MemoryStep({
+  onSkip,
+  onUnlisted,
+  onOffline,
+  onDone,
+}: {
+  onSkip: () => void
+  onUnlisted: () => void
+  onOffline: () => void
+  onDone: (outcome: 'imported' | 'failed') => void
+}) {
   const { config } = useConfig()
   const locale = configuredLocale(config)
   const listing = useTmListing(locale)
@@ -385,8 +395,11 @@ export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: W
           skip()
           setNote(OFFLINE_NOTE)
         }}
-        onDone={() => {
-          record('confirmed')
+        onDone={(outcome) => {
+          // A failed fetch moves on but records nothing: the step stays open,
+          // so the header still shows the memory missing and the next launch
+          // offers it again, where a skip would have said not to.
+          if (outcome === 'imported') record('confirmed')
           advance()
         }}
       />

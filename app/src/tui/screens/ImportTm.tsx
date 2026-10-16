@@ -158,8 +158,10 @@ export interface TmFetchProps {
   client: DataClient
   // Esc before or instead of importing.
   onBack: () => void
-  // Enter, or esc, once the import has finished or failed.
-  onDone: () => void
+  // Enter, or esc, once the import has finished or failed, saying which: the
+  // wizard records its memory step as confirmed only on an import, since a
+  // failed fetch confirmed would read as a memory that is there.
+  onDone: (outcome: 'imported' | 'failed') => void
   doneHint?: string
 }
 
@@ -182,10 +184,11 @@ export function TmFetch({ locale, client, onBack, onDone, doneHint = DONE_HINT }
   const ready = plan.state.status === 'done' ? plan.state.result : undefined
   const importing = run.state.status === 'running'
   const finished = run.state.status === 'done' || run.state.status === 'error'
+  const done = () => onDone(run.state.status === 'done' ? 'imported' : 'failed')
 
   // Not while importing: the rows are going in, and leaving would only hide
   // the result. Once it has finished, every way out is the way on.
-  useBackKeys(finished ? onDone : onBack, { enabled: !importing })
+  useBackKeys(finished ? done : onBack, { enabled: !importing })
   useKeys({
     tmFetch: {
       start:
@@ -193,7 +196,7 @@ export function TmFetch({ locale, client, onBack, onDone, doneHint = DONE_HINT }
           ? () => run.run(() => commands.runTmFetch(ready, client, { onProgress: setProgress }))
           : undefined,
     },
-    finished: { close: finished ? onDone : undefined },
+    finished: { close: finished ? done : undefined },
   })
 
   if (plan.state.status === 'idle' || plan.state.status === 'running') return <Text>Checking polyglots-data…</Text>

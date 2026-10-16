@@ -123,6 +123,21 @@ describe('the wizard memory step', () => {
     expect(runTmFetch).toHaveBeenCalledTimes(1)
     expect(view.state().wizard.confirmed).toContain('memory')
   })
+
+  // tui.json is what the header and the launch check read; a failed fetch
+  // recorded as confirmed would mark the memory step done with no rows in it.
+  it('does not confirm the step when the fetch fails', async () => {
+    const runTmFetch = vi.fn(async () => {
+      throw new Error('sha512 mismatch for tr_TR.tmx.gz')
+    })
+    const view = mount(async () => manifestWith({ tm: [tmEntry()] }), { planTmFetch: vi.fn(async () => plan()), runTmFetch })
+    await waitForText(view.lastFrame, '1,002 strings')
+    view.stdin.write('y')
+    await waitForText(view.lastFrame, 'Fetch failed: sha512 mismatch')
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, 'Step 6 of 6')
+    expect(view.state().wizard.confirmed).not.toContain('memory')
+  })
 })
 
 describe('the app and the memory step', () => {
