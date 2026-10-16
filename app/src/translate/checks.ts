@@ -29,8 +29,12 @@ const DRAFT_RULES = new Set([
 export interface DraftChecker {
   /** Drafts with mechanical repairs and fix patterns applied, and what each still fails. */
   prepare(unit: TranslationUnit, drafts: string[]): { drafts: string[]; checks: string[] }
-  /** The AI's answer with fix patterns applied, fuzzy if an error-level check still fails. */
-  finalize(unit: TranslationUnit, result: ReviewResult): ReviewResult
+  /**
+   * The AI's answer with fix patterns applied, fuzzy if an error-level check
+   * still fails, with a note for each pattern that changed the entry here or
+   * in `prepare`.
+   */
+  finalize(unit: TranslationUnit, result: ReviewResult): ReviewResult & { notes?: string[] }
   /**
    * The glossary terms the source contains, by the same matcher the glossary
    * rule and review's prompt use. Handed to a reviewer that cannot look them
@@ -48,6 +52,10 @@ export interface DraftCheckerOptions {
 }
 
 const asEntry = (unit: TranslationUnit, msgstr: string[]): AuditEntry => ({ ...unit, msgstr, fuzzy: false })
+
+// Worded as review words the same fix in its findings, so a translator who
+// meets both in a file reads one voice.
+const FIX_NOTE_PREFIX = 'polyglots: locale rule: '
 
 /**
  * Review's rules, run on translate's own drafts.
@@ -74,26 +82,41 @@ export function createDraftChecker(opts: DraftCheckerOptions): DraftChecker {
     profile: { ...base.profile, rules: new Set([...base.profile.rules].filter((r) => DRAFT_RULES.has(r))) },
   }
 
-  const fix = (unit: TranslationUnit, forms: string[]): string[] => {
+  const fix = (unit: TranslationUnit, forms: string[]): { forms: string[]; notes: string[] } => {
     const restored = repairMechanically(asEntry(unit, forms)) ?? forms
-    return applyFixPatterns({ msgid: unit.msgid, msgstr: restored }, ctx.customPatterns ?? [], ctx.locale)?.forms ?? restored
+    const fixed = applyFixPatterns({ msgid: unit.msgid, msgstr: restored }, ctx.customPatterns ?? [], ctx.locale)
+    return { forms: fixed?.forms ?? restored, notes: fixed?.notes ?? [] }
   }
+  // The notes of the fixes prepare made, held until finalize. Prepare's fix is
+  // the one that usually counts: the AI pass sees the fixed draft and keeps it,
+  // so by finalize there is nothing left to change, and a note taken only there
+  // would name the rare entry the AI broke again and miss every other one. Kept
+  // here rather than returned from prepare so its interface, and the caller's
+  // plumbing of drafts and checks through the review, stay as they were.
+  const prepared = new Map<string, string[]>()
   const findings = (unit: TranslationUnit, forms: string[]): Finding[] => runRules(asEntry(unit, forms), ctx)
 
   return {
     prepare(unit, drafts) {
       const fixed = fix(unit, drafts)
-      return { drafts: fixed, checks: findings(unit, fixed).map((f) => `${f.rule}: ${f.message}`) }
+      if (fixed.notes.length > 0) prepared.set(unit.key, fixed.notes)
+      else prepared.delete(unit.key)
+      return { drafts: fixed.forms, checks: findings(unit, fixed.forms).map((f) => `${f.rule}: ${f.message}`) }
     },
     terms(unit) {
       return glossaryMatches(unit.msgid, ctx)
     },
     finalize(unit, result) {
-      const text = fix(unit, result.text)
+      const { forms: text, notes: late } = fix(unit, result.text)
+      // One note per pattern, however many times it fired: a pattern prepare
+      // applied and the AI then wrote back in is still one rule's doing.
+      const said = [...new Set([...(prepared.get(unit.key) ?? []), ...late])]
+      prepared.delete(unit.key)
+      const notes = said.length > 0 ? { notes: said.map((n) => FIX_NOTE_PREFIX + n) } : {}
       const errors = findings(unit, text).filter((f) => f.severity === 'error')
-      if (errors.length === 0) return { ...result, text }
+      if (errors.length === 0) return { ...result, text, ...notes }
       const still = `Still failing: ${errors.map((f) => `${f.rule}: ${f.message}`).join('; ')}`
-      return { ...result, text, fuzzy: true, reason: result.reason ? `${result.reason} ${still}` : still }
+      return { ...result, text, ...notes, fuzzy: true, reason: result.reason ? `${result.reason} ${still}` : still }
     },
   }
 }

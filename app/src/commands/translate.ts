@@ -104,6 +104,9 @@ export interface TranslateSummary {
   // only by --draft-engine none, which fills from the memory alone. Absent on
   // every other run, so their summaries read exactly as before.
   untranslated?: number
+  // Entries a locale rule's fix pattern changed. Absent when none did, so a run
+  // on a locale without fixes reports exactly what it always has.
+  fixedByRules?: number
   stopped?: string
 }
 
@@ -644,7 +647,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
         emit({ type: 'batch-phase', index, phase: 'drafting', at: Date.now() })
 
         let drafts: Drafts | undefined
-        let results: ReviewResult[] | undefined
+        let results: Array<ReviewResult & { notes?: string[] }> | undefined
         let lastError: unknown
         for (let attempt = 0; attempt < 2 && results === undefined; attempt++) {
           try {
@@ -704,6 +707,8 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
         const fuzzy = results.filter((r) => r.fuzzy).length
         summary.translated += results.length
         summary.fuzzy += fuzzy
+        const fixed = results.filter((r) => r.notes?.length).length
+        if (fixed > 0) summary.fixedByRules = (summary.fixedByRules ?? 0) + fixed
         emit({
           type: 'entries',
           index,

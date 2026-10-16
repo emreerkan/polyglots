@@ -230,6 +230,21 @@ describe('PoFile.apply', () => {
     expect(file.raw.translations[''][key].comments?.translator).toBeUndefined()
   })
 
+  it('writes the notes of a non-fuzzy entry as translator comments', async () => {
+    const file = await loadPo(path)
+    file.apply([{ key: 'Save Changes', text: ['Değişiklikleri Kaydet'], fuzzy: false, notes: ['polyglots: locale rule: two words'] }])
+    expect(file.raw.translations['']['Save Changes'].comments?.translator).toBe('polyglots: locale rule: two words')
+  })
+
+  // The notes say what a rule changed, the reason why a human must look; the
+  // change comes first because the reason is often about the changed text.
+  it('writes the notes before the reason of a fuzzy entry', async () => {
+    const file = await loadPo(path)
+    const key = 'Thank you for installing %s.'
+    file.apply([{ key, text: ['%s yüklediğiniz için teşekkürler.'], fuzzy: true, reason: 'check the tone', notes: ['locale rule: two words'] }])
+    expect(file.raw.translations[''][key].comments?.translator).toBe('polyglots: locale rule: two words\npolyglots: check the tone')
+  })
+
   it('ignores unknown keys and does not touch other entries', async () => {
     const file = await loadPo(path)
     const before = structuredClone(file.raw.translations)

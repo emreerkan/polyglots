@@ -33,6 +33,13 @@ describe('translateSummary', () => {
     expect(translateSummary(plainPainter, { ...base, fuzzy: 0 }, false).join('\n')).not.toContain('check before upload')
   })
 
+  it('counts the entries a locale rule changed, and only when there are some', () => {
+    expect(translateSummary(plainPainter, { ...base, fixedByRules: 3 }, false)).toContainEqual(
+      expect.stringMatching(/│  fixed by locale rules\s+3\s+│/),
+    )
+    expect(translateSummary(plainPainter, base, false).join('\n')).not.toContain('locale rules')
+  })
+
   it('reads the same with colour on, once the codes are stripped', () => {
     const painted = translateSummary(createPainter({ isTTY: true }, {}), base, false)
     expect(painted.join('\n')).toMatch(/\x1b\[/)

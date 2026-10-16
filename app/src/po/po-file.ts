@@ -20,6 +20,10 @@ export interface ApplyResult {
   // Why the reviewer left it fuzzy. Written as a translator comment so the note
   // travels with the entry into PoEdit.
   reason?: string
+  // What a locale rule changed in the text. Written whether or not the entry is
+  // fuzzy: an approved entry a rule rewrote is exactly the one a reviewer would
+  // otherwise read as the engine's own words.
+  notes?: string[]
 }
 
 const KEY_SEPARATOR = '\u0004'
@@ -157,7 +161,10 @@ function readableNotes(notes: string[]): string[] {
 function setNotes(entry: GetTextTranslation, notes: string[]): void {
   const said = notes.map((note) => note.replace(/\s*\n\s*/g, ' ').trim()).filter((note) => note !== '')
   const kept = splitLines(entry.comments?.translator).filter((line) => !line.startsWith(NOTE_PREFIX))
-  const all = [...said.map((n) => `${NOTE_PREFIX}${n}`), ...kept]
+  // A note that already carries the prefix keeps it once: the draft checker
+  // words its notes the way review's findings read, prefix included, so the
+  // same text is right in a summary and in the file.
+  const all = [...said.map((n) => (n.startsWith(NOTE_PREFIX) ? n : `${NOTE_PREFIX}${n}`)), ...kept]
   const comments = { ...entry.comments }
   if (all.length > 0) comments.translator = all.join('\n')
   else delete comments.translator
@@ -332,7 +339,7 @@ export class PoFile {
         entry.msgstr = [result.text[0] ?? '']
       }
       const reason = result.fuzzy ? result.reason?.trim() : undefined
-      setNotes(entry, reason ? [reason] : [])
+      setNotes(entry, [...(result.notes ?? []), ...(reason ? [reason] : [])])
 
       const flags = flagList(entry).filter((f) => f !== 'fuzzy')
       if (result.fuzzy) flags.push('fuzzy')

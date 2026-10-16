@@ -163,6 +163,22 @@ describe('translate with locale rules', () => {
     expect((await written()).Preview?.text).toBe('Ön izleme')
   })
 
+  // The fix was made before the AI pass, which kept it: the usual path, and
+  // the one where the note is easiest to lose.
+  it('leaves a note on every entry a fix changed and counts them', async () => {
+    await writeRules(RULES)
+    const summary = await run(fakeReview())
+    const parsed = po.parse(await readFile(ws.file))
+    expect(parsed.translations['']!['Preview']!.comments?.translator).toBe('polyglots: locale rule: TDK writes it as two words')
+    expect(parsed.translations['']!['Settings']!.comments?.translator).toBeUndefined()
+    expect(summary.fixedByRules).toBe(1)
+  })
+
+  it('counts nothing when no fix changed anything', async () => {
+    const summary = await run(fakeReview())
+    expect(summary.fixedByRules).toBeUndefined()
+  })
+
   // Starts from a file that already enables a language check. Without one,
   // the first mistake also lifts the universal-only note from the review
   // prompt, which is a different question for every entry, not just this one.

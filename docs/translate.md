@@ -31,6 +31,11 @@ The summary says how many came from memory, how many were drafted, and how
 many are fuzzy. Read the fuzzy ones in your `.po` editor before you import
 the file into GlotPress.
 
+If your [locale rules](locale-rules.md) have `fix` patterns, translate applies
+them to every draft. Each entry a fix changed carries a translator comment,
+`polyglots: locale rule: <note>`, fuzzy or not, and the summary counts them as
+"fixed by locale rules".
+
 **A fuzzy entry is overwritten.** translate treats fuzzy as "not translated
 yet", which is what GlotPress means by it. If you marked an entry fuzzy as a
 note to yourself, or rejected a draft by hand and kept it fuzzy, the next run

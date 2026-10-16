@@ -28,6 +28,9 @@ export function translateSummary(p: Painter, s: TranslateSummary, dryRun: boolea
       ...(s.untranslated === undefined
         ? []
         : [['untranslated', String(s.untranslated), s.untranslated > 0 ? p.paint('muted', 'no memory match; left for you') : '']]),
+      // Only when a fix pattern changed something, so a locale without fixes
+      // reads as it always has. Each such entry carries a note in the file.
+      ...(s.fixedByRules === undefined ? [] : [['fixed by locale rules', String(s.fixedByRules)]]),
     ],
     { align: ['left', 'right', 'left'] },
   )

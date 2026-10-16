@@ -161,6 +161,19 @@ describe('Progress', () => {
     expect(lastFrame()).toContain('fuzzy 1')
   })
 
+  it('counts the entries a locale rule changed, and says nothing when none were', async () => {
+    const fixed: TranslateEvent[] = [
+      { type: 'start', file: FILE, total: 10, pending: 4 },
+      { type: 'done', summary: { file: FILE, total: 10, pending: 4, fromTm: 0, translated: 4, fuzzy: 0, skipped: 0, fixedByRules: 2 } },
+    ]
+    const { lastFrame } = render(<Progress events={fixed} />)
+    await tick()
+    expect(flat(lastFrame())).toContain('fixed by locale rules 2')
+    const plain = render(<Progress events={events} />)
+    await tick()
+    expect(plain.lastFrame()).not.toContain('locale rules')
+  })
+
   it('renders a waiting line before the start event', async () => {
     const { lastFrame } = render(<Progress events={[]} />)
     await tick()
