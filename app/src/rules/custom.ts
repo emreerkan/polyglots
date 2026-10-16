@@ -128,6 +128,16 @@ const patternLabel = (p: CustomPattern) => p.note ?? p.find ?? p.text ?? ''
 const SKIP_PREFIX = 'locale rule skipped: '
 
 /**
+ * The notice that a regex from the rules file ran away on this entry, for a
+ * pattern and for sentenceEnd alike. One builder, because isSkipFinding finds
+ * the notice by its prefix: the sentence-end check once wrote the prefix as
+ * its own literal, and the two agreed only until one of them was reworded.
+ */
+export function skipFinding(label: string): Finding {
+  return { rule: CUSTOM_RULE, severity: 'suspect', message: `${SKIP_PREFIX}${label} took longer than ${PATTERN_BUDGET_MS} ms` }
+}
+
+/**
  * Whether a finding is the notice that a locale pattern ran away on this
  * entry. It speaks of the rules file, not of the text it was found on, so a
  * caller weighing a text, the model's fix or a draft, leaves it out.
@@ -191,11 +201,7 @@ export function customFindings(entry: Text, patterns: readonly CustomPattern[], 
     if (typeof match === 'string') {
       findings.push({ rule: CUSTOM_RULE, severity: p.level === 'error' ? 'error' : 'suspect', message: message(p, match) })
     } else if (!wasSkipped && skippedFor(id)) {
-      findings.push({
-        rule: CUSTOM_RULE,
-        severity: 'suspect',
-        message: `${SKIP_PREFIX}${patternLabel(p)} took longer than ${PATTERN_BUDGET_MS} ms`,
-      })
+      findings.push(skipFinding(patternLabel(p)))
     }
   }
   return findings

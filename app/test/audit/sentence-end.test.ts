@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildRuleContext, runRules } from '../../src/audit/rules/index.js'
+import { isSkipFinding, skipFinding } from '../../src/rules/custom.js'
 import { localeRulesFile } from '../../src/rules/load.js'
 import { resetSandbox, takeSkipped } from '../../src/rules/sandbox.js'
 import { useLocaleFixture } from '../locale-fixture.js'
@@ -169,5 +170,19 @@ describe('a runaway sentenceEnd regex', () => {
     ])
     expect(second.some((f) => f.message.includes('locale rule skipped'))).toBe(false)
     expect(takeSkipped().map((s) => s.label)).toEqual(['sentenceEnd.notEnding'])
+  })
+
+  // Translate and repair leave a skip out by recognising its message, so the
+  // sentence-end skip has to be built by the same function as the pattern
+  // skip. Two copies of the prefix agreed by luck once, as the placeholder
+  // regex did before it drifted.
+  it('is a skip finding that translate and repair recognise', () => {
+    const path = localeRulesFile('th')
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, "schema: 2\nsentenceEnd:\n  notEnding: '^(a+)+$'\n")
+    resetSandbox()
+    const e = { key: 'a', msgid: 'Saved', msgstr: ['a'.repeat(30) + 'b'], comments: [], references: [], fuzzy: false }
+    const found = runRules(e, buildRuleContext({ locale: 'th', glossary: [], nplurals: 1, entries: [] })).filter(isSkipFinding)
+    expect(found).toEqual([skipFinding('sentenceEnd.notEnding')])
   })
 })

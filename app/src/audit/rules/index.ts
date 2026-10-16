@@ -1,10 +1,10 @@
 import type { AuditEntry, Finding, GlossaryEntry, Locale } from '../../types.js'
 import { controlFindings, controlSpec } from '../control.js'
 import { localeDisplayName } from '../../wporg/locales.js'
-import { customFindings } from '../../rules/custom.js'
+import { customFindings, skipFinding } from '../../rules/custom.js'
 import { loadLocaleRules } from '../../rules/load.js'
 import { CUSTOM_RULE } from '../../rules/names.js'
-import { PATTERN_BUDGET_MS, runRegexOps, skippedFor, type RegexOp } from '../../rules/sandbox.js'
+import { runRegexOps, skippedFor, type RegexOp } from '../../rules/sandbox.js'
 import type { CustomPattern, SentenceEndRules } from '../../rules/schema.js'
 import { missingPlaceholders } from '../../draft/placeholders.js'
 import {
@@ -430,11 +430,7 @@ function sentenceEndOf(style: CompiledSentenceEnd, msgid: string, text: string):
     answers: answers.some((a) => matched(a.text) && (a.source === undefined || matched(a.source))),
     skipped: [...labels]
       .filter(([id]) => !before.has(id) && skippedFor(id))
-      .map(([, label]) => ({
-        rule: CUSTOM_RULE,
-        severity: 'suspect' as const,
-        message: `locale rule skipped: ${label} took longer than ${PATTERN_BUDGET_MS} ms`,
-      })),
+      .map(([, label]) => skipFinding(label)),
   }
 }
 
