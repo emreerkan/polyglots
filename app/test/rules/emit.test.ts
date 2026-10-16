@@ -94,6 +94,23 @@ describe('emitRulesYaml', () => {
     expect(parse(yaml)).toEqual({ schema: 2, patterns: [] })
   })
 
+  // The app matches a literal as a substring, with no word boundaries, so the
+  // spaces at its edges are what it looks for: ' :' is a space before a colon,
+  // and ':' would be every colon in every translation.
+  it('writes literal text, mistakes and conditions with their edge spaces', () => {
+    const yaml = emitRulesYaml({
+      ...emptyBuilderState('fr_FR'),
+      mistakes: [{ wrong: ' ki ', right: ' ', note: '' }],
+      patterns: [{ mode: 'text', value: ' :', level: 'hint', replace: '', ignoreCase: false, whenSource: ' :', whenNotSource: ' ki ', note: '' }],
+    })
+    expect(yaml).toContain("wrong: ' ki '")
+    expect(yaml).toContain("text: ' :'")
+    expect(parse(yaml).patterns).toEqual([
+      { kind: 'mistake', text: ' ki ', level: 'hint', ignoreCase: true },
+      { kind: 'pattern', text: ' :', level: 'hint', ignoreCase: true, whenSource: ' :', whenNotSource: ' ki ' },
+    ])
+  })
+
   it('writes guidance and capitalization as block text', () => {
     const yaml = emitRulesYaml(full())
     expect(yaml).toMatch(/^capitalization: \|\n {2}- \{language\} uses sentence case\.$/m)

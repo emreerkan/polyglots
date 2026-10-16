@@ -142,28 +142,32 @@ function contents(state: BuilderState): Record<string, unknown> {
   // leading spaces can be part of the person's own list layout.
   if (filled(state.capitalization)) out.capitalization = `${state.capitalization.replace(/\s+$/, '')}\n`
   if (filled(state.guidance)) out.guidance = state.guidance.trim()
+  // Whatever the app matches as text is written as typed, edge spaces and
+  // all. It matches a literal as a substring with no word boundaries, so the
+  // spaces are the rule: ' :' is a space before a colon, and trimmed to ':'
+  // it would hint at every colon in every translation while rules check
+  // passes the file. A row of spaces alone still counts as blank, since a
+  // stray space left in an empty row would otherwise match every space.
   const mistakes = state.mistakes
     .filter((m) => filled(m.wrong))
     .map((m) => ({
-      wrong: m.wrong.trim(),
+      wrong: m.wrong,
       ...(filled(m.right) ? { right: m.right.trim() } : {}),
       ...(filled(m.note) ? { note: m.note.trim() } : {}),
     }))
   if (mistakes.length > 0) out.mistakes = mistakes
-  // A regex is written as typed, spaces included, since a space can be what
-  // it looks for; a literal and the plain-text conditions are trimmed.
   const patterns = state.patterns
     .filter((p) => (p.mode === 'find' ? p.value !== '' : filled(p.value)))
     .map((p) => ({
-      ...(p.mode === 'find' ? { find: p.value } : { text: p.value.trim() }),
+      ...(p.mode === 'find' ? { find: p.value } : { text: p.value }),
       ...(p.replace !== '' || p.level === 'fix' ? { replace: p.replace } : {}),
       level: p.level,
       ...(p.mode === 'find' && p.ignoreCase ? { ignoreCase: true } : {}),
       ...(filled(p.whenSource) || filled(p.whenNotSource)
         ? {
             when: {
-              ...(filled(p.whenSource) ? { source: p.whenSource.trim() } : {}),
-              ...(filled(p.whenNotSource) ? { notSource: p.whenNotSource.trim() } : {}),
+              ...(filled(p.whenSource) ? { source: p.whenSource } : {}),
+              ...(filled(p.whenNotSource) ? { notSource: p.whenNotSource } : {}),
             },
           }
         : {}),

@@ -62,7 +62,7 @@ const compiles = (source: string) => {
 
 /** Every non-blank mistake and pattern, in file order, with what to run for this sample. */
 export function checksFor(state: BuilderState, source: string, translation: string, tag: string): Check[] {
-  const has = (needle: string) => source.toLocaleLowerCase(tag).includes(needle.trim().toLocaleLowerCase(tag));
+  const has = (needle: string) => source.toLocaleLowerCase(tag).includes(needle.toLocaleLowerCase(tag));
   const translated = translation.trim() !== '';
   const checks: Check[] = [];
   state.mistakes.forEach((m, index) => {
@@ -70,17 +70,20 @@ export function checksFor(state: BuilderState, source: string, translation: stri
     checks.push({
       kind: 'mistake',
       index,
-      label: m.wrong.trim(),
+      label: m.wrong,
       level: 'hint',
       regex: false,
       applies: translated,
       invalid: false,
-      ops: translated ? [{ source: literalSource(m.wrong.trim(), tag), flags: 'gu', text: translation }] : [],
+      ops: translated ? [{ source: literalSource(m.wrong, tag), flags: 'gu', text: translation }] : [],
     });
   });
   state.patterns.forEach((p, index) => {
-    const value = p.mode === 'find' ? p.value : p.value.trim();
-    if (value === '') return;
+    // A literal keeps its edge spaces, as the emitted file does: the app
+    // matches it as a substring, so ' :' must not preview as ':'. Only a
+    // literal of spaces alone is a blank row, the same line emit.ts draws.
+    const value = p.value;
+    if (p.mode === 'find' ? value === '' : value.trim() === '') return;
     const regex = p.mode === 'find';
     const invalid = regex && !compiles(value);
     const conditions =

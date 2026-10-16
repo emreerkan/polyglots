@@ -149,6 +149,23 @@ test('tester: conditions on the source decide which checks run', () => {
   assert.equal(checks[3]!.ops[0]!.replace, ' ')
 })
 
+test('tester: a literal keeps its edge spaces, as the file does', () => {
+  const state = {
+    ...emptyBuilderState('fr_FR'),
+    mistakes: [{ wrong: ' ki ', right: '', note: '' }],
+    patterns: [pattern({ value: ' :', whenSource: ' :' })],
+  }
+  const checks = checksFor(state, 'Name:', 'Nom: kilo', 'fr')
+  assert.deepEqual(
+    checks.map((c) => [c.label, c.applies]),
+    [
+      [' ki ', true],
+      [' :', false],
+    ],
+  )
+  assert.equal(checks[0]!.ops[0]!.source, literalSource(' ki ', 'fr'))
+})
+
 test('tester: an empty translation runs nothing', () => {
   const state = { ...emptyBuilderState('es_ES'), patterns: [pattern({ value: 'blog' })] }
   assert.equal(checksFor(state, 'blog', '  ', 'es')[0]!.applies, false)
