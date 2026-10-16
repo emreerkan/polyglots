@@ -143,6 +143,27 @@ describe('planRulesFetch', () => {
     expect(plan.summary[0]).toMatch(/^The local file is not valid \(.*\); compared against nothing\.$/)
   })
 
+  // A YAML "\e" is an ESC byte. Printed raw, a replace ending in an erase
+  // sequence hides its own "fix added:" line from the person deciding.
+  it('shows control characters in the summary as escapes, never as raw bytes', async () => {
+    const after = [
+      'schema: 2',
+      'patterns:',
+      '  - text: a',
+      '    replace: "b\\e[2K\\r"',
+      '    level: fix',
+      '    note: "ok\\e[1A"',
+      '',
+    ].join('\n')
+    await publish(after, { maintainers: ['evil\u001b[2K', 'tab\there'] })
+    const plan = await planRulesFetch('tr', dataClient)
+    const text = plan.summary.join('\n')
+    expect(text).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/)
+    expect(text).toContain('fix added: a → b\\u{1b}[2K\\u{d}')
+    expect(text).toContain('note: ok\\u{1b}[1A')
+    expect(plan.summary.at(-1)).toBe('status: maintained · maintainers (wordpress.org): evil\\u{1b}[2K, tab\\u{9}here')
+  })
+
   it('summarises prompt text, fix patterns and sentenceEnd', async () => {
     const after = [
       'schema: 2',

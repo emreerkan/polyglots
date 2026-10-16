@@ -73,7 +73,7 @@ export async function planRulesFetch(locale: Locale, client: DataClient): Promis
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
   }
   const status = `status: ${entry.status} · maintainers (wordpress.org): ${entry.maintainers.length > 0 ? entry.maintainers.join(', ') : 'none listed'}`
-  if (local === undefined) return { locale, path, entry, text, state: 'new', summary: [...diffRules(undefined, after), status] }
+  if (local === undefined) return { locale, path, entry, text, state: 'new', summary: visible([...diffRules(undefined, after), status]) }
   if (local.equals(downloaded)) return { locale, path, entry, text, state: 'same', summary: [] }
 
   // A local file that no longer parses is the case fetching most often
@@ -88,8 +88,21 @@ export async function planRulesFetch(locale: Locale, client: DataClient): Promis
     if (!(err instanceof RulesFileError)) throw err
     notes.push(`The local file is not valid (${err.message}); compared against nothing.`)
   }
-  return { locale, path, entry, text, state: 'changed', summary: [...notes, ...diffRules(before, after), status] }
+  return { locale, path, entry, text, state: 'changed', summary: visible([...notes, ...diffRules(before, after), status]) }
 }
+
+// Every summary line carries text from a file and a manifest someone else
+// published, and YAML's "\e" is an ESC byte. Printed raw, a replace ending in
+// an erase sequence wipes its own "fix added:" line, and the summary exists
+// so that no fix rewrites drafts unseen; the sha512 is no defence, because
+// the manifest names it. So C0 and C1 controls are shown as escapes, here,
+// once, for the CLI and the TUI alike. The newline stays: diffRules has
+// already split prompt text on it, and one left inside a note is a line
+// break, not a cursor command. Tab goes too, since Ink measures it as one
+// column and the frame would tear.
+const CONTROL = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g
+const visible = (lines: string[]) =>
+  lines.map((line) => line.replace(CONTROL, (c) => `\\u{${c.charCodeAt(0).toString(16)}}`))
 
 /**
  * Writes the planned file exactly as downloaded, so its sha512 still matches
