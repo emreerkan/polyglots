@@ -219,6 +219,18 @@ describe('tm fetch', () => {
     ])
   })
 
+  // built and stale are only checked as strings, and the summary is printed
+  // on the terminal and in the TUI as rules fetch's is: an erase sequence in
+  // either would clear the lines the person is answering on.
+  it('shows control characters in the manifest dates as escapes', async () => {
+    await publish({ built: '\u001b[2J\u001b[H', projects: [{ path: 'wp/dev', units: 1, stale: '\u009b2K' }] })
+    const plan = await planTmFetch('tr', dataClient, db)
+    const text = plan.summary.join('\n')
+    expect(text).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/)
+    expect(text).toContain('built \\u{1b}[2J\\u{1b}[H')
+    expect(text).toContain('(oldest \\u{9b}2K)')
+  })
+
   it('says how many projects are long text', async () => {
     await publish({
       projects: [

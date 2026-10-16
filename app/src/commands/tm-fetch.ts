@@ -5,6 +5,7 @@ import { createGunzip } from 'node:zlib'
 import type Database from 'better-sqlite3'
 import type { DataClient } from '../data/download.js'
 import { DataError, findTmEntry, type TmManifestEntry } from '../data/manifest.js'
+import { visible } from '../data/visible.js'
 import { dataDir, dbFile } from '../paths.js'
 import { openDb } from '../storage/db.js'
 import { readOnly } from '../storage/read-only.js'
@@ -77,7 +78,9 @@ export async function planTmFetch(locale: Locale, client: DataClient, db?: Datab
   // Any other kind, including one the producer adds later, is normal here, as
   // it is for the x-weight it would come with.
   const longText = entry.projects.filter((p) => p.kind === 'long-text').length
-  const summary = [
+  // built and stale are checked only as strings, and this summary reaches the
+  // same terminal and TUI panel as rules fetch's, so it is escaped the same way.
+  const summary = visible([
     `${localeDisplayName(locale)} (${locale}): ${plural(entry.units, 'string')}, ${formatBytes(entry.bytes)} download, built ${entry.built.slice(0, 10)}`,
     `${plural(entry.projects.length, 'project')}${stale.length > 0 ? `, ${stale.length} not refreshed in this build (oldest ${stale[0]!.slice(0, 10)})` : ''}`,
     ...(longText > 0
@@ -86,7 +89,7 @@ export async function planTmFetch(locale: Locale, client: DataClient, db?: Datab
     existing > 0
       ? `You already have ${plural(existing, 'string')} for ${locale}. This adds what is new; it never changes or deletes your rows.`
       : `Your memory has no ${locale} strings yet.`,
-  ]
+  ])
   return { locale, entry, existing, summary }
 }
 

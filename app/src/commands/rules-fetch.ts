@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname } from 'node:path'
 import type { DataClient } from '../data/download.js'
 import { compareVersions, DataError, findRulesEntry, type RulesManifestEntry } from '../data/manifest.js'
+import { visible } from '../data/visible.js'
 import { localeRulesFile, parseLocaleRules, RulesFileError } from '../rules/load.js'
 import { MAX_SCHEMA, type CustomPattern, type LocaleRules } from '../rules/schema.js'
 import type { Locale } from '../types.js'
@@ -95,19 +96,6 @@ export async function planRulesFetch(locale: Locale, client: DataClient): Promis
   }
   return { locale, path, entry, text, local, state: 'changed', summary: visible([...notes, ...diffRules(before, after), status]) }
 }
-
-// Every summary line carries text from a file and a manifest someone else
-// published, and YAML's "\e" is an ESC byte. Printed raw, a replace ending in
-// an erase sequence wipes its own "fix added:" line, and the summary exists
-// so that no fix rewrites drafts unseen; the sha512 is no defence, because
-// the manifest names it. So C0 and C1 controls are shown as escapes, here,
-// once, for the CLI and the TUI alike. The newline stays: diffRules has
-// already split prompt text on it, and one left inside a note is a line
-// break, not a cursor command. Tab goes too, since Ink measures it as one
-// column and the frame would tear.
-const CONTROL = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g
-const visible = (lines: string[]) =>
-  lines.map((line) => line.replace(CONTROL, (c) => `\\u{${c.charCodeAt(0).toString(16)}}`))
 
 /**
  * Writes the planned file exactly as downloaded, so its sha512 still matches
