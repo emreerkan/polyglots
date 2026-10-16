@@ -121,7 +121,7 @@ const PROMPT_HINT = 'Write in English; the model reads it.';
         <h2 id="rb-s3">Mistakes</h2>
         <p class="help">
           Wordings your team rejects. Each is found anywhere in a translation, without regard to case, and reaches the
-          reviewer as a hint with your note. The suggested wording and the note: {PROMPT_HINT.toLowerCase()}
+          reviewer as a hint with your note. For the suggested wording and the note: {PROMPT_HINT}
         </p>
         <ol class="rows" data-list="mistakes"></ol>
         <button type="button" class="btn" data-add="mistakes">Add a mistake</button>
@@ -135,8 +135,8 @@ const PROMPT_HINT = 'Write in English; the model reads it.';
           <h3>Patterns</h3>
           <p class="help">
             Literal text or a regular expression. A hint is weighed by the reviewer, an error is always wrong, a fix is
-            replaced automatically. Conditions are plain text the English source must contain, or must not. Notes:
-            {' '}{PROMPT_HINT.toLowerCase()}
+            replaced automatically. Conditions are plain text the English source must contain, or must not. For
+            notes: {PROMPT_HINT}
           </p>
           <ol class="rows" data-list="patterns"></ol>
           <button type="button" class="btn" data-add="patterns">Add a pattern</button>
