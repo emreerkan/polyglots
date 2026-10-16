@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildRuleContext, runRules } from '../../src/audit/rules/index.js'
-import { profileFor } from '../../src/audit/rules/profiles.js'
+import { profileFor, UNIVERSAL_RULES } from '../../src/audit/rules/profiles.js'
 import { properNounsFor } from '../../src/audit/rules/proper-nouns.js'
 import { buildAuditPrompt } from '../../src/audit/prompt.js'
 import { configHash, translateConfigHash } from '../../src/jobs/hash.js'
@@ -40,23 +40,23 @@ const hashTr = () => configHash({ locale: 'tr', glossary: [], properNouns: [] })
 
 // Captured without a rules file. Anyone who never writes one must keep every
 // cached verdict between releases.
+//
+// Every one of them moved once, on purpose, when the default register line
+// stopped asking for a formal register and the fix instruction began naming
+// "the register above" for every locale: each locale without a register in
+// its file re-reviews once. Turkish and Swedish moved further in the same
+// release, because polyglots stopped shipping their packs. Without a file
+// they are now universal-only locales like German, and a team keeps its
+// Turkish or Swedish rules by having the rules file, whose fingerprint is in
+// the hash anyway.
 const BEFORE = {
-  // Moved once, on purpose, by the control rule (a new universal rule) and
-  // the prompt paragraphs on automatedChecks and control strings.
-  trEmpty: '35c0131f7cc7515a',
-  trGloss: '56423d5cfd39fbcc',
-  // Moved by the universal-only note (#2): German runs only the universal
-  // rules, and both review prompts now say so. Every universal-only locale
-  // re-reviews once.
-  de: '96f764d0e675cd3f',
-  // Pinned with the note in place, which moved it too; it was not pinned
-  // before (#2).
-  deTranslate: '4675c41a315e6d33',
-  trTranslate: '061889a3e01b0b39',
-  // The Swedish pack, pinned when it was added (#2), so later drift in its
-  // paragraph or register line is deliberate.
-  sv: '5254d5918a0c6460',
-  svTranslate: '8244647091197a1b',
+  trEmpty: '2469b167cd1da5ec',
+  trGloss: '804c433f876e3ffc',
+  de: '10f66eb75c48e8a4',
+  deTranslate: 'f5efbff9e931f553',
+  trTranslate: '3a0e3f62659696ca',
+  sv: 'ecc27fd9393c755c',
+  svTranslate: 'c7007a99ba3dadc2',
 }
 
 describe('without a rules file', () => {
@@ -72,8 +72,10 @@ describe('without a rules file', () => {
     expect(translateConfigHash('sv')).toBe(BEFORE.svTranslate)
   })
 
-  it('keeps the built-in Turkish profile', () => {
-    expect([...profileFor('tr').rules]).toEqual(expect.arrayContaining(['title-case', 'apostrophe', 'ampersand', 'number-format']))
+  // polyglots ships no locale data, so Turkish without its rules file is
+  // every other language without one: the universal checks and nothing more.
+  it('runs only the universal rules for Turkish', () => {
+    expect([...profileFor('tr').rules]).toEqual([...UNIVERSAL_RULES])
     expect(profileFor('tr').glossaryStemRatio).toBe(0.7)
   })
 })
@@ -98,7 +100,7 @@ describe('with a rules file', () => {
 
   it('keeps the built-in profile when the file says nothing about rules', async () => {
     await writeRules('tr', 'guidance: Be brief.\n')
-    expect(profileFor('tr').rules.has('title-case')).toBe(true)
+    expect([...profileFor('tr').rules]).toEqual([...UNIVERSAL_RULES])
   })
 
   it('applies the glossary stem ratio', async () => {
@@ -106,18 +108,20 @@ describe('with a rules file', () => {
     expect(profileFor('tr').glossaryStemRatio).toBe(0.9)
   })
 
-  it('replaces a proper-noun list it names and keeps the other', async () => {
+  // There is no built-in list left for the other to keep, so a list the file
+  // leaves out is empty rather than Turkish.
+  it('uses a proper-noun list it names and leaves the other empty', async () => {
     await writeRules('tr', 'properNouns:\n  always: [Acme]\n')
     const nouns = properNounsFor('tr')
     expect(nouns.always).toEqual(['Acme'])
-    expect(nouns.dateOnly).toContain('Ocak')
+    expect(nouns.dateOnly).toEqual([])
   })
 
   // A name of several words is matched as a phrase, the way the names in
   // config.json were before they moved here: Türk Dil Kurumu is excused, and
   // Dil on its own still reads as a capital mid-sentence.
   it('matches a name of several words as a phrase', async () => {
-    await writeRules('tr', 'properNouns:\n  always: ["Türk Dil Kurumu"]\n')
+    await writeRules('tr', 'rules:\n  enable: [title-case]\nproperNouns:\n  always: ["Türk Dil Kurumu"]\n')
     const findings = (msgid: string, msgstr: string) => {
       const e = { key: msgid, msgid, msgstr: [msgstr], comments: [], references: [], fuzzy: false }
       const ctx = buildRuleContext({ locale: 'tr', glossary: [], nplurals: 2, entries: [e] })
@@ -169,9 +173,13 @@ describe('guidance', () => {
     expect(translateConfigHash('tr')).not.toBe(BEFORE.trTranslate)
   })
 
+  // Compared against a file that already enables a language check, so the
+  // only thing a mistake could change is the guidance, not the universal-only
+  // note a mistake also lifts.
   it('stays out of both prompts when the file has none', async () => {
+    await writeRules('tr', 'rules:\n  enable: [title-case]\n')
     const before = [buildAuditPrompt([], 'tr', 2), buildReviewPrompt([], 'tr', 2)]
-    await writeRules('tr', 'mistakes:\n  - wrong: önizleme\n')
+    await writeRules('tr', 'rules:\n  enable: [title-case]\nmistakes:\n  - wrong: önizleme\n')
     expect([buildAuditPrompt([], 'tr', 2), buildReviewPrompt([], 'tr', 2)]).toEqual(before)
   })
 })

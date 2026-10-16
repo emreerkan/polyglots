@@ -22,7 +22,7 @@ Mark problem=true only when a human should change the translation before it is a
 
 Categories: meaning, glossary, title-case, register, fluency, placeholder, other. Use an empty array when problem is false. Keep "reason" to one short sentence, written for the contributor, saying what is wrong (or why a flagged check was cleared).
 
-- When an entry is a problem, also return "fix": the corrected translation, as an array with one string per plural form. It must obey every standard above: the glossary, this locale's capitalization rules, the source's placeholders and HTML exactly, and the formal register.
+- When an entry is a problem, also return "fix": the corrected translation, as an array with one string per plural form. It must obey every standard above: the glossary, this locale's capitalization rules, the source's placeholders and HTML exactly, and the register above.
 - If you are not confident what the entry should say, leave "fix" out entirely. An honest "I do not know" is worth more than a confident wrong translation, which a human then has to catch.
 - An entry marked "control" is a setting WordPress code reads, not text a person reads: "on" or "off" for a font, "ltr" for text direction, a language tag, a number separator. Its translator comment says which value to use. Never translate the English word; a fix is one of the values the comment names.
 - An entry marked "condemned" has been proved wrong by a deterministic check, so it is already known to be broken whatever you think of it. Do not argue about whether it is wrong; return the fix.

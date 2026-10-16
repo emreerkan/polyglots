@@ -9,6 +9,7 @@ import { hasLocaleRules } from '../../src/tui/setup.js'
 import { App } from '../../src/tui/App.js'
 import { CommandsProvider } from '../../src/tui/commands.js'
 import { LocaleRules } from '../../src/tui/screens/LocaleRules.js'
+import { installLocaleFixture } from '../locale-fixture.js'
 import { ESC_DELAY, fakeCommands, flat, openFromHome, keys, makeHome, render, tick, waitFor, waitForText, cleanup, type Home } from './helpers.js'
 
 let home: Home
@@ -162,16 +163,18 @@ describe('LocaleRules: accepting the built-in rules', () => {
   })
 })
 
+// Turkish without its rules file starts from the universal set like any
+// other locale, so title-case is the opt-in rule a team switches on.
 describe('LocaleRules: built-in rules', () => {
   it('shows every built-in rule with its state and toggles one', async () => {
     const view = mount()
     await openLocale(view)
     await select(view, /Built-in rules/)
     await waitForText(view.lastFrame, /title-case/)
-    expect(view.lastFrame()).toMatch(/\[x\] title-case/)
+    expect(view.lastFrame()).toMatch(/\[ \] title-case/)
     expect(view.lastFrame()).toMatch(/placeholder.*universal/)
-    await select(view, /\[x\] title-case/)
-    await waitForText(view.lastFrame, /\[ \] title-case/)
+    await select(view, /\[ \] title-case/)
+    await waitForText(view.lastFrame, /\[x\] title-case/)
   })
 
   it('names the rule under the cursor and says what it checks', async () => {
@@ -185,18 +188,18 @@ describe('LocaleRules: built-in rules', () => {
     expect(flat(view.lastFrame())).not.toContain('Placeholder missing or added')
   })
 
-  it('saves the toggle so the rule stops running for the locale', async () => {
+  it('saves the toggle so the rule starts running for the locale', async () => {
     const view = mount()
     await openLocale(view)
     await select(view, /Built-in rules/)
-    await select(view, /\[x\] title-case/)
+    await select(view, /\[ \] title-case/)
     view.stdin.write(keys.esc)
     await tick(ESC_DELAY)
     await waitForText(view.lastFrame, /unsaved/)
     view.stdin.write('s')
     await waitForText(view.lastFrame, /Saved/)
-    expect(profileFor('tr').rules.has('title-case')).toBe(false)
-    expect(profileFor('tr').rules.has('apostrophe')).toBe(true)
+    expect(profileFor('tr').rules.has('title-case')).toBe(true)
+    expect(profileFor('tr').rules.has('apostrophe')).toBe(false)
   })
 })
 
@@ -286,7 +289,9 @@ describe('LocaleRules: common mistakes', () => {
 })
 
 describe('LocaleRules: proper nouns', () => {
-  it('starts from the built-in list and adds a name to it', async () => {
+  // From the Turkish rules file, which is where the list comes from now.
+  it('starts from the list in the file and adds a name to it', async () => {
+    installLocaleFixture('tr_TR.yaml')
     const view = mount()
     await openLocale(view)
     await select(view, /Proper nouns/)
@@ -307,8 +312,8 @@ describe('LocaleRules: proper nouns', () => {
     const always = loadLocaleRules('tr')!.properNouns!.always!
     expect(always).toContain('Türkiye')
     expect(always).toContain('Anadolu')
-    // The other list was not touched, so it stays built-in.
-    expect(loadLocaleRules('tr')!.properNouns!.dateOnly).toBeUndefined()
+    // The other list was not touched, so it stays as the file had it.
+    expect(loadLocaleRules('tr')!.properNouns!.dateOnly).toContain('Ocak')
   })
 })
 

@@ -1,7 +1,6 @@
 import { loadLocaleRules } from '../../rules/load.js'
 import type { LocaleRules } from '../../rules/schema.js'
 import { CUSTOM_RULE } from '../../rules/names.js'
-import { packFor } from '../../rules/packs/index.js'
 import type { Locale } from '../../types.js'
 
 export interface RuleProfile {
@@ -42,18 +41,17 @@ export const DEFAULT_PROFILE: RuleProfile = {
 }
 
 // A language only earns the orthography-specific rules once someone who speaks it
-// says they apply, and its pack is where that is written down. German is the
-// clearest reason for that caution: it capitalizes every noun by rule, so
+// says they apply, and its rules file is where that is written down. German is
+// the clearest reason for that caution: it capitalizes every noun by rule, so
 // `title-case` would flag correct translations wholesale.
 //
-// What the code ships for a language, before any rules file. Exported for the
-// defaults `rules edit` writes out, which must describe exactly this. The
-// pack's extras follow the universal set in the pack's own order, which is
-// the order the template lists them in.
-export function builtInProfileFor(locale: Locale): RuleProfile {
-  const pack = packFor(locale)
-  if (!pack) return DEFAULT_PROFILE
-  return { rules: new Set([...UNIVERSAL, ...pack.extraRules]), glossaryStemRatio: pack.glossaryStemRatio }
+// What the code ships for a language, before any rules file: the universal
+// set, for every locale alike. polyglots carries no locale data of its own any
+// more. Still exported, and still a function of the locale, for the defaults
+// `rules edit` writes out and the editor's built-in column, which must
+// describe exactly this.
+export function builtInProfileFor(_locale: Locale): RuleProfile {
+  return DEFAULT_PROFILE
 }
 
 export const UNIVERSAL_RULES: readonly string[] = UNIVERSAL

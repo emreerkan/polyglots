@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { auditEntries, type Adjudicator } from '../../src/audit/audit.js'
 import type { CachedVerdict, VerdictKey } from '../../src/jobs/verdicts.js'
 import type { AuditEntry, GlossaryEntry } from '../../src/types.js'
+import { useLocaleFixture } from '../locale-fixture.js'
+
+// The Turkish entries here are reviewed under the Turkish rules file, which is
+// where Turkish rules come from now that polyglots ships no locale data.
+useLocaleFixture('tr_TR.yaml')
 
 const glossary: GlossaryEntry[] = [{ sourceTerm: 'Settings', translation: 'Ayarlar', locale: 'tr' }]
 

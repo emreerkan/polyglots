@@ -7,6 +7,7 @@ import { openDb, replaceGlossary, upsertTm } from '../../../src/storage/index.js
 import { loadPo } from '../../../src/po/po-file.js'
 import { reviewFile } from '../../../src/commands/review.js'
 import type { ReviewEvent } from '../../../src/types.js'
+import { useLocaleFixture } from '../../locale-fixture.js'
 
 const PO = `msgid ""
 msgstr ""
@@ -42,6 +43,9 @@ describe('reviewFile', () => {
       { locale: 'tr', sourceTerm: 'sidebar', translation: 'kenar çubuğu', partOfSpeech: 'noun' },
     ])
   })
+
+  // The Turkish rules come from the Turkish rules file, as for a reviewer.
+  useLocaleFixture('tr_TR.yaml')
 
   afterEach(async () => {
     db.close()

@@ -5,13 +5,19 @@ import { draftSystemPrompt } from '../../src/draft/prompt.js'
 import { buildReviewPrompt } from '../../src/review/prompt.js'
 import { renderDefaultRules } from '../../src/rules/defaults.js'
 import type { AuditEntry, GlossaryEntry, ReviewInput } from '../../src/types.js'
+import { useLocaleFixture } from '../locale-fixture.js'
 
-// Turkish is the one locale with a maintained pack, and moving its data out of
-// the code into a pack must not change a byte of what it renders or reports.
-// These fixtures were captured from the code as it stood before locale packs
-// existed (#2). A diff here means a Turkish prompt, finding or template moved,
+// Turkish was the one locale with a maintained pack, and its data has since
+// moved out of the code altogether, into a rules file. Neither move may change
+// a byte of what Turkish renders or reports. The prompt and findings fixtures
+// were captured from the code as it stood before locale packs existed (#2);
+// they now load every Turkish rule from test/fixtures/locale/tr_TR.yaml, which
+// holds what the pack carried, so a pass proves the file says exactly what the
+// pack did. A diff here means a Turkish prompt, finding or template moved,
 // which re-reviews every Turkish file a reviewer has cached; regenerate them
 // only when that is the intended change.
+
+useLocaleFixture('tr_TR.yaml')
 
 const fixture = (name: string) => `../fixtures/locale/${name}`
 

@@ -1,7 +1,7 @@
-import { pluralFormsLine, universalOnlyNote, type PromptOptions } from '../audit/prompt.js'
+import { DEFAULT_REGISTER, pluralFormsLine, universalOnlyNote, type PromptOptions } from '../audit/prompt.js'
 import { isUniversalOnly, profileFor } from '../audit/rules/profiles.js'
 import { guidanceSection } from '../rules/guidance.js'
-import { packFor } from '../rules/packs/index.js'
+import { loadLocaleRules } from '../rules/load.js'
 import { localeDisplayName, splitLocale } from '../wporg/locales.js'
 import type { Locale, ReviewInput } from '../types.js'
 
@@ -31,12 +31,10 @@ export function buildReviewPrompt(
   // configuration hash keys every cached draft review.
   const tools = options.tools !== false
   const language = localeLabel(locale)
-  const pack = packFor(locale)
-  // A pack replaces the line rather than adding to it: WordPress in Swedish
-  // says "du", and a formal line left beside the override would contradict it.
-  const register = pack?.register
-    ? `${pack.register.translate.replaceAll('{language}', language)}\n`
-    : `- Use the formal/neutral register that is standard in WordPress ${language}.\n`
+  // The file's line replaces the default rather than adding to it: WordPress
+  // in Swedish says "du", and a neutral line left beside it would only blur
+  // the instruction the team wrote.
+  const register = `${(loadLocaleRules(locale)?.register?.translate ?? DEFAULT_REGISTER).replaceAll('{language}', language)}\n`
   // The same rules review runs are run on the drafts (translate/checks.ts),
   // so when those know nothing about the language this prompt says so too.
   const universalOnly = isUniversalOnly(profileFor(locale)) ? universalOnlyNote(language) : ''

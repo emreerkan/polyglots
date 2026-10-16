@@ -1,0 +1,67 @@
+# The tr pack as a schema-2 rules file, for the baseline tests: everything the
+# pack carried that a prompt or a rule reads, and nothing else.
+schema: 2
+rules:
+  enable: [title-case, apostrophe, ampersand, number-format]
+glossaryStemRatio: 0.7
+properNouns:
+  always:
+    - Türk
+    - Türkçe
+    - Türkiye
+    - İngiliz
+    - İngilizce
+    - Almanca
+    - Alman
+    - Fransızca
+    - Fransız
+    - İspanyolca
+    - İspanyol
+    - İtalyanca
+    - İtalyan
+    - Rusça
+    - Rus
+    - Arapça
+    - Arap
+    - Japonca
+    - Japon
+    - Çince
+    - Çin
+    - Korece
+    - Portekizce
+    - Hollandaca
+    - Lehçe
+    - İbranice
+    - Farsça
+    - Yunanca
+    - Yunan
+    - Kürtçe
+    - Kürt
+  dateOnly:
+    - Pazartesi
+    - Salı
+    - Çarşamba
+    - Perşembe
+    - Cuma
+    - Cumartesi
+    - Pazar
+    - Ocak
+    - Şubat
+    - Mart
+    - Nisan
+    - Mayıs
+    - Haziran
+    - Temmuz
+    - Ağustos
+    - Eylül
+    - Ekim
+    - Kasım
+    - Aralık
+capitalization: |
+  - {language} does NOT use English Title Case. Only the first word and proper nouns are capitalized. "Tüm Değişiklikleri Kaydet" is wrong; "Tüm değişiklikleri kaydet" is right. Brand names (WordPress, WooCommerce) and acronyms keep their own casing.
+  - A capital mid-string is legitimate when the word is a proper noun. In {language} that includes place and person names, names of languages and peoples, day and month names inside a specific date, titles of works, and institution names, where every word is capitalized (Türk Dil Kurumu). An automated check cannot recognize most of these, so when a title-case finding is really one of them, clear it.
+  - Menu labels, screen and section names, and section headings in help or documentation pages are a deliberate exception. TDK madde D capitalizes the words of sign-like labels, and the locale team does not reject a submission over capitalization in those places, so do NOT report title-case for them. This exception covers labels and headings only. Commands, buttons, confirmations, error messages and running prose keep sentence case, and an English calque there is still a problem worth reporting.
+  - The two kinds of title-case check are not equal evidence. A finding that says the translation "mirrors the English source" means the source itself was Title Case and the translation copied its shape word for word; that is close to proof of an English calque. A finding that only says a word is capitalized mid-string is much weaker: measured against approved WordPress {language} translations it is roughly four times as likely to be a false alarm, and the usual reason is that the capitalized words name a thing, most often a feature, widget, block or key ("Etiket Bulutu bileşeninde", "Hızlı Düzenleme'de göster", "Site Logosu bloğu", "Shift + Ok tuşları"). Check what the capitalized words refer to before confirming that kind.
+register:
+  audit: '- Use the formal, neutral register standard in WordPress {language}. No slang, no over-familiar address.'
+  translate: '- Use the formal/neutral register that is standard in WordPress {language}.'

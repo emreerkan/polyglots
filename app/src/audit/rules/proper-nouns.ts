@@ -1,5 +1,4 @@
 import { loadLocaleRules } from '../../rules/load.js'
-import { packFor } from '../../rules/packs/index.js'
 import type { Locale } from '../../types.js'
 
 export interface ProperNouns {
@@ -23,9 +22,10 @@ export function mergeProperNouns(base: ProperNouns, file: { always?: string[]; d
   return file ? { always: file.always ?? base.always, dateOnly: file.dateOnly ?? base.dateOnly } : base
 }
 
-// The pack's lists, which for Turkish are the TDK categories a brand
-// allowlist does not cover. A language without a pack exempts nothing beyond
-// the brands the rule context learns from the file.
-export function builtInProperNounsFor(locale: Locale): ProperNouns {
-  return packFor(locale)?.properNouns ?? EMPTY
+// Nothing, for every locale. The Turkish lists (the TDK categories a brand
+// allowlist does not cover) live in the Turkish rules file now, and a locale
+// without one exempts nothing beyond the brands the rule context learns from
+// the catalogue.
+export function builtInProperNounsFor(_locale: Locale): ProperNouns {
+  return EMPTY
 }

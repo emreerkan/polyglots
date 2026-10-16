@@ -34,7 +34,11 @@ describe('tryRules', () => {
 
   it('runs the built-in rules as switched in the editor', () => {
     const draft = openRulesDraft('tr')
-    const on = tryRules(draft, draft.value, { source: 'Save Changes', translation: 'Değişiklikleri Kaydet' })
+    const on = tryRules(
+      draft,
+      { ...draft.value, rules: { enable: ['title-case'], disable: [] } },
+      { source: 'Save Changes', translation: 'Değişiklikleri Kaydet' },
+    )
     expect(on.findings.some((f) => f.rule === 'title-case')).toBe(true)
     const off = tryRules(
       draft,

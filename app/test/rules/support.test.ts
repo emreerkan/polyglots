@@ -3,10 +3,13 @@ import { dirname } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { localeRulesFile } from '../../src/rules/load.js'
 import { localeSupport, supportNotice } from '../../src/rules/support.js'
+import { useLocaleFixture } from '../locale-fixture.js'
 
 describe('localeSupport', () => {
   it('describes a locale with a pack and no file', () => {
-    expect(localeSupport('sv')).toEqual({ pack: { language: 'sv', status: 'defaults' }, file: false, universalOnly: false })
+    // The pack no longer adds a rule: without its rules file Swedish runs the
+    // universal checks only, like any other language.
+    expect(localeSupport('sv')).toEqual({ pack: { language: 'sv', status: 'defaults' }, file: false, universalOnly: true })
   })
 
   it('describes a locale with neither', () => {
@@ -28,8 +31,18 @@ describe('supportNotice', () => {
     expect(supportNotice('de')).toBe('No locale rules for de; only the universal checks run. Add some with: polyglots rules edit de')
   })
 
-  it('stays quiet for Turkish and Swedish', () => {
-    expect(supportNotice('tr')).toBeUndefined()
-    expect(supportNotice('sv')).toBeUndefined()
+  describe('with their rules files', () => {
+    useLocaleFixture('tr_TR.yaml', 'sv_SE.yaml')
+
+    it('stays quiet for Turkish and Swedish', () => {
+      expect(supportNotice('tr')).toBeUndefined()
+      expect(supportNotice('sv')).toBeUndefined()
+    })
+  })
+
+  // What a Turkish reviewer who never fetched the rules is told: nothing
+  // Turkish ships in the code any more.
+  it('speaks up for Turkish without its rules file', () => {
+    expect(supportNotice('tr')).toBe('No locale rules for tr; only the universal checks run. Add some with: polyglots rules edit tr')
   })
 })

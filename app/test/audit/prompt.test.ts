@@ -6,6 +6,11 @@ import { buildRuleContext, runRules } from '../../src/audit/rules/index.js'
 import { buildReviewPrompt } from '../../src/review/prompt.js'
 import { localeRulesFile } from '../../src/rules/load.js'
 import type { ReviewInput } from '../../src/types.js'
+import { useLocaleFixture } from '../locale-fixture.js'
+
+// Turkish and Swedish read their paragraphs and register lines from their
+// rules files, which these are, as a reviewer's would be.
+useLocaleFixture('tr_TR.yaml', 'sv_SE.yaml')
 
 // Each write moves the mtime forward, so the loader's cache always sees it.
 let tick = 0
@@ -53,9 +58,11 @@ describe('the register line', () => {
     }
   })
 
-  it('keeps the formal line for a locale without an override', () => {
-    expect(audit('de')).toContain('- Use the formal, neutral register standard in WordPress German.')
-    expect(review('de')).toContain('- Use the formal/neutral register that is standard in WordPress German (de).')
+  // The default no longer asserts a formal register, which is the Swedish
+  // mistake made for every locale that has not written a register of its own.
+  it('gives a locale without one the neutral line', () => {
+    expect(audit('de')).toContain('- Use the register that is standard in WordPress German. Keep the tone neutral and concise, with no slang.')
+    expect(review('de')).toContain('- Use the register that is standard in WordPress German (de). Keep the tone neutral and concise, with no slang.')
   })
 })
 

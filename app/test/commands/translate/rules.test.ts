@@ -163,11 +163,15 @@ describe('translate with locale rules', () => {
     expect((await written()).Preview?.text).toBe('Ön izleme')
   })
 
+  // Starts from a file that already enables a language check. Without one,
+  // the first mistake also lifts the universal-only note from the review
+  // prompt, which is a different question for every entry, not just this one.
   it('reaches the AI pass again for an entry whose checks changed, and only for it', async () => {
+    await writeRules('rules:\n  enable: [title-case]\n')
     const first = fakeReview()
     await run(first)
     await writeFile(ws.file, CATALOGUE, 'utf8')
-    await writeRules('mistakes:\n  - wrong: ayar\n')
+    await writeRules('rules:\n  enable: [title-case]\nmistakes:\n  - wrong: ayar\n')
     const second = fakeReview()
     await run(second)
     expect(second.calls.flat().map((i) => i.msgid)).toEqual(['Settings'])

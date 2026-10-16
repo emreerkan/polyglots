@@ -9,6 +9,7 @@ import { writeMcpConfig } from '../../src/mcp/config.js'
 import { loadPo } from '../../src/po/po-file.js'
 import { reviewFile } from '../../src/commands/review.js'
 import type { ReviewEvent } from '../../src/types.js'
+import { useLocaleFixture } from '../locale-fixture.js'
 
 const FAKE_CLAUDE = resolve(import.meta.dirname, '../fixtures/fake-claude/claude')
 
@@ -57,6 +58,10 @@ describe('review end to end', () => {
       { locale: 'tr', sourceTerm: 'sidebar', translation: 'kenar çubuğu', partOfSpeech: 'noun' },
     ])
   })
+
+  // After the hook above, which moves POLYGLOTS_HOME: the Turkish rules file
+  // has to land in the home the review reads.
+  useLocaleFixture('tr_TR.yaml')
 
   afterEach(async () => {
     db.close()

@@ -7,7 +7,7 @@
 
 # Rules that always run unless disabled: placeholder, html, plural-count, whitespace, untranslated, escaping, line-breaks, punctuation, glossary, inconsistent, tm-conflict, control
 # rules:
-#   enable: ["title-case", "apostrophe", "ampersand", "number-format"]
+#   enable: []
 #   disable: []
 
 # How much of a glossary term must match an inflected form, between 0 and 1.
@@ -15,8 +15,8 @@
 
 # Names capitalized everywhere (always), and only inside a specific date (dateOnly).
 # properNouns:
-#   always: ["Türk", "Türkçe", "Türkiye", "İngiliz", "İngilizce", "Almanca", "Alman", "Fransızca", "Fransız", "İspanyolca", "İspanyol", "İtalyanca", "İtalyan", "Rusça", "Rus", "Arapça", "Arap", "Japonca", "Japon", "Çince", "Çin", "Korece", "Portekizce", "Hollandaca", "Lehçe", "İbranice", "Farsça", "Yunanca", "Yunan", "Kürtçe", "Kürt"]
-#   dateOnly: ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+#   always: []
+#   dateOnly: []
 
 # Common mistakes: found anywhere in a translation, case-insensitive.
 # The AI review weighs each match with your note.

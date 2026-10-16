@@ -69,9 +69,12 @@ describe('packFor', () => {
 })
 
 describe('the Swedish pack', () => {
+  // Asked of the pack rather than the built-in profile, which is the
+  // universal set for every locale now that rules come from the rules file.
   it('adds title-case and nothing Turkish', () => {
-    expect([...builtInProfileFor('sv').rules].filter((r) => !UNIVERSAL_RULES.includes(r))).toEqual(['title-case'])
-    expect(builtInProfileFor('sv').glossaryStemRatio).toBe(0.7)
+    expect(packFor('sv')?.extraRules).toEqual(['title-case'])
+    expect(packFor('sv')?.glossaryStemRatio).toBe(0.7)
+    expect(builtInProfileFor('sv').rules).toEqual(new Set(UNIVERSAL_RULES))
   })
 
   // Swedish writes languages, days and months in lower case, so there is

@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { AuditEntry, GlossaryEntry } from '../../src/types.js'
 import { buildRuleContext, runRules, tmKey } from '../../src/audit/rules/index.js'
 import { profileFor } from '../../src/audit/rules/profiles.js'
+import { useLocaleFixture } from '../locale-fixture.js'
+
+// Almost everything here is Turkish, and polyglots ships no locale data: the
+// Turkish rules come from the Turkish rules file, as they do for a reviewer.
+useLocaleFixture('tr_TR.yaml')
 
 const GLOSSARY: GlossaryEntry[] = [
   { locale: 'tr', sourceTerm: 'sidebar', translation: 'kenar çubuğu', partOfSpeech: 'noun' },
@@ -58,8 +63,9 @@ describe('rule profiles', () => {
     expect(forLocale('de', 'Read <a>more</a>', 'Mehr lesen')).toContain('html')
   })
 
-  it('resolves a regional locale through its language subtag', () => {
-    expect(profileFor('tr-TR').rules.has('title-case')).toBe(true)
+  // Rules files are per locale, so a regional locale no longer inherits what
+  // a pack once gave every locale of its language.
+  it('leaves title-case out for a regional locale with no rules file', () => {
     expect(profileFor('pt-br').rules.has('title-case')).toBe(false)
   })
 

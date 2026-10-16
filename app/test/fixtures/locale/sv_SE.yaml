@@ -1,0 +1,11 @@
+# The sv pack as a schema-2 rules file, for the baseline tests: everything the
+# pack carried that a prompt or a rule reads, and nothing else.
+schema: 2
+rules:
+  enable: [title-case]
+glossaryStemRatio: 0.7
+capitalization: |
+  - {language} uses sentence case, not English Title Case. Only the first word and proper nouns are capitalized: "Spara Alla Ändringar" is wrong; "Spara alla ändringar" is right. Brand names (WordPress, WooCommerce) and acronyms keep their own casing.
+  - {language} writes the names of languages, nationalities, days of the week and months in lower case (svenska, engelsk, måndag, januari), even where English capitalizes them. A capital on one of those mid-sentence is an English calque.
+  - The two kinds of title-case check are not equal evidence. A finding that says the translation "mirrors the English source" means the source itself was Title Case and the translation copied its shape word for word; that is close to proof of an English calque. A finding that only says a word is capitalized mid-string is weaker: check whether the word is a proper noun or a brand before confirming it.
+register: '- Address the reader as "du", as WordPress in {language} does, and do not use "ni" as a polite form. Keep the register neutral and concise, with no slang.'

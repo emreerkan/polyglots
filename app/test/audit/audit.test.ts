@@ -6,6 +6,11 @@ import { auditEntries } from '../../src/audit/audit.js'
 import { createRunControl } from '../../src/run-control.js'
 import { buildAuditPrompt } from '../../src/audit/prompt.js'
 import { mapAuditResults } from '../../src/audit/schema.js'
+import { useLocaleFixture } from '../locale-fixture.js'
+
+// The Turkish entries here are reviewed under the Turkish rules file, which is
+// where Turkish rules come from now that polyglots ships no locale data.
+useLocaleFixture('tr_TR.yaml')
 
 const GLOSSARY: GlossaryEntry[] = [
   { locale: 'tr', sourceTerm: 'sidebar', translation: 'kenar çubuğu', partOfSpeech: 'noun' },

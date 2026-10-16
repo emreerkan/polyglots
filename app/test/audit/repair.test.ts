@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { judgeFix, REPAIRABLE_RULES, repairMechanically } from '../../src/audit/repair.js'
 import { buildRuleContext } from '../../src/audit/rules/index.js'
 import type { AuditEntry, GlossaryEntry } from '../../src/types.js'
+import { useLocaleFixture } from '../locale-fixture.js'
+
+// The Turkish entries here are reviewed under the Turkish rules file, which is
+// where Turkish rules come from now that polyglots ships no locale data.
+useLocaleFixture('tr_TR.yaml')
 
 function entry(msgid: string, msgstr: string[]): AuditEntry {
   return { key: msgid, msgid, msgstr, comments: [], references: [], fuzzy: false }

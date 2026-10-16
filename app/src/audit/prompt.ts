@@ -4,9 +4,23 @@ import type { GlossaryMatch } from './rules/index.js'
 import { AUDIT_CATEGORIES } from './schema.js'
 import { isUniversalOnly, profileFor } from './rules/profiles.js'
 import { guidanceSection } from '../rules/guidance.js'
-import { packFor } from '../rules/packs/index.js'
+import { loadLocaleRules } from '../rules/load.js'
 
 const GLOSSARY_LIMIT = 12
+
+/**
+ * The register line both review prompts carry for a locale whose rules file
+ * says nothing about register. It used to ask for "the formal, neutral
+ * register ... no over-familiar address", which asserted a convention that is
+ * wrong for Swedish, Spanish and others: WordPress in those languages says
+ * "du" or "tú", and a reviewer told to avoid over-familiar address proposes the
+ * polite form as a fix, written into a contributor's work. This line names no
+ * convention and leaves the choice to what the locale already does; a team
+ * that wants one states it in its file. Exported for the draft review prompt,
+ * which must say the same thing in the same words.
+ */
+export const DEFAULT_REGISTER =
+  '- Use the register that is standard in WordPress {language}. Keep the tone neutral and concise, with no slang.'
 
 export interface AuditCandidate {
   id: number
@@ -110,21 +124,19 @@ export function buildAuditPrompt(
   const tools = options.tools !== false
   const language = languageName(locale)
   const profile = profileFor(locale)
-  const pack = packFor(locale)
+  const file = loadLocaleRules(locale)
   const fill = (text: string) => text.replaceAll('{language}', language)
   // Orthography guidance follows the locale's profile, not its name. Telling a
   // German reviewer that "German does not use English Title Case" would be false,
   // and would have it flag correct capitalization all day. The paragraph itself
-  // comes from the pack: the Turkish one is TDK text with Turkish examples, and
-  // gating it on the rule name alone sent it to any team that turned
-  // title-case on in its rules file.
+  // comes from the rules file: the Turkish one is TDK text with Turkish
+  // examples, and gating it on the rule name alone sent it to any team that
+  // turned title-case on without writing its own.
   const capitalization = profile.rules.has('title-case')
-    ? fill(pack?.capitalization ?? GENERIC_CAPITALIZATION)
+    ? fill(file?.capitalization ?? GENERIC_CAPITALIZATION)
     : `- Follow ${language}'s own capitalization rules. Do not import English conventions, and do not treat a capital that ${language} requires as an error.
 `
-  const register = pack?.register
-    ? `${fill(pack.register.audit)}\n`
-    : `- Use the formal, neutral register standard in WordPress ${language}. No slang, no over-familiar address.\n`
+  const register = `${fill(file?.register?.audit ?? DEFAULT_REGISTER)}\n`
   const entries = candidates
     .map((c) => {
       const payload: Record<string, unknown> = { id: c.id, source: c.msgid, submitted: c.msgstr }
@@ -172,7 +184,7 @@ Mark problem=true only when a human should change the translation before it is a
 
 Categories: ${AUDIT_CATEGORIES.join(', ')}. Use an empty array when problem is false. Keep "reason" to one short sentence, written for the contributor, saying what is wrong (or why a flagged check was cleared).
 
-- When an entry is a problem, also return "fix": the corrected translation, as an array with one string per plural form. It must obey every standard above: the glossary, this locale's capitalization rules, the source's placeholders and HTML exactly, and ${pack?.register ? 'the register above' : 'the formal register'}.
+- When an entry is a problem, also return "fix": the corrected translation, as an array with one string per plural form. It must obey every standard above: the glossary, this locale's capitalization rules, the source's placeholders and HTML exactly, and the register above.
 - If you are not confident what the entry should say, leave "fix" out entirely. An honest "I do not know" is worth more than a confident wrong translation, which a human then has to catch.
 - An entry marked "control" is a setting WordPress code reads, not text a person reads: "on" or "off" for a font, "ltr" for text direction, a language tag, a number separator. Its translator comment says which value to use. Never translate the English word; a fix is one of the values the comment names.
 - An entry marked "condemned" has been proved wrong by a deterministic check, so it is already known to be broken whatever you think of it. Do not argue about whether it is wrong; return the fix.

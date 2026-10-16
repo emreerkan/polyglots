@@ -6,8 +6,9 @@ import type Database from 'better-sqlite3'
 import { openDb, replaceGlossary } from '../../../src/storage/index.js'
 import { reviewFile } from '../../../src/commands/review.js'
 import type { AuditCandidate } from '../../../src/audit/prompt.js'
+import { useLocaleFixture } from '../../locale-fixture.js'
 
-// The Swedish pack end to end, against a fake agent: what reaches the model as
+// The Swedish rules file end to end, against a fake agent: what reaches the model as
 // automatedChecks is what a contributor's review is built on.
 const PO = `msgid ""
 msgstr ""
@@ -47,6 +48,9 @@ describe('reviewFile: Swedish', () => {
     db = openDb(join(home, 'polyglots.db'))
     replaceGlossary(db, 'sv', [{ locale: 'sv', sourceTerm: 'dashboard', translation: 'panel', partOfSpeech: 'noun' }])
   })
+
+  // The Swedish rules come from the Swedish rules file, as for a reviewer.
+  useLocaleFixture('sv_SE.yaml')
 
   afterEach(async () => {
     db.close()

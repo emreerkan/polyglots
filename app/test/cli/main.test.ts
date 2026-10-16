@@ -13,6 +13,7 @@ import type { TranslateOptions, TranslateSummary } from '../../src/commands/tran
 import type { AgentStatus, DiscoverOptions } from '../../src/agent/discover.js'
 import type { DiscoverModelsOptions, ModelCheck, ModelServer } from '../../src/draft/discover.js'
 import { DEFAULT_QWEN_MODEL } from '../../src/draft/qwen.js'
+import { installLocaleFixture } from '../locale-fixture.js'
 
 // The default local model differs by platform (the MLX build on Apple silicon
 // only), so patterns name whichever this machine gets.
@@ -378,9 +379,10 @@ async function rulesNouns(code: string): Promise<string[] | undefined> {
 }
 
 describe('config add-name', () => {
-  // A list in the file replaces the built-in one, so the first name added
-  // writes the built-in names out with it rather than dropping Türkiye.
-  it('adds a name to the locale rules file, after the built-in names', async () => {
+  // The name goes on the end of the list the file already has, so the
+  // Turkish rules file keeps Türkiye and gains the new name after it.
+  it('adds a name to the locale rules file, after the names it already lists', async () => {
+    installLocaleFixture('tr_TR.yaml')
     const h = harness()
     expect(await h.run(['config', 'add-name', 'Türk Dil Kurumu'])).toBe(0)
     const always = await rulesNouns('tr_TR')
@@ -453,7 +455,8 @@ describe('config list-names and remove-name', () => {
     expect(lines(h.stdout.text)).toEqual(['Proper nouns for de:', '1 Berlin', '2 Deutsche Bahn', '3 München'])
   })
 
-  it('lists the built-in names of a locale that has a pack, as the one list they now are', async () => {
+  it('lists the names the locale rules file carries', async () => {
+    installLocaleFixture('tr_TR.yaml')
     const h = harness()
     expect(await h.run(['config', 'list-names'])).toBe(0)
     expect(lines(h.stdout.text)).toContain('1 Türk')
@@ -465,7 +468,8 @@ describe('config list-names and remove-name', () => {
     expect(await rulesNouns('de_DE')).toEqual(['Deutsche Bahn'])
   })
 
-  it('removes a built-in name by writing the list without it', async () => {
+  it('removes a name the rules file carries by writing the list without it', async () => {
+    installLocaleFixture('tr_TR.yaml')
     expect(await harness().run(['config', 'remove-name', 'Türkiye'])).toBe(0)
     const always = await rulesNouns('tr_TR')
     expect(always).not.toContain('Türkiye')
@@ -492,6 +496,7 @@ describe('moving proper nouns out of config.json', () => {
   const configJson = async () => JSON.parse(await readFile(join(home, 'config', 'config.json'), 'utf8'))
 
   it('moves each locale into its rules file and says so once', async () => {
+    installLocaleFixture('tr_TR.yaml')
     await legacy({ tr: ['Kadıköy'], de: ['Berlin'] })
     const h = harness()
     expect(await h.run(['config', 'list-names', '--locale', 'de'])).toBe(0)

@@ -40,12 +40,14 @@ guidance: |
 `
 
 describe('openRulesDraft', () => {
+  // The built-in defaults are the universal checks for every locale, Turkish
+  // included: its language rules live in its rules file, not in the code.
   it('describes a locale without a file as the built-in defaults, with nothing set', () => {
     const draft = openRulesDraft('tr')
     expect(draft.exists).toBe(false)
     expect(draft.value).toEqual({ mistakes: [], patterns: [] })
-    expect(draft.builtIn.rules).toContain('title-case')
-    expect(draft.builtIn.properNouns.dateOnly).toContain('Ocak')
+    expect(draft.builtIn.rules).not.toContain('title-case')
+    expect(draft.builtIn.properNouns).toEqual({ always: [], dateOnly: [] })
   })
 
   it('reads the file as written, mistakes and patterns kept apart', async () => {
