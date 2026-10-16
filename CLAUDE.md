@@ -180,7 +180,7 @@ change), minor when the next run behaves differently for someone already
 using the tool (a new command, key, provider or rule, different output or
 requester wording, or anything that moves `configHash` or an engine id and so
 prunes the verdict cache, which also gets its own changelog line), patch for
-the rest. When it is a coin toss, take minor.
+the rest. When it is a coin toss between minor and patch, take minor.
 
 `polyglots --version` reads `package.json` at run time, so after a refused build
 it reports the new version while running the old code. It is never evidence
