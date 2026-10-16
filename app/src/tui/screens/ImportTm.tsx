@@ -104,7 +104,7 @@ function ImportTmInLocale({ cwd, onBack, locale }: ImportTmProps & { locale: Loc
           ))}
           {listing.status === 'loading' && <Text {...TOKENS.muted.ink}>Checking polyglots-data…</Text>}
           {listing.status === 'offline' && <Text {...TOKENS.muted.ink}>Could not reach polyglots-data: {listing.message}</Text>}
-          <Hint>{`↑↓ move · enter choose · ${BACK_HINT}`}</Hint>
+          <Hint>{`${options.length > 1 ? '↑↓ move · ' : ''}enter choose · ${BACK_HINT}`}</Hint>
         </>
       )}
       {chosen === 'fetch' && listing.status === 'listed' && <TmFetch locale={locale} client={listing.client} onBack={back} onDone={onBack} />}

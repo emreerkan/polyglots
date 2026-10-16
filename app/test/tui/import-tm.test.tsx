@@ -5,7 +5,7 @@ import React from 'react'
 import { saveConfig } from '../../src/config.js'
 import { CommandsProvider } from '../../src/tui/commands.js'
 import { ImportTm } from '../../src/tui/screens/ImportTm.js'
-import { ESC_DELAY, fakeCommands, keys, makeHome, tick, waitForText, render, cleanup, type Home } from './helpers.js'
+import { ESC_DELAY, fakeCommands, flat, keys, makeHome, tick, waitForText, render, cleanup, type Home } from './helpers.js'
 
 let home: Home
 let cwd: string
@@ -79,6 +79,15 @@ describe('ImportTm', () => {
 
   // A menu of one is passed through, so esc from the picker leaves the
   // screen as it did before the fetch was added.
+  it('does not offer to move in a menu of one', async () => {
+    const view = mount()
+    await waitForText(view.lastFrame, 'Import a file')
+    await tick()
+    const frame = flat(view.lastFrame())
+    expect(frame).toContain('enter choose')
+    expect(frame).not.toContain('↑↓ move')
+  })
+
   it('esc from the picker leaves the screen when the file is the only way in', async () => {
     let back = 0
     const view = mount(fakeCommands(), () => back++)

@@ -61,6 +61,7 @@ describe('ImportTm: fetch from polyglots-data', () => {
     expect(frame.indexOf('Fetch from polyglots-data')).toBeLessThan(frame.indexOf('Import a file'))
     // The picker is a second step, not drawn under the menu.
     expect(frame).not.toContain('poedit.tmx')
+    expect(frame).toContain('↑↓ move · enter choose')
   })
 
   // config.json is hand-editable, and tm fetch reads tr_TR as tr through
