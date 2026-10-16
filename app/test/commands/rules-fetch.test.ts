@@ -279,6 +279,14 @@ describe('diffRules', () => {
     ])
   })
 
+  // A note the team dropped is a check they no longer make, which the
+  // person replacing their file should see as much as one they added.
+  it('names a note and a suggested wording the new file no longer has anywhere', () => {
+    const before = parse('schema: 2\nmistakes:\n  - wrong: a\n    right: A\n    note: old note\npatterns:\n  - text: b\n    level: hint\n    note: kept\n  - text: c\n    level: error\n    note: old note\n')
+    const after = parse('schema: 2\npatterns:\n  - text: d\n    level: hint\n    note: kept\n')
+    expect(diffRules(before, after).slice(0, 2)).toEqual(['right removed: A', 'note removed: old note'])
+  })
+
   it('shows a fix whose notSource changed, and names the condition', () => {
     const before = parse('schema: 2\npatterns:\n  - text: a\n    replace: b\n    level: fix\n    when: { notSource: x }\n')
     const after = parse('schema: 2\npatterns:\n  - text: a\n    replace: b\n    level: fix\n    when: { notSource: y }\n')

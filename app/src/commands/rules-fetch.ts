@@ -193,15 +193,25 @@ export function diffRules(before: LocaleRules | undefined, after: LocaleRules): 
     lines.push(after.formality === undefined ? 'formality removed' : `formality changed: ${after.formality}`)
   }
 
-  // A note or a suggested wording is shown when the old file had no such
-  // text anywhere, so moving a pattern does not repeat its note.
-  const oldNotes = new Set(before?.patterns.map((p) => p.note).filter((n) => n !== undefined))
-  const oldRights = new Set(before?.patterns.map((p) => p.right).filter((r) => r !== undefined))
+  // A note or a suggested wording is shown when the other file had no such
+  // text anywhere, so moving a pattern does not repeat its note. Both ways:
+  // a note the new file drops is a check the team stopped making, which the
+  // person replacing their file should see as much as one added.
+  const notes = (r: LocaleRules | undefined) => new Set(r?.patterns.map((p) => p.note).filter((n) => n !== undefined))
+  const rights = (r: LocaleRules | undefined) => new Set(r?.patterns.map((p) => p.right).filter((n) => n !== undefined))
+  const oldNotes = notes(before)
+  const oldRights = rights(before)
+  const newNotes = notes(after)
+  const newRights = rights(after)
   const shown = new Set<string>()
   const show = (line: string) => {
     if (shown.has(line)) return
     shown.add(line)
     lines.push(line)
+  }
+  for (const p of before?.patterns ?? []) {
+    if (p.right !== undefined && !newRights.has(p.right)) show(`right removed: ${p.right}`)
+    if (p.note !== undefined && !newNotes.has(p.note)) show(`note removed: ${p.note}`)
   }
   for (const p of after.patterns) {
     if (p.right !== undefined && !oldRights.has(p.right)) show(`right: ${p.right}`)
