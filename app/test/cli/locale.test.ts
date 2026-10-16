@@ -196,7 +196,7 @@ describe('no default locale', () => {
 
 // Earlier versions fell back to tr, and for a while the refusal named that
 // fallback to anyone with tr work on disk. The hint was one locale's data in
-// the code, and the people it was for have long since set a locale.
+// the code, and this version keeps no locale's data in the code, so it goes.
 describe('earlier Turkish work', () => {
   it('says nothing about Turkish even when jobs.db holds tr runs', async () => {
     await mkdir(join(home, 'data'), { recursive: true })
