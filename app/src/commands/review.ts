@@ -38,6 +38,7 @@ import { languageOf } from '../wporg/locales.js'
 import { tmKey } from '../audit/rules/index.js'
 import { FIX_SUSPECT_RULE } from '../audit/repair.js'
 import { allGlossary, findMemory, openDb } from '../storage/index.js'
+import { isSkipFinding } from '../rules/custom.js'
 import { takeSkipped } from '../rules/sandbox.js'
 import type {
   AuditEntry,
@@ -405,8 +406,11 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
       const annotations = new Map<string, Annotation>()
       for (const verdict of decided) {
         // A repair with nothing else wrong is neither a problem nor a guess, and it
-        // still belongs in the file: it is the only copy of the correction.
-        if (!verdict.problem && !verdict.needsReview && verdict.text === undefined) continue
+        // still belongs in the file: it is the only copy of the correction. So
+        // does an entry a locale pattern ran away on, which the model may have
+        // cleared without ever being asked about the pattern: the problems file
+        // is where the maintainer learns which entry it hung on.
+        if (!verdict.problem && !verdict.needsReview && verdict.text === undefined && !verdict.findings.some(isSkipFinding)) continue
         const notes = verdict.findings.map((f) => f.message)
         annotations.set(verdict.key, {
           // A verdict with no findings still has to say something: keepOnly would

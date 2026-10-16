@@ -5,9 +5,9 @@ import { runAgent, type AgentRunOptions } from '../agent/run.js'
 import { auditSrcHash } from '../jobs/hash.js'
 import type { CachedVerdict, VerdictKey } from '../jobs/verdicts.js'
 import type { AuditEntry, Finding, GlossaryEntry, Locale } from '../types.js'
-import { buildAuditPrompt, type AuditCandidate } from './prompt.js'
+import { automatedChecks, buildAuditPrompt, type AuditCandidate } from './prompt.js'
 import { judgeFix, repairMechanically } from './repair.js'
-import { applyFixPatterns } from '../rules/custom.js'
+import { applyFixPatterns, isSkipFinding } from '../rules/custom.js'
 import { auditBatchJsonSchema, mapAuditResults, type AuditResult } from './schema.js'
 import {
   buildRuleContext,
@@ -287,9 +287,10 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
   // them, message and all, because a message can be file-derived too:
   // `inconsistent` counts how many ways this file translates the same source,
   // so editing one entry changes another entry's prompt without touching its
-  // text or the names of the rules that fired. `repaired` is excluded because
-  // the prompt withholds it, and auditSrcHash sorts, so the order they fired in
-  // cannot turn a hit into a miss.
+  // text or the names of the rules that fired. Taken from automatedChecks, the
+  // function the prompt renders them with, so what the prompt withholds (the
+  // repair note and a locale rule skipped as a runaway) cannot move the key.
+  // auditSrcHash sorts, so the order they fired in cannot turn a hit into a miss.
   const cacheKey = (candidate: AuditCandidate): VerdictKey => ({
     srcHash: auditSrcHash(
       {
@@ -301,7 +302,7 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
       {
         references: candidate.references,
         comments: candidate.comments,
-        hints: candidate.hints.filter((f) => f.rule !== 'repaired').map((f) => `${f.rule}: ${f.message}`),
+        hints: automatedChecks(candidate.hints),
         ...(candidate.memory ? { memory: candidate.memory } : {}),
         nplurals: opts.nplurals,
         ...(opts.pluralForms === undefined ? {} : { pluralForms: opts.pluralForms }),
@@ -492,7 +493,14 @@ function toVerdict(candidate: AuditCandidate, result: AuditResult, ctx: RuleCont
   // A cleared entry keeps the note for a repair the rules already made. Nothing
   // else records that the text in the file is not what was submitted, and an
   // entry with no note at all is invisible to a resume, which would revert it.
-  const findings = problem ? [...candidate.hints, ...aiFindings] : candidate.hints.filter((f) => f.rule === 'repaired')
+  //
+  // It keeps a locale rule skipped as a runaway too. The model was never asked
+  // about it, so clearing the entry says nothing about it, and the problems
+  // file is the one place the maintainer learns which entry the pattern hung
+  // on (maintainer ruling 2026-10-16).
+  const findings = problem
+    ? [...candidate.hints, ...aiFindings]
+    : candidate.hints.filter((f) => f.rule === 'repaired' || isSkipFinding(f))
 
   const base: Verdict = { key: candidate.key, problem, findings, reason: result.reason, ...(candidate.repaired ?? {}) }
   if (!problem || !result.fix) return base

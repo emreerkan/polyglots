@@ -1,11 +1,12 @@
 import { mkdir, utimes, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { buildAuditPrompt } from '../../src/audit/prompt.js'
+import { buildAuditPrompt, type AuditCandidate } from '../../src/audit/prompt.js'
 import { buildRuleContext, runRules } from '../../src/audit/rules/index.js'
 import { buildReviewPrompt } from '../../src/review/prompt.js'
+import { skipFinding } from '../../src/rules/custom.js'
 import { localeRulesFile } from '../../src/rules/load.js'
-import type { ReviewInput } from '../../src/types.js'
+import type { Finding, ReviewInput } from '../../src/types.js'
 import { useLocaleFixture } from '../locale-fixture.js'
 
 // Turkish and Swedish read their paragraphs and register lines from their
@@ -125,5 +126,34 @@ describe('the review prompt keeps its inputs', () => {
   it('still renders entries after the new lines', () => {
     const inputs: ReviewInput[] = [{ key: 'Save', msgid: 'Save', comments: [], drafts: ['Spara'] }]
     expect(buildReviewPrompt(inputs, 'sv', 2)).toContain('"msgid":"Save"')
+  })
+})
+
+// Maintainer ruling 2026-10-16: a locale pattern that ran away on an entry is
+// the rules file's fault, not the contributor's. The person reads it in the
+// problems file; the model never weighs it, since it cannot answer for a regex
+// it never sees and a check it cannot adjudicate invites a guess either way.
+describe('a locale rule skipped as a runaway', () => {
+  const candidate = (hints: Finding[]): AuditCandidate => ({
+    id: 1,
+    key: 'Save',
+    msgid: 'Save',
+    msgstr: ['Kaydet'],
+    comments: [],
+    references: [],
+    hints,
+  })
+  const titleCase: Finding = { rule: 'title-case', severity: 'suspect', message: 'capital mid-string' }
+
+  it('is not among the automated checks the review prompt sends', () => {
+    const prompt = buildAuditPrompt([candidate([skipFinding('nested repetition'), titleCase])], 'tr', 2)
+    expect(prompt).not.toContain('locale rule skipped')
+    expect(prompt).toContain('"automatedChecks":["title-case: capital mid-string"]')
+  })
+
+  it('leaves an entry whose only finding it is with no automated checks at all', () => {
+    // The entry is the last line; the guidance above it names the field too.
+    const line = buildAuditPrompt([candidate([skipFinding('nested repetition')])], 'tr', 2).split('\n').at(-1)
+    expect(line).toBe('{"id":1,"source":"Save","submitted":["Kaydet"]}')
   })
 })

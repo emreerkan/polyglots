@@ -1,6 +1,7 @@
 import { repairMechanically } from '../audit/repair.js'
 import { buildRuleContext, glossaryMatches, runRules, type GlossaryMatch, type RuleContext } from '../audit/rules/index.js'
-import { applyFixPatterns, isSkipFinding } from '../rules/custom.js'
+import { automatedChecks } from '../audit/prompt.js'
+import { applyFixPatterns } from '../rules/custom.js'
 import { CUSTOM_RULE } from '../rules/names.js'
 import type { AuditEntry, Finding, GlossaryEntry, Locale, ReviewResult, TranslationUnit } from '../types.js'
 
@@ -101,10 +102,12 @@ export function createDraftChecker(opts: DraftCheckerOptions): DraftChecker {
       const fixed = fix(unit, drafts)
       if (fixed.notes.length > 0) prepared.set(unit.key, fixed.notes)
       else prepared.delete(unit.key)
-      // A pattern that ran away on this draft is the rules file's fault, not
-      // the draft's, and the AI cannot answer for a regex it never sees.
-      const checks = findings(unit, fixed.forms).filter((f) => !isSkipFinding(f))
-      return { drafts: fixed.forms, checks: checks.map((f) => `${f.rule}: ${f.message}`) }
+      // Rendered by the audit prompt's own function, so a locale pattern that
+      // ran away on this draft is withheld here exactly as it is from a
+      // contributor's entry: the rules file is at fault, and the AI cannot
+      // answer for a regex it never sees. The caller keys the draft review on
+      // this list, so the key follows what the prompt renders by construction.
+      return { drafts: fixed.forms, checks: automatedChecks(findings(unit, fixed.forms)) }
     },
     terms(unit) {
       return glossaryMatches(unit.msgid, ctx)

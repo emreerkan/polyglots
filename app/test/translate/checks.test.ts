@@ -43,4 +43,12 @@ describe('the checks a draft checker sends with a draft', () => {
     const prepared = checker.prepare(u, ['a'.repeat(30) + 'b'])
     expect(prepared.checks.filter((c) => c.includes('locale rule skipped'))).toEqual([])
   })
+
+  // A draft whose only finding is the skip goes to the reviewer as a clean
+  // draft would: no automatedChecks, and so the same cache key as one.
+  it('sends no checks at all with a draft whose only finding is the skip', () => {
+    const u = unit('Save')
+    const checker = createDraftChecker({ locale: 'tr', nplurals: 2, glossary: [], properNouns: [], units: [u] })
+    expect(checker.prepare(u, ['a'.repeat(30) + 'b']).checks).toEqual([])
+  })
 })

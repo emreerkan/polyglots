@@ -209,7 +209,9 @@ That is a limit, not a usual time: most expressions take far less. Some
 expressions, such as `^(a+)+$`, can take minutes on the wrong text. A review
 stops such an expression at the limit and does not use it again. The entry
 where it stopped gets a finding that names the expression, and the summary
-names it once. `rules check` runs each expression on a few test strings first,
+names it once. The finding is in the problems file only: the AI is never
+asked about it, because the fault is in the rules file, not in the
+translation. `rules check` runs each expression on a few test strings first,
 and reports one that takes too long as an error on its line.
 
 ## Variants of a language

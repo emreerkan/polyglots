@@ -5,6 +5,7 @@ import { AUDIT_CATEGORIES } from './schema.js'
 import { isUniversalOnly, profileFor } from './rules/profiles.js'
 import { guidanceSection } from '../rules/guidance.js'
 import { loadLocaleRules } from '../rules/load.js'
+import { isSkipFinding } from '../rules/custom.js'
 
 const GLOSSARY_LIMIT = 12
 
@@ -88,6 +89,28 @@ export function pluralFormsLine(nplurals: number, pluralForms: string | undefine
 }
 
 /**
+ * The findings a model is asked to adjudicate, rendered as both review prompts
+ * list them: the audit's for a contributor's text and the draft review's for
+ * translate's own drafts. One function for the prompt and for the cache key,
+ * because the key has to cover exactly what the prompt renders: keyed on the
+ * findings before this filter, a skip that the prompt never showed would still
+ * move the key, and a verdict would be paid for twice over a prompt that had
+ * not changed.
+ *
+ * Two kinds are withheld. The mechanical repair is a decided fact, not an open
+ * check: listing it would ask the model to adjudicate the one finding that
+ * needs no adjudication, and invite a fix for an entry that already has one.
+ * A locale pattern that ran past its budget on this text speaks of the rules
+ * file, not of the text (maintainer ruling 2026-10-16): the model cannot
+ * answer for a regex it never sees, and a check it cannot weigh invites a
+ * guess either way on a contributor's work. The person reads it in the
+ * problems file and in the run summary instead.
+ */
+export function automatedChecks(hints: readonly Finding[]): string[] {
+  return hints.filter((h) => h.rule !== 'repaired' && !isSkipFinding(h)).map((h) => `${h.rule}: ${h.message}`)
+}
+
+/**
  * The prompt for one batch.
  *
  * The entry count is stated rather than left to be counted, which is a line of
@@ -145,11 +168,8 @@ export function buildAuditPrompt(
       if (c.msgidPlural) payload.sourcePlural = c.msgidPlural
       if (c.comments.length > 0) payload.comments = c.comments
       if (c.references.length > 0) payload.references = c.references
-      // The mechanical repair is a decided fact, not an open check. Listing it
-      // here would ask the model to adjudicate the one finding that needs no
-      // adjudication, and invite a fix for an entry that already has one.
-      const checks = c.hints.filter((h) => h.rule !== 'repaired')
-      if (checks.length > 0) payload.automatedChecks = checks.map((h) => `${h.rule}: ${h.message}`)
+      const checks = automatedChecks(c.hints)
+      if (checks.length > 0) payload.automatedChecks = checks
       // Capped, because a long source can touch a dozen terms and the list is
       // repeated for every entry in the batch. The cap is generous enough that
       // hitting it means the string is long enough for the model to ask.

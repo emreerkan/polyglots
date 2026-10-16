@@ -41,8 +41,9 @@ export interface AuditContext {
   // gettext's own disambiguation mechanism, handed to the model verbatim.
   comments: string[]
   // The hints the prompt lists as automatedChecks, as the prompt renders them:
-  // "<rule>: <message>", excluding `repaired`, which the prompt deliberately
-  // withholds.
+  // the output of automatedChecks in audit/prompt.ts, which withholds the
+  // `repaired` note and a locale rule skipped as a runaway. The rendered list
+  // and not the findings, so what the prompt never shows cannot move the key.
   //
   // The message and not just the rule name, because a message can be derived
   // from the whole file: `inconsistent` says how many different ways the same
