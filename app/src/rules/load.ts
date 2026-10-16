@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { LineCounter, parseDocument } from 'yaml'
 import { configDir } from '../paths.js'
 import type { Locale } from '../types.js'
-import { localeRulesSchema, normalise, type LocaleRules } from './schema.js'
+import { localeRulesSchema, MAX_SCHEMA, normalise, type LocaleRules } from './schema.js'
 
 export class RulesFileError extends Error {
   readonly path: string
@@ -42,7 +42,23 @@ export function parseLocaleRules(text: string, path: string): LocaleRules {
     const at = lines.linePos(syntax.pos[0])
     throw new RulesFileError(path, syntax.message.split('\n')[0] ?? 'invalid YAML', at.line, at.col)
   }
-  const parsed = localeRulesSchema.safeParse(doc.toJS() ?? {})
+  const js: unknown = doc.toJS() ?? {}
+  const declared = typeof js === 'object' && js !== null && 'schema' in js ? (js as { schema: unknown }).schema : undefined
+  if (declared !== undefined) {
+    const node = doc.get('schema', true) as { range?: [number, number, number] } | undefined
+    const line = node?.range ? lines.linePos(node.range[0]).line : undefined
+    const whole = typeof declared === 'number' && Number.isInteger(declared)
+    // Checked before the shape: a newer file may use keys this polyglots has
+    // never heard of, and "update polyglots" is the useful answer, not the
+    // first unknown key it happens to reach.
+    if (whole && declared > MAX_SCHEMA) {
+      throw new RulesFileError(path, `needs rules schema ${declared}; this polyglots reads up to ${MAX_SCHEMA}. Update polyglots.`, line)
+    }
+    if (!whole || declared < 1) {
+      throw new RulesFileError(path, `schema must be a whole number from 1 to ${MAX_SCHEMA}`, line)
+    }
+  }
+  const parsed = localeRulesSchema.safeParse(js)
   if (!parsed.success) {
     const issue = parsed.error.issues[0]!
     const dotted = issue.path.join('.')
@@ -81,7 +97,11 @@ const isEmpty = (r: LocaleRules) =>
   r.glossaryStemRatio === undefined &&
   r.properNouns === undefined &&
   r.patterns.length === 0 &&
-  r.guidance === undefined
+  r.guidance === undefined &&
+  r.capitalization === undefined &&
+  r.register === undefined &&
+  r.formality === undefined &&
+  r.sentenceEnd === undefined
 
 /**
  * A stable fingerprint of a locale's rules, for the review fingerprint and so
@@ -92,5 +112,10 @@ export function rulesFingerprint(rules: LocaleRules | undefined): string {
   // A file that sets nothing is no file. The defaults rules edit writes are
   // commented out, and opening the editor must not re-review anything.
   if (!rules || isEmpty(rules)) return ''
-  return createHash('sha256').update(JSON.stringify(rules)).digest('hex')
+  // The schema number is left out: it says which keys the file may use, not
+  // what the rules are, so adding schema: 2 to a file changes no cache key.
+  // Stripping it also keeps the hash of every schema-1 file exactly what it
+  // was before the field existed.
+  const { schema: _schema, ...meaning } = rules
+  return createHash('sha256').update(JSON.stringify(meaning)).digest('hex')
 }

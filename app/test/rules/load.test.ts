@@ -79,7 +79,7 @@ guidance: |
   })
 
   it('accepts an empty file as no changes', () => {
-    expect(parseLocaleRules('', 'tr.yaml')).toEqual({ patterns: [] })
+    expect(parseLocaleRules('', 'tr.yaml')).toEqual({ schema: 1, patterns: [] })
   })
 
   it('names the file, line and column of a YAML syntax error', () => {
