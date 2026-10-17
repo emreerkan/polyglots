@@ -3,10 +3,12 @@ import { BUILT_IN_RULES, UNIVERSAL_RULES, findingLabel } from '../../../../app/s
 import { RulesFileError, parseRulesText } from '../../../../app/src/rules/parse.js';
 import type { LocaleRules } from '../../../../app/src/rules/schema.js';
 import { intlTag, localeDisplayName, resolveLocale } from '../../../../app/src/wporg/locales.js';
+import { agentPrompt } from './agent-prompt.js';
 import { debounce } from './debounce.js';
 import { checksFor, compiles, patternProblem, type Check } from './match.js';
 import { probeProblem } from './probe.js';
 import { RULE_EXAMPLES } from './rule-copy.js';
+import { stateFromPasted } from './paste.js';
 import { emptyShare, sendRules, shareBlocker, type ShareFields } from './share.js';
 import { applyAskedLocale, hasContent, loadSaved, save, STEPS } from './store.js';
 import { PATTERN_BUDGET_MS, RegexRunner } from './tester.js';
@@ -109,6 +111,7 @@ export function start(): void {
       : localeInput.value.trim() === ''
         ? 'Any WordPress locale code from translate.wordpress.org.'
         : `“${localeInput.value.trim()}” is not a locale on translate.wordpress.org.`;
+    showAgentPrompt();
   };
   localeInput.value = state.locale;
   localeInput.addEventListener('input', () => {
@@ -160,6 +163,53 @@ export function start(): void {
     }
     load(next);
     say(fetchStatus, `Loaded the published rules for ${wp}. The comments in that file are not carried over.`, 'ok');
+  });
+
+  // ---- Pasting a file: an agent's answer, or a file from elsewhere -------------
+  const pastePanel = $(root, '[data-paste]');
+  const pasteToggle = $<HTMLButtonElement>(root, '[data-paste-toggle]');
+  const pasteText = $<HTMLTextAreaElement>(root, '[data-paste-text]');
+  const showPaste = (open: boolean) => {
+    pastePanel.hidden = !open;
+    pasteToggle.setAttribute('aria-expanded', String(open));
+    if (open) pasteText.focus();
+  };
+  const loadPasted = (text: string) => {
+    const result = stateFromPasted(text, state.locale);
+    if ('error' in result) {
+      say(fetchStatus, `Not loaded: ${result.error}`, 'warn');
+      return;
+    }
+    if (hasContent(state) && !confirm('Replace what you have entered with the pasted file?')) {
+      say(fetchStatus, 'Kept what you had.');
+      return;
+    }
+    load(result.state);
+    pasteText.value = '';
+    showPaste(false);
+    say(
+      fetchStatus,
+      state.locale === ''
+        ? 'Loaded the pasted file. Pick its locale above to name the file.'
+        : 'Loaded the pasted file. Look through the steps, then check it in Review and share.',
+      'ok',
+    );
+  };
+  pasteToggle.addEventListener('click', () => showPaste(pasteToggle.getAttribute('aria-expanded') !== 'true'));
+  $(root, '[data-paste-cancel]').addEventListener('click', () => showPaste(false));
+  $(root, '[data-paste-load]').addEventListener('click', () => loadPasted(pasteText.value));
+  const pasteFile = $<HTMLInputElement>(root, '[data-paste-file]');
+  pasteFile.addEventListener('change', async () => {
+    const file = pasteFile.files?.[0];
+    pasteFile.value = '';
+    if (!file) return;
+    try {
+      pasteText.value = await file.text();
+    } catch {
+      say(fetchStatus, `Could not read ${file.name}.`, 'warn');
+      return;
+    }
+    loadPasted(pasteText.value);
   });
 
   $(root, '[data-reset]').addEventListener('click', () => {
@@ -539,6 +589,61 @@ export function start(): void {
       copyLabel.textContent = 'Selected: press copy';
     }
     setTimeout(() => (copyLabel.textContent = 'Copy'), 1800);
+  });
+
+  // ---- The agent prompt ------------------------------------------------------------
+  // Follows the locale picked in step 1, so the prompt names the language and
+  // the file. The page renders the no-locale prompt, so it reads without this.
+  const agentBox = $(root, '[data-agent]');
+  const agentText = $(root, '[data-agent-text]');
+  const agentFull = $(root, '[data-agent-full]');
+  const agentDialog = $<HTMLDialogElement>(root, '[data-agent-dialog]');
+  let prompt = agentText.textContent ?? '';
+  function showAgentPrompt() {
+    const row = state.locale === '' ? undefined : resolveLocale(state.locale);
+    prompt = agentPrompt({
+      wp: row?.wp ?? '',
+      language: row ? localeDisplayName(row.id) : '',
+      templateUrl: agentBox.dataset.templateUrl!,
+      builderUrl: agentBox.dataset.builderUrl!,
+    });
+    agentText.textContent = prompt;
+    agentFull.textContent = prompt;
+  }
+  const copyPrompt = async (label: HTMLElement, shown: HTMLElement) => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      label.textContent = 'Copied';
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(shown);
+      getSelection()?.removeAllRanges();
+      getSelection()?.addRange(range);
+      label.textContent = 'Selected: press copy';
+    }
+    setTimeout(() => (label.textContent = 'Copy prompt'), 1800);
+  };
+  // The box shows only the top of the prompt, so a selection made there would
+  // not hold all of it: without the clipboard, the dialog opens to select in.
+  $(root, '[data-agent-copy]').addEventListener('click', () => {
+    const label = $(root, '[data-agent-copy-label]');
+    navigator.clipboard?.writeText(prompt).then(
+      () => {
+        label.textContent = 'Copied';
+        setTimeout(() => (label.textContent = 'Copy prompt'), 1800);
+      },
+      () => {
+        agentDialog.showModal();
+        void copyPrompt($(root, '[data-agent-copy-full-label]'), agentFull);
+      },
+    ) ?? (agentDialog.showModal(), void copyPrompt($(root, '[data-agent-copy-full-label]'), agentFull));
+  });
+  $(root, '[data-agent-copy-full]').addEventListener('click', () => void copyPrompt($(root, '[data-agent-copy-full-label]'), agentFull));
+  $(root, '[data-agent-expand]').addEventListener('click', () => agentDialog.showModal());
+  $(root, '[data-agent-close]').addEventListener('click', () => agentDialog.close());
+  // A click on the backdrop lands on the dialog element itself.
+  agentDialog.addEventListener('click', (event) => {
+    if (event.target === agentDialog) agentDialog.close();
   });
 
   // ---- Share ---------------------------------------------------------------------

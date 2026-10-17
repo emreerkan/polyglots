@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 import Icon from '../components/Icon.astro';
 import { WPORG_LOCALES, localeDisplayName, localeId } from '../../../app/src/wporg/locales';
 import { CAPITALIZATION_LIMIT, GUIDANCE_LIMIT, REGISTER_LIMIT } from '../../../app/src/rules/schema';
+import { agentPrompt } from '../components/rules-builder/agent-prompt';
 
 // A client-side tool: the steps below are plain markup, and the script fills
 // the lists and keeps the YAML in step. Nothing leaves the browser unless the
@@ -11,6 +12,11 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
 const locales = WPORG_LOCALES.map((l) => ({ wp: l.wp, name: localeDisplayName(localeId(l.slug, l.set)) }));
 const steps = ['Locale and you', 'Basics', 'Writing style', 'Mistakes', 'Advanced', 'Review and share'];
 const PROMPT_HINT = 'Write in English; the model reads it.';
+// Absolute, because the prompt leaves the site in a person's clipboard. The
+// script fills in the locale; this is what shows before it runs, or without it.
+const siteBase = new URL(base, Astro.site).href;
+const agentUrls = { templateUrl: `${siteBase}rules-builder/template.txt`, builderUrl: `${siteBase}rules-builder/` };
+const initialPrompt = agentPrompt({ wp: '', language: '', ...agentUrls });
 ---
 <Base
   title="Rules builder · polyglots"
@@ -18,6 +24,7 @@ const PROMPT_HINT = 'Write in English; the model reads it.';
   path="rules-builder/"
 >
   <div class="wrap rb" data-rb>
+    <div class="top">
     <header class="intro">
       <p class="eyebrow">ada.tools/polyglots/rules-builder</p>
       <h1>Rules builder</h1>
@@ -27,6 +34,32 @@ const PROMPT_HINT = 'Write in English; the model reads it.';
         you share the file at the end. See <a href={`${base}docs/locale-rules/`}>Locale rules</a> for what each part does.
       </p>
     </header>
+
+    <aside class="agent" aria-labelledby="rb-agent-title" data-agent data-template-url={agentUrls.templateUrl} data-builder-url={agentUrls.builderUrl}>
+      <div class="agent-head">
+        <h2 id="rb-agent-title">Ask your AI agent</h2>
+        <button type="button" class="icon-btn" data-agent-expand aria-label="Show the whole prompt" title="Show the whole prompt"><Icon name="expand" /></button>
+      </div>
+      <p class="help">Give this prompt to ChatGPT, Claude or another agent. Then paste its answer in step 1 with Paste a rules file.</p>
+      <pre class="agent-text" data-agent-text tabindex="0" aria-label="Prompt for your AI agent">{initialPrompt}</pre>
+      <div class="agent-foot">
+        <button type="button" class="btn" data-agent-copy><Icon name="copy" /> <span data-agent-copy-label>Copy prompt</span></button>
+        <a href={agentUrls.templateUrl} target="_blank" rel="noopener">Open the template</a>
+      </div>
+    </aside>
+    </div>
+
+    <dialog class="agent-dialog" data-agent-dialog aria-labelledby="rb-agent-dialog-title">
+      <div class="agent-head">
+        <h2 id="rb-agent-dialog-title">Prompt for your AI agent</h2>
+        <button type="button" class="icon-btn" data-agent-close aria-label="Close"><Icon name="x" /></button>
+      </div>
+      <pre class="agent-full" data-agent-full tabindex="0">{initialPrompt}</pre>
+      <div class="agent-foot">
+        <button type="button" class="btn primary" data-agent-copy-full><Icon name="copy" /> <span data-agent-copy-full-label>Copy prompt</span></button>
+        <a href={agentUrls.templateUrl} target="_blank" rel="noopener">Open the template</a>
+      </div>
+    </dialog>
 
     <noscript><p class="note warn">The rules builder runs in your browser and needs JavaScript.</p></noscript>
 
@@ -55,7 +88,20 @@ const PROMPT_HINT = 'Write in English; the model reads it.';
         </div>
         <div class="row">
           <button type="button" class="btn" data-fetch>Start from the published rules</button>
+          <button type="button" class="btn" data-paste-toggle aria-expanded="false" aria-controls="rb-paste-panel">Paste a rules file</button>
           <button type="button" class="btn quiet" data-reset>Start over</button>
+        </div>
+        <div class="paste" id="rb-paste-panel" data-paste hidden>
+          <div class="field">
+            <label for="rb-paste">A rules file, or your agent's whole answer</label>
+            <textarea id="rb-paste" rows="8" class="mono" spellcheck="false" data-paste-text placeholder="schema: 2"></textarea>
+            <p class="help">It is checked as polyglots reads it. A code block in the answer is found by itself.</p>
+          </div>
+          <div class="row">
+            <button type="button" class="btn primary" data-paste-load>Load this file</button>
+            <label class="btn quiet">Choose a file… <input type="file" accept=".yaml,.yml,.txt,text/plain,application/x-yaml" data-paste-file class="sr-only" /></label>
+            <button type="button" class="btn quiet" data-paste-cancel>Cancel</button>
+          </div>
         </div>
         <p class="status" data-fetch-status aria-live="polite"></p>
       </section>
@@ -242,6 +288,44 @@ const PROMPT_HINT = 'Write in English; the model reads it.';
   .rb [hidden] { display: none !important; }
   .rb { padding-top: 3rem; display: grid; gap: 1.5rem; }
   .rb .intro { max-width: 46rem; }
+  /* The intro and the agent box: side by side where there is room, the box
+     under the intro on a narrow screen. */
+  .rb .top { display: grid; gap: 1.5rem; align-items: start; }
+  @media (min-width: 64rem) { .rb .top { grid-template-columns: minmax(0, 46rem) minmax(18rem, 1fr); gap: 2.5rem; } }
+  .rb .agent {
+    border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg-2);
+    padding: 1rem 1.1rem; display: grid; gap: 0.6rem; min-width: 0;
+  }
+  .rb .agent-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+  .rb .agent-head h2 { font-size: 1.05rem; margin: 0; }
+  .rb .agent .help { margin: 0; }
+  .rb .agent-text, .rb .agent-full {
+    font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere;
+    margin: 0; color: var(--fg); background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 0.75rem;
+  }
+  /* A window on the prompt, fading out at the foot; the dialog shows it whole. */
+  .rb .agent-text {
+    max-height: 13rem; overflow: hidden;
+    mask-image: linear-gradient(to bottom, #000 70%, transparent); -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  }
+  @media (max-width: 40rem) { .rb .agent-text { max-height: 8rem; } }
+  .rb .agent-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem 1rem; font-size: 0.9rem; }
+  .rb .icon-btn {
+    display: inline-grid; place-items: center; width: 2rem; height: 2rem; flex: none; cursor: pointer;
+    color: var(--fg-2); background: transparent; border: 1px solid var(--rule); border-radius: 6px;
+  }
+  .rb .icon-btn:hover { color: var(--fg); border-color: var(--muted); }
+  .rb .icon-btn:focus-visible, .rb .agent-text:focus-visible, .rb .agent-full:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .rb .agent-dialog {
+    width: min(56rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 1.25rem; color: var(--fg);
+    background: var(--bg); border: 1px solid var(--rule); border-radius: var(--radius);
+  }
+  .rb .agent-dialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 0.9rem; }
+  .rb .agent-dialog::backdrop { background: rgb(0 0 0 / 0.55); }
+  .rb .agent-full { overflow: auto; font-size: 0.875rem; }
+  .rb .paste { margin-top: 0.5rem; }
+  .rb .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .rb label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
   .rb h2 { font-size: 1.5rem; }
   .rb h3 { margin-top: 1.75rem; }
   .rb .note.warn { color: var(--warn); }

@@ -285,3 +285,74 @@ test('store: an address locale switches an empty or same-locale state silently',
   assert.equal(unnamed.conflict, undefined)
   assert.equal(applyAskedLocale(emptyBuilderState('de_DE'), undefined).state.locale, 'de_DE')
 })
+
+// ---- The agent prompt, the template it points at, and pasting the answer back
+
+test('agent prompt: names the locale, the file, the template and every key the schema takes', async () => {
+  const { agentPrompt } = await import('../src/components/rules-builder/agent-prompt.js')
+  const { localeRulesSchema } = await import('../../app/src/rules/schema.js')
+  const { BUILT_IN_RULES } = await import('../../app/src/rules/names.js')
+  const prompt = agentPrompt({
+    wp: 'de_DE',
+    language: 'German',
+    templateUrl: 'https://ada.tools/polyglots/rules-builder/template.txt',
+    builderUrl: 'https://ada.tools/polyglots/rules-builder/',
+  })
+  assert.match(prompt, /German \(de_DE\)/)
+  assert.match(prompt, /de_DE\.yaml/)
+  assert.match(prompt, /https:\/\/ada\.tools\/polyglots\/rules-builder\/template\.txt/)
+  // A key the schema gains and the prompt does not mention would have agents
+  // writing files that leave it out, or guessing its shape.
+  for (const key of Object.keys(localeRulesSchema.shape)) assert.ok(prompt.includes(key), `prompt does not mention ${key}`)
+  for (const rule of BUILT_IN_RULES) assert.ok(prompt.includes(rule), `prompt does not mention the rule ${rule}`)
+  assert.match(prompt, /2,500/)
+  assert.match(prompt, /1,500/)
+  assert.match(prompt, /500/)
+})
+
+test('agent prompt: without a locale it asks the agent to find out which one', async () => {
+  const { agentPrompt } = await import('../src/components/rules-builder/agent-prompt.js')
+  const prompt = agentPrompt({ wp: '', language: '', templateUrl: 'https://x/template.txt', builderUrl: 'https://x/' })
+  assert.match(prompt, /Ask me which WordPress locale/)
+  assert.doesNotMatch(prompt, /undefined|\(\)/)
+})
+
+test('template: every section of the rules file, for no locale in particular', async () => {
+  const { rulesTemplate } = await import('../src/lib/rules-template.js')
+  const text = rulesTemplate()
+  for (const key of ['schema: 2', 'rules:', 'glossaryStemRatio', 'properNouns', 'mistakes', 'patterns', 'guidance', 'capitalization', 'register', 'formality', 'sentenceEnd', 'notSource']) {
+    assert.ok(text.includes(key), `template lacks ${key}`)
+  }
+  assert.match(text, /^# polyglots rules for <wp_code>$/m)
+  assert.match(text, /polyglots rules check <wp_code>/)
+  // Rendered for some locale and then made generic: no trace of it may stay.
+  assert.doesNotMatch(text, /\b[a-z]{2,3}_[A-Z]{2}\b/)
+  // As written, it is a valid file that changes nothing.
+  parseRulesText(text, 'template.yaml')
+})
+
+test('paste: a valid file becomes the builder state, under the chosen locale', async () => {
+  const { stateFromPasted } = await import('../src/components/rules-builder/paste.js')
+  const result = stateFromPasted('schema: 2\nformality: formal\nmistakes:\n  - wrong: e-mail\n    right: E-Mail\n', 'de_DE')
+  assert.ok('state' in result)
+  assert.equal(result.state.locale, 'de_DE')
+  assert.equal(result.state.formality, 'formal')
+  assert.equal(result.state.mistakes[0]!.wrong, 'e-mail')
+})
+
+test('paste: an agent answer wrapped in a code fence still loads', async () => {
+  const { stateFromPasted } = await import('../src/components/rules-builder/paste.js')
+  const result = stateFromPasted('Here is the file:\n\n```yaml\nschema: 2\nformality: informal\n```\n', 'de_DE')
+  assert.ok('state' in result)
+  assert.equal(result.state.formality, 'informal')
+})
+
+test('paste: an invalid or empty file says why and loads nothing', async () => {
+  const { stateFromPasted } = await import('../src/components/rules-builder/paste.js')
+  const bad = stateFromPasted('schema: 2\nrules:\n  enable: [nope]\n', 'de_DE')
+  assert.ok('error' in bad)
+  assert.match(bad.error, /nope/)
+  const empty = stateFromPasted('   \n', 'de_DE')
+  assert.ok('error' in empty)
+  assert.match(empty.error, /empty/i)
+})

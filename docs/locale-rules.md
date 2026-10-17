@@ -71,6 +71,15 @@ it works over SSH too. The app's Locale rules screen has the same link.
 - **Start from the published rules** loads your locale's file from
   polyglots-data, so you change your team's rules rather than start over.
   Its comments are not carried over.
+- **Paste a rules file** loads a file from anywhere: one you have, or your
+  AI agent's answer. A code block in the answer is found by itself, and a
+  file polyglots would refuse is not loaded.
+- **Ask your AI agent**, beside the introduction, is a prompt for ChatGPT,
+  Claude or another agent. It names your locale, points the agent at the
+  template polyglots writes for a new file
+  ([template.txt](https://ada.tools/polyglots/rules-builder/template.txt)),
+  and tells it to ask about your team's conventions instead of inventing
+  them. Paste its answer back with **Paste a rules file**.
 - The file is checked as you type, with the same checks polyglots runs, and
   shown in full in the last step. Download it, or copy it.
 - A tester runs your mistakes and patterns on a sample source and
