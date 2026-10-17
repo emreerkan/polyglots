@@ -148,6 +148,12 @@ export interface ProviderSpec {
   buildArgs(schema: string, opts: AgentRunOptions): string[]
   /** The provider's own envelope, reduced to the object the schema asked for. */
   readEnvelope(stdout: string): unknown
+  /**
+   * Whether stdout already holds the agent's whole answer, so the run can be
+   * read and the process killed without waiting for it to exit. Only for an
+   * agent known to hang after answering; absent means wait for the exit.
+   */
+  answerComplete?(stdout: string): boolean
 }
 
 function envelopeOf(stdout: string, provider: string): Record<string, unknown> {
@@ -330,6 +336,27 @@ const antigravity: ProviderSpec = {
     args.push('--print-timeout', printTimeout(opts.timeoutMs ?? antigravity.defaultTimeoutMs))
     if (opts.model) args.push('--model', opts.model)
     return args
+  },
+  /**
+   * antigravity 1.3.6 and 1.4.0 can write their whole envelope and then never
+   * exit: run on a captured 25-entry review prompt four times, it answered
+   * every time and hung three times, past any limit, ignoring SIGTERM. Waiting
+   * for the exit lost each such batch to the twenty-minute limit, then lost
+   * the retry the same way, and left its entries unreviewed.
+   *
+   * The envelope is one JSON object on one line, newline-terminated, and
+   * always carries a status, so a line that parses as an object with a status
+   * is the end of the answer. Any status counts: an error envelope is as final
+   * as a success, and readEnvelope reports it the same way either way.
+   */
+  answerComplete(stdout) {
+    if (!stdout.endsWith('\n')) return false
+    try {
+      const env: unknown = JSON.parse(stdout)
+      return typeof env === 'object' && env !== null && typeof (env as { status?: unknown }).status === 'string'
+    } catch {
+      return false
+    }
   },
   // { conversation_id, status, response: string, error?, structured_output?, usage }
   readEnvelope(stdout) {

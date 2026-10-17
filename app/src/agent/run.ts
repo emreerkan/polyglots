@@ -154,7 +154,18 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
     child.stdin.on('error', () => {})
     child.stdin.end(prompt)
 
-    child.stdout.setEncoding('utf8').on('data', (chunk: string) => (stdout += chunk))
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+      stdout += chunk
+      // An agent that has printed its whole answer is done, whether or not it
+      // ever exits (see answerComplete). It is killed outright: the one that
+      // needs this ignores SIGTERM while it hangs.
+      if (settled || !spec.answerComplete || !chunk.endsWith('\n') || !spec.answerComplete(stdout)) return
+      settled = true
+      clearTimeout(timer)
+      if (plan.shell) killTree(child.pid)
+      else child.kill('SIGKILL')
+      resolve({ stdout, stderr })
+    })
     child.stderr.setEncoding('utf8').on('data', (chunk: string) => (stderr += chunk))
 
     child.on('error', (err) => {
