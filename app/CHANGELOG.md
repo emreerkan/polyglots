@@ -14,6 +14,10 @@ Entries say what changed. For why and how, read the commit.
 
 - Review and translate keep every failed batch attempt, with its reason and duration, in `jobs.db` (`batch_failure`).
 
+### Fixed
+
+- Quitting the app or stopping a run with Ctrl+C or a kill no longer leaves a running agent (such as a hung `agy`) behind.
+
 ## [1.0.1] - 2026-10-17
 
 ### Fixed

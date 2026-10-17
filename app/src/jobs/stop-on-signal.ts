@@ -1,3 +1,5 @@
+import { killAgents } from '../agent/children.js'
+
 // A run killed by a signal leaves its row at running, which the reaper later
 // files as abandoned, and stats counts that beside crashes. SIGINT and SIGTERM
 // are someone choosing to stop the run, Ctrl+C above all, and what it finished
@@ -37,6 +39,9 @@ export function stopOnSignal({ busy, stop, raise = (signal) => process.kill(proc
         // The reaper still ends the row, as abandoned. A signal is no place to hang.
       }
     }
+    // The signal's default action ends the process without running exit
+    // handlers, so the agents it started are killed here or not at all.
+    killAgents()
     raise(signal)
   }
   for (const signal of STOP_SIGNALS) process.on(signal, onSignal)

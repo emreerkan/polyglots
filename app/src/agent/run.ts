@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { findOnPath, killTree, spawnPlan, type SpawnPlan } from '../spawn-plan.js'
+import { trackAgent } from './children.js'
 import {
   AgentError,
   providerSpec,
@@ -119,6 +120,8 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
+    // Killed if this process ends first, so a hung agent is never left behind.
+    trackAgent(child)
     let stdout = ''
     let stderr = ''
     let settled = false

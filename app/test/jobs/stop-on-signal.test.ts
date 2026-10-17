@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { spawn } from 'node:child_process'
+import { liveAgents, trackAgent } from '../../src/agent/children.js'
 import { stopOnSignal } from '../../src/jobs/stop-on-signal.js'
 
 // Signals are emitted, never sent: emitting runs the listeners without the
@@ -16,6 +18,18 @@ describe('stopOnSignal', () => {
     })
     process.emit(sig, sig)
     expect(order).toEqual(['stop', `raise ${sig}`])
+  })
+
+  // Ctrl+C or a kill during a run ends this process by the default action,
+  // which runs no exit handler, so the agents are killed here.
+  it('kills the running agents before sending the signal on', async () => {
+    const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"], { stdio: 'ignore' })
+    trackAgent(child)
+    const ended = new Promise((done) => child.once('exit', (_c, signal) => done(signal)))
+    unwatch = stopOnSignal({ busy: () => false, stop: () => {}, raise: () => {} })
+    process.emit('SIGTERM', 'SIGTERM')
+    expect(await ended).toBe('SIGKILL')
+    expect(liveAgents()).toBe(0)
   })
 
   it('records nothing when no run is going, and still sends the signal on', () => {
