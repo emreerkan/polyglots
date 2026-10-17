@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-17
+
 ### Fixed
 
 - `rules fetch` and `tm fetch` name a locale the manifest lacks by its WordPress code (`tr_TR (tr)`), not the bare slug.
