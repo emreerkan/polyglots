@@ -167,12 +167,12 @@ describe('LocaleRules: fetch from polyglots-data', () => {
     await waitForText(view.lastFrame, /Locale/)
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, /Built-in rules/)
-    // Glossary match, then → to change the ratio: an unsaved edit.
+    // Formality, then ↓ to choose formal: an unsaved edit.
     view.stdin.write(keys.down)
     await tick()
     view.stdin.write(keys.enter)
-    await waitForText(view.lastFrame, /How much of a glossary term/)
-    view.stdin.write(keys.right)
+    await waitForText(view.lastFrame, /How a draft addresses the reader/)
+    view.stdin.write(keys.down)
     await tick()
     view.stdin.write(keys.esc)
     await tick(ESC_DELAY)

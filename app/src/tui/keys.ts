@@ -272,6 +272,17 @@ export const KEYS = {
     move: { keys: '↑↓', does: 'choose a proper noun list', match: vertical },
     open: { keys: 'enter', does: 'open the list', match: enter },
   },
+  formality: {
+    choose: { keys: '↑↓', does: 'choose not set, formal or informal', match: vertical },
+  },
+  register: {
+    move: { keys: '↑↓', does: 'choose the review or the draft register', match: vertical },
+    open: { keys: 'enter', does: 'edit that register', match: enter },
+  },
+  sentenceEnd: {
+    move: { keys: '↑↓', does: 'move through the sentence-end settings', match: vertical },
+    open: { keys: 'space  enter', does: 'turn "no final mark" on or off, or open a setting', match: any(enter, space) },
+  },
   leave: {
     save: { keys: 's', does: 'with unsaved changes: save them', match: char('s') },
     discard: { keys: 'd', does: 'with unsaved changes: leave without saving', match: char('d') },
@@ -309,7 +320,7 @@ export const KEYS = {
     sync: widget('enter', 'sync'),
     saveKey: widget('enter', 'save and go to the next key'),
     templateName: widget('enter', 'create the template with that name'),
-    guidanceText: widget('type  ←→↑↓  enter  ctrl+x', 'in the guidance: edit the text, enter a new line, ctrl+x clear it all, ctrl+z undo'),
+    guidanceText: widget('type  ←→↑↓  enter  ctrl+x', 'in guidance, capitalization or a register: edit the text, enter a new line, ctrl+x clear it all, ctrl+z undo'),
     templateText: widget('type  ←→↑↓  enter  ctrl+x', 'edit the text: enter a new line, ctrl+x clear it all, ctrl+z undo, ctrl+y redo'),
     write: widget('enter', 'write the file'),
     submitForm: widget('enter', 'save the form'),
@@ -451,6 +462,11 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
       KEYS.ratio.reset,
       KEYS.nouns.move,
       KEYS.nouns.open,
+      KEYS.formality.choose,
+      KEYS.register.move,
+      KEYS.register.open,
+      KEYS.sentenceEnd.move,
+      KEYS.sentenceEnd.open,
       KEYS.listEditor.move,
       KEYS.listEditor.add,
       KEYS.listEditor.edit,

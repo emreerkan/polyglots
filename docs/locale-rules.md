@@ -93,6 +93,9 @@ creating it first if needed. The new file spells out what the code already
 does for that locale, commented out, with an example of every section. A file
 that sets nothing changes nothing.
 
+The app's **Locale rules** screen edits every section too, in the rules
+builder's order, and keeps the comments you wrote in the file.
+
 ```yaml
 # The rules format version. polyglots refuses a file newer than it reads.
 schema: 2

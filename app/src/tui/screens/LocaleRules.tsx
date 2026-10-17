@@ -4,7 +4,7 @@ import { Box, Text } from 'ink'
 import { UNIVERSAL_RULES } from '../../audit/rules/profiles.js'
 import { openRulesDraft, saveRulesDraft, type RulesDraft, type RulesValue } from '../../rules/edit.js'
 import { BUILT_IN_RULES, findingLabel } from '../../rules/names.js'
-import { GUIDANCE_LIMIT } from '../../rules/schema.js'
+import { CAPITALIZATION_LIMIT, GUIDANCE_LIMIT, REGISTER_LIMIT, SENTENCE_REGEX_LIMIT } from '../../rules/schema.js'
 import { resolveLocale, wpCodeOf } from '../../wporg/locales.js'
 import { rulesBuilderUrl } from '../../rules/builder-url.js'
 import { RulesFileError } from '../../rules/parse.js'
@@ -28,9 +28,48 @@ export interface LocaleRulesProps {
   onBack: () => void
 }
 
-type Stage = 'pick' | 'overview' | 'rules' | 'ratio' | 'nouns' | 'nounList' | 'mistakes' | 'patterns' | 'guidance' | 'try' | 'copy' | 'fetch' | 'builder' | 'leave'
+type Stage =
+  | 'pick'
+  | 'overview'
+  | 'rules'
+  | 'formality'
+  | 'register'
+  | 'registerText'
+  | 'capitalization'
+  | 'ratio'
+  | 'nouns'
+  | 'nounList'
+  | 'mistakes'
+  | 'patterns'
+  | 'guidance'
+  | 'sentenceEnd'
+  | 'notEnding'
+  | 'answers'
+  | 'try'
+  | 'copy'
+  | 'fetch'
+  | 'builder'
+  | 'leave'
 
-const SECTION_STAGE: Stage[] = ['rules', 'ratio', 'nouns', 'mistakes', 'patterns', 'guidance', 'try', 'copy', 'fetch', 'builder']
+// In the rules builder's order, so a person who has used one finds each
+// section where the other put it: basics, writing style, mistakes, then
+// what most locales never touch.
+const SECTION_STAGE: Stage[] = [
+  'rules',
+  'formality',
+  'register',
+  'capitalization',
+  'guidance',
+  'nouns',
+  'mistakes',
+  'patterns',
+  'sentenceEnd',
+  'ratio',
+  'try',
+  'copy',
+  'fetch',
+  'builder',
+]
 // What the overview offers for a file that does not parse: the two ways to a
 // valid one that do not start from its contents. Editing would start from a
 // value the file does not hold, and saving it would write over whatever the
@@ -50,6 +89,52 @@ const NOUN_LISTS: { key: NounList; label: string }[] = [
 type Mistake = RulesValue['mistakes'][number]
 
 type Pattern = RulesValue['patterns'][number]
+
+type Formality = 'formal' | 'informal' | undefined
+const FORMALITIES: { value: Formality; label: string }[] = [
+  { value: undefined, label: 'Not set' },
+  { value: 'formal', label: 'Formal' },
+  { value: 'informal', label: 'Informal' },
+]
+
+type RegisterPart = 'audit' | 'translate'
+const REGISTER_PARTS: { key: RegisterPart; label: string }[] = [
+  { key: 'audit', label: 'For the review prompt' },
+  { key: 'translate', label: 'For the draft prompt' },
+]
+// A file may give one line for both prompts. Shown under both, and written
+// back as two only once one of them is edited, so opening and saving the
+// screen leaves a file's single line as it was.
+const registerParts = (register: RulesValue['register']): Partial<Record<RegisterPart, string>> =>
+  register === undefined ? {} : typeof register === 'string' ? { audit: register, translate: register } : register
+
+type SentenceEnd = NonNullable<RulesValue['sentenceEnd']>
+type Answer = NonNullable<SentenceEnd['answers']>[number]
+const SENTENCE_END_ROWS = 3
+
+const describeSentenceEnd = (end: SentenceEnd | undefined) => {
+  const parts = [
+    ...(end?.unmarked ? ['no final mark'] : []),
+    ...(end?.notEnding !== undefined ? ['a mark that is not a stop'] : []),
+    ...(end?.answers?.length ? [`${end.answers.length} final mark${end.answers.length === 1 ? '' : 's'}`] : []),
+  ]
+  return parts.length > 0 ? parts.join(' · ') : 'not set'
+}
+
+const describeRegister = (register: RulesValue['register']) => {
+  const parts = registerParts(register)
+  if (parts.audit === undefined && parts.translate === undefined) return 'not set'
+  return `review ${parts.audit === undefined ? 'not set' : 'set'} · draft ${parts.translate === undefined ? 'not set' : 'set'}`
+}
+
+const sentenceRegex = (v: string) =>
+  v === '' ? undefined : v.length > SENTENCE_REGEX_LIMIT ? `longer than ${SENTENCE_REGEX_LIMIT} characters` : !compiles(v) ? 'not a valid regular expression' : undefined
+
+const ANSWER_FIELDS = [
+  { key: 'text', label: 'Final mark (regex)', required: true, validate: sentenceRegex },
+  { key: 'source', label: 'Answers this source mark (regex, optional)', validate: sentenceRegex },
+]
+const describeAnswer = (a: Answer) => `/${a.text}/${a.source !== undefined ? `  answers /${a.source}/` : ''}`
 
 const compiles = (source: string) => {
   try {
@@ -159,6 +244,8 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   const [cursor, setCursor] = useState(0)
   const [ruleCursor, setRuleCursor] = useState(0)
   const [nounCursor, setNounCursor] = useState(0)
+  const [registerCursor, setRegisterCursor] = useState(0)
+  const [endCursor, setEndCursor] = useState(0)
   const [trial, setTrial] = useState<TryResult | string>()
   const [glossary, setGlossary] = useState<GlossaryEntry[]>()
   const [copyResult, setCopyResult] = useState<{ ok: boolean; lines: string[] }>()
@@ -183,6 +270,9 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
       ? new Set([...UNIVERSAL_RULES, ...value.rules.enable].filter((r) => !value.rules!.disable.includes(r)))
       : new Set(draft?.builtIn.rules ?? [])
   const ratio = value.glossaryStemRatio ?? draft?.builtIn.glossaryStemRatio ?? 0.7
+  // Counted as the limit counts it: the final newline a | block keeps is not
+  // part of the text.
+  const capitalizationLength = value.capitalization?.trimEnd().length ?? 0
 
   const open = (raw: string) => {
     const resolved = resolveLocale(raw)
@@ -245,6 +335,47 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
     setValue({ ...value, properNouns: { ...(value.properNouns ?? {}), [list]: names } })
     setNotice(undefined)
   }
+
+  // A text emptied in its editor takes the key out of the file, as guidance
+  // does, so the built-in wording comes back rather than a blank one.
+  const setText = (key: 'capitalization', text: string) => {
+    const { [key]: _, ...rest } = value
+    setValue(text === '' ? rest : { ...value, [key]: text })
+    setNotice(undefined)
+  }
+  const setFormality = (formality: Formality) => {
+    const { formality: _, ...rest } = value
+    setValue(formality === undefined ? rest : { ...value, formality })
+    setNotice(undefined)
+  }
+  const register = registerParts(value.register)
+  const setRegister = (part: RegisterPart, text: string) => {
+    const { [part]: _, ...others } = register
+    const parts = text === '' ? others : { ...others, [part]: text }
+    const { register: _r, ...rest } = value
+    setValue(Object.keys(parts).length === 0 ? rest : { ...value, register: parts })
+    setNotice(undefined)
+  }
+  const end: SentenceEnd = value.sentenceEnd ?? {}
+  // Only what is set reaches the file: unmarked is true or absent, and an
+  // empty list or an empty section is left out rather than written empty.
+  const setEnd = (next: SentenceEnd) => {
+    const kept: SentenceEnd = {
+      ...(next.answers?.length ? { answers: next.answers } : {}),
+      ...(next.unmarked ? { unmarked: true as const } : {}),
+      ...(next.notEnding !== undefined && next.notEnding !== '' ? { notEnding: next.notEnding } : {}),
+    }
+    const { sentenceEnd: _, ...rest } = value
+    setValue(Object.keys(kept).length === 0 ? rest : { ...value, sentenceEnd: kept })
+    setNotice(undefined)
+  }
+  const openEndRow = () => {
+    if (endCursor === 0) {
+      const { unmarked: _, ...rest } = end
+      setEnd(end.unmarked ? rest : { ...end, unmarked: true })
+    } else setStage(endCursor === 1 ? 'notEnding' : 'answers')
+  }
+  const formalityIndex = Math.max(0, FORMALITIES.findIndex((f) => f.value === value.formality))
 
   // One listener, every stage: what a key does depends on the stage, and only
   // the live stage's handlers are set. The list editors, the forms and the
@@ -320,7 +451,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   useKeys({
     back: {
       esc:
-        copyNotice || on('nouns', 'rules', 'ratio', 'leave', 'builder') || (on('fetch') && !writing)
+        copyNotice || on('nouns', 'rules', 'ratio', 'leave', 'builder', 'formality', 'register', 'sentenceEnd') || (on('fetch') && !writing)
           ? toOverview
           : on('pick')
             ? onBack
@@ -373,9 +504,60 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
       move: on('nouns') ? () => setNounCursor((c) => (c === 0 ? 1 : 0)) : undefined,
       open: on('nouns') ? () => setStage('nounList') : undefined,
     },
+    formality: {
+      choose: on('formality')
+        ? (_ch, key) =>
+            setFormality(FORMALITIES[key.upArrow ? Math.max(0, formalityIndex - 1) : Math.min(FORMALITIES.length - 1, formalityIndex + 1)]!.value)
+        : undefined,
+    },
+    register: {
+      move: on('register') ? () => setRegisterCursor((c) => (c === 0 ? 1 : 0)) : undefined,
+      open: on('register') ? () => setStage('registerText') : undefined,
+    },
+    sentenceEnd: {
+      move: on('sentenceEnd')
+        ? (_ch, key) =>
+            key.upArrow ? setEndCursor((c) => Math.max(0, c - 1)) : setEndCursor((c) => Math.min(SENTENCE_END_ROWS - 1, c + 1))
+        : undefined,
+      open: on('sentenceEnd') ? openEndRow : undefined,
+    },
   })
 
   const marker = (selected: boolean) => (selected ? '❯ ' : '  ')
+  const sectionLabel = (section: Stage): string => {
+    switch (section) {
+      case 'rules':
+        return `Built-in rules     ${activeRules().size} on`
+      case 'formality':
+        return `Formality          ${value.formality ?? 'not set'}`
+      case 'register':
+        return `Register           ${describeRegister(value.register)}`
+      case 'capitalization':
+        return `Capitalization     ${capitalizationLength} of ${CAPITALIZATION_LIMIT} characters`
+      case 'guidance':
+        return `Guidance           ${value.guidance?.length ?? 0} of ${GUIDANCE_LIMIT} characters`
+      case 'nouns':
+        return `Proper nouns       ${nouns('always').length} always · ${nouns('dateOnly').length} date-only`
+      case 'mistakes':
+        return `Common mistakes    ${value.mistakes.length}`
+      case 'patterns':
+        return `Patterns           ${value.patterns.length}`
+      case 'sentenceEnd':
+        return `Sentence ends      ${describeSentenceEnd(value.sentenceEnd)}`
+      case 'ratio':
+        return `Glossary match     ${ratio.toFixed(2)}`
+      case 'try':
+        return 'Try the rules      check a sample against the rules as edited'
+      case 'copy':
+        return 'Copy to another locale'
+      case 'fetch':
+        return 'Fetch from polyglots-data'
+      case 'builder':
+        return 'Open the rules builder in your browser'
+      default:
+        return section
+    }
+  }
   const header = draft || broken ? `${wpCodeOf(id) ?? id} (${id})` : ''
 
   return (
@@ -421,22 +603,9 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
 
       {draft && (stage === 'overview' || stage === 'leave') && (
         <>
-          <Text>
-            {marker(cursor === 0)}Built-in rules     {activeRules().size} on
-          </Text>
-          <Text>
-            {marker(cursor === 1)}Glossary match     {ratio.toFixed(2)}
-          </Text>
-          <Text>
-            {marker(cursor === 2)}Proper nouns       {nouns('always').length} always · {nouns('dateOnly').length} date-only
-          </Text>
-          <Text>{`${marker(cursor === 3)}Common mistakes    ${value.mistakes.length}`}</Text>
-          <Text>{`${marker(cursor === 4)}Patterns           ${value.patterns.length}`}</Text>
-          <Text>{`${marker(cursor === 5)}Guidance           ${value.guidance?.length ?? 0} of ${GUIDANCE_LIMIT} characters`}</Text>
-          <Text>{`${marker(cursor === 6)}Try the rules      check a sample against the rules as edited`}</Text>
-          <Text>{`${marker(cursor === 7)}Copy to another locale`}</Text>
-          <Text>{`${marker(cursor === 8)}Fetch from polyglots-data`}</Text>
-          <Text>{`${marker(cursor === 9)}Open the rules builder in your browser`}</Text>
+          {SECTION_STAGE.map((section, i) => (
+            <Text key={section}>{`${marker(cursor === i)}${sectionLabel(section)}`}</Text>
+          ))}
           {dirty && (
             <Text color="yellow">
               Saving changes the rules for {id}: the next review of every {id} file starts over.
@@ -564,6 +733,96 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
           </Text>
           <Hint>enter new line · ctrl+x clear · ctrl+z undo · esc back to the overview</Hint>
         </>
+      )}
+
+      {draft && stage === 'capitalization' && (
+        <>
+          <Text>Capitalization, for the prompts where title-case runs</Text>
+          <Text dimColor>One "- " line per point; {'{language}'} becomes the language's name. Write in English; the model reads it.</Text>
+          <MultilineInput value={value.capitalization ?? ''} onChange={(text) => setText('capitalization', text)} onDone={() => setStage('overview')} />
+          <TextCount length={capitalizationLength} limit={CAPITALIZATION_LIMIT} />
+          <Hint>enter new line · ctrl+x clear · ctrl+z undo · esc back to the overview</Hint>
+        </>
+      )}
+
+      {draft && stage === 'formality' && (
+        <>
+          <Text>How a draft addresses the reader</Text>
+          {FORMALITIES.map((f, i) => (
+            <Text key={f.label}>{`${marker(i === formalityIndex)}${f.label}`}</Text>
+          ))}
+          <Hint>↑↓ choose · esc back to the overview</Hint>
+        </>
+      )}
+
+      {draft && stage === 'register' && (
+        <>
+          <Text dimColor>
+            The tone and form of address. Leave both empty for the register that is standard in WordPress for your language.
+          </Text>
+          {REGISTER_PARTS.map((part, i) => (
+            <Text key={part.key}>
+              {marker(i === registerCursor)}
+              {part.label.padEnd(26)}
+              <Text dimColor>{`${register[part.key]?.length ?? 0} of ${REGISTER_LIMIT}`}</Text>
+            </Text>
+          ))}
+          <Hint>↑↓ move · enter edit · esc back to the overview</Hint>
+        </>
+      )}
+
+      {draft && stage === 'registerText' && (
+        <>
+          <Text>{`Register ${REGISTER_PARTS[registerCursor]!.label.toLowerCase()}`}</Text>
+          <Text dimColor>Write in English; the model reads it.</Text>
+          <MultilineInput
+            value={register[REGISTER_PARTS[registerCursor]!.key] ?? ''}
+            onChange={(text) => setRegister(REGISTER_PARTS[registerCursor]!.key, text)}
+            onDone={() => setStage('register')}
+          />
+          <TextCount length={register[REGISTER_PARTS[registerCursor]!.key]?.length ?? 0} limit={REGISTER_LIMIT} />
+          <Hint>enter new line · ctrl+x clear · ctrl+z undo · esc back</Hint>
+        </>
+      )}
+
+      {draft && stage === 'sentenceEnd' && (
+        <>
+          <Text dimColor>For scripts whose final mark is not a full stop. Each value is a regular expression.</Text>
+          <Text>{`${marker(endCursor === 0)}[${end.unmarked ? 'x' : ' '}] The language writes no final mark`}</Text>
+          <Text>{`${marker(endCursor === 1)}Not a stop         ${end.notEnding ?? 'not set'}`}</Text>
+          <Text>{`${marker(endCursor === 2)}Final marks        ${end.answers?.length ?? 0}`}</Text>
+          <Hint>↑↓ move · space or enter toggle or open · esc back to the overview</Hint>
+        </>
+      )}
+
+      {draft && stage === 'notEnding' && (
+        <>
+          <Text>A mark that looks like a full stop and is not one</Text>
+          <Form
+            fields={[{ key: 'notEnding', label: 'Regex', validate: sentenceRegex }]}
+            initial={{ notEnding: end.notEnding ?? '' }}
+            onCancel={() => setStage('sentenceEnd')}
+            onSubmit={(v) => {
+              const { notEnding: _, ...rest } = end
+              setEnd(v.notEnding ? { ...rest, notEnding: v.notEnding } : rest)
+              setStage('sentenceEnd')
+            }}
+          />
+        </>
+      )}
+
+      {draft && stage === 'answers' && (
+        <ListEditor<Answer>
+          title="Final marks"
+          items={end.answers ?? []}
+          empty="No final marks. Add the marks that answer a source's full stop, such as ։ or ።."
+          describe={describeAnswer}
+          fields={ANSWER_FIELDS}
+          toForm={(a) => ({ text: a.text, source: a.source ?? '' })}
+          fromForm={(v) => ({ text: v.text!, ...(v.source ? { source: v.source } : {}) })}
+          onChange={(answers) => setEnd({ ...end, answers })}
+          onBack={() => setStage('sentenceEnd')}
+        />
       )}
 
       {draft && stage === 'copy' && (
@@ -765,5 +1024,13 @@ function RuleDetail({ rule }: { rule: string | undefined }) {
       <Text bold>{label.name}</Text>
       <Text dimColor>{label.description}</Text>
     </Box>
+  )
+}
+
+function TextCount({ length, limit }: { length: number; limit: number }) {
+  return (
+    <Text color={length > limit ? 'red' : undefined} dimColor={length <= limit}>
+      {`${length} of ${limit} characters${length > limit ? ': too long to save' : ''}`}
+    </Text>
   )
 }

@@ -7,7 +7,7 @@ import { builtInProperNounsFor, type ProperNouns } from '../audit/rules/proper-n
 import type { Locale } from '../types.js'
 import { renderDefaultRules } from './defaults.js'
 import { localeRulesFile, parseLocaleRules } from './load.js'
-import { localeRulesSchema, type RawLocaleRules } from './schema.js'
+import { localeRulesSchema, SCHEMA_2_KEYS, type RawLocaleRules } from './schema.js'
 
 // The sections a person edits, in the form they write them: mistakes and
 // patterns kept apart, a regex as its source text, guidance as typed.
@@ -27,7 +27,9 @@ export interface RulesDraft {
   builtIn: { rules: string[]; glossaryStemRatio: number; properNouns: ProperNouns }
 }
 
-const SECTIONS = ['rules', 'glossaryStemRatio', 'properNouns', 'mistakes', 'patterns', 'guidance'] as const
+const SECTIONS = ['rules', 'glossaryStemRatio', 'properNouns', 'mistakes', 'patterns', 'guidance', ...SCHEMA_2_KEYS] as const
+// Prompt text a person writes as several lines, one point per line.
+const PROSE = new Set<string>(['guidance', 'capitalization'])
 
 const clean = (value: RulesValue): RulesValue =>
   Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as RulesValue
@@ -87,7 +89,7 @@ export async function saveRulesDraft(draft: RulesDraft, next: RulesValue): Promi
     if (JSON.stringify(before) === JSON.stringify(after)) continue
     if (empty(after)) {
       doc.delete(key)
-    } else if (key === 'guidance' && typeof after === 'string' && after.includes('\n')) {
+    } else if (PROSE.has(key) && typeof after === 'string' && after.includes('\n')) {
       const node = new Scalar(after)
       node.type = Scalar.BLOCK_LITERAL
       doc.set(key, node)
@@ -96,14 +98,15 @@ export async function saveRulesDraft(draft: RulesDraft, next: RulesValue): Promi
     }
   }
 
-  // The editor offers "When source lacks", which only a schema-2 file may
-  // use, but has no field for the schema itself, and most hand-written files
-  // predate the schema line. Refusing such a save would send the person out
+  // The editor offers "When source lacks" and the four schema-2 sections,
+  // which only a schema-2 file may use, but has no field for the schema
+  // itself, and most hand-written files predate the schema line. Refusing such a save would send the person out
   // to add one line by hand, so the line is added for them, at the top where
   // the loader's message says it belongs. It is added only when something in
   // the saved value needs it: declaring 2 on a file that does not use it
   // would make an older polyglots refuse a file it can read.
-  const needsSchema2 = next.patterns.some((p) => p.when?.notSource !== undefined)
+  const needsSchema2 =
+    SCHEMA_2_KEYS.some((key) => next[key] !== undefined) || next.patterns.some((p) => p.when?.notSource !== undefined)
   const declared = doc.get('schema')
   if (needsSchema2 && !(typeof declared === 'number' && declared >= 2)) {
     if (doc.has('schema')) doc.set('schema', 2)

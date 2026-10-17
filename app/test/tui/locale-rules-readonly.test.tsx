@@ -68,7 +68,7 @@ describe('LocaleRules: trying the rules', () => {
     await waitForText(view.lastFrame, /Locale/)
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, /Built-in rules/)
-    for (let i = 0; i < 10 && !/❯ Try the rules/.test(view.lastFrame()); i++) {
+    for (let i = 0; i < 20 && !/❯ Try the rules/.test(view.lastFrame()); i++) {
       view.stdin.write(keys.down)
       await tick()
     }

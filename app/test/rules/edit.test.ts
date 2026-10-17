@@ -160,6 +160,40 @@ describe('saveRulesDraft', () => {
     expect(await readFile(localeRulesFile('tr'), 'utf8')).not.toMatch(/^schema:/m)
   })
 
+  // The four schema-2 sections the rules builder edits. The menu edits them
+  // too, so the save has to write them, and to declare the schema they need.
+  it('writes capitalization, formality, register and sentenceEnd, and declares schema 2', async () => {
+    await writeRules(HAND_WRITTEN)
+    const draft = openRulesDraft('tr')
+    await saveRulesDraft(draft, {
+      ...draft.value,
+      capitalization: '- Sentence case.\n- Never title case.',
+      formality: 'formal',
+      register: { audit: '- Address the reader as siz.\n- No slang.', translate: '- Use siz.' },
+      sentenceEnd: { unmarked: true, notEnding: 'X\\.$', answers: [{ text: '։', source: '\\.' }] },
+    })
+    const text = await readFile(localeRulesFile('tr'), 'utf8')
+    expect(text.match(/^schema:.*$/gm)).toEqual(['schema: 2'])
+    expect(text).toContain('# My own notes about this file.')
+    // Written as a block, the way a person writes several prompt lines.
+    expect(text).toMatch(/^capitalization: \|/m)
+    const rules = loadLocaleRules('tr')!
+    expect(rules.capitalization).toBe('- Sentence case.\n- Never title case.\n')
+    expect(rules.formality).toBe('formal')
+    expect(rules.register).toEqual({ audit: '- Address the reader as siz.\n- No slang.', translate: '- Use siz.' })
+    expect(rules.sentenceEnd).toEqual({ unmarked: true, notEnding: 'X\\.$', answers: [{ text: '։', source: '\\.' }] })
+    expect(openRulesDraft('tr').value.formality).toBe('formal')
+  })
+
+  it('removes a schema-2 section that was cleared', async () => {
+    await writeRules('schema: 2\nformality: informal\nregister: Use sen.\n')
+    const draft = openRulesDraft('tr')
+    const { formality: _f, register: _r, ...rest } = draft.value
+    await saveRulesDraft(draft, rest)
+    const text = await readFile(localeRulesFile('tr'), 'utf8')
+    expect(text).not.toMatch(/^(formality|register):/m)
+  })
+
   // Edited elsewhere while the menu was open: saving would silently lose that.
   it('refuses to overwrite a file changed on disk since it was opened', async () => {
     await writeRules(HAND_WRITTEN)

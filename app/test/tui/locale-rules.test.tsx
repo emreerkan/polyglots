@@ -42,7 +42,7 @@ async function openLocale(view: View) {
 }
 
 async function select(view: View, label: RegExp) {
-  for (let i = 0; i < 10 && !new RegExp(`❯ ${label.source}`).test(view.lastFrame()); i++) {
+  for (let i = 0; i < 20 && !new RegExp(`❯ ${label.source}`).test(view.lastFrame()); i++) {
     view.stdin.write(keys.down)
     await tick()
   }
@@ -457,6 +457,126 @@ describe('LocaleRules: guidance', () => {
     await typeInto(view, 'x'.repeat(1501))
     await waitForText(view.lastFrame, /1501 of 1500/)
     expect(flat(view.lastFrame())).toMatch(/too long/)
+  })
+})
+
+// The four sections the rules builder edits and the menu once did not: an
+// app user should not need a browser to change what their own file says.
+describe('LocaleRules: formality, register, capitalization and sentence ends', () => {
+  async function saveAndLoad(view: View) {
+    view.stdin.write('s')
+    await waitForText(view.lastFrame, /Saved/)
+    return loadLocaleRules('tr')!
+  }
+
+  async function back(view: View) {
+    view.stdin.write(keys.esc)
+    await tick(ESC_DELAY)
+  }
+
+  it('chooses a formality and saves it under schema 2', async () => {
+    const view = mount()
+    await openLocale(view)
+    expect(flat(view.lastFrame())).toMatch(/Formality +not set/)
+    await select(view, /Formality/)
+    await waitForText(view.lastFrame, /❯ Not set/)
+    view.stdin.write(keys.down)
+    await waitForText(view.lastFrame, /❯ Formal/)
+    await back(view)
+    expect(flat(view.lastFrame())).toMatch(/Formality +formal/)
+    const rules = await saveAndLoad(view)
+    expect(rules.formality).toBe('formal')
+    expect(rules.schema).toBe(2)
+  })
+
+  it('types capitalization over several lines, counts it, and saves it', async () => {
+    const view = mount()
+    await openLocale(view)
+    await select(view, /Capitalization/)
+    await waitForText(view.lastFrame, /0 of 2500/)
+    await typeInto(view, '- Sentence case.')
+    view.stdin.write(keys.enter)
+    await tick()
+    await typeInto(view, '- No title case.')
+    await waitForText(view.lastFrame, /33 of 2500/)
+    await back(view)
+    expect(flat(view.lastFrame())).toMatch(/Capitalization +33 of 2500/)
+    expect((await saveAndLoad(view)).capitalization).toBe('- Sentence case.\n- No title case.\n')
+  })
+
+  it('writes the review and the draft register apart', async () => {
+    const view = mount()
+    await openLocale(view)
+    await select(view, /Register/)
+    await waitForText(view.lastFrame, /❯ For the review prompt/)
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /0 of 500/)
+    await typeInto(view, 'Use siz.')
+    await waitForText(view.lastFrame, /8 of 500/)
+    await back(view)
+    view.stdin.write(keys.down)
+    await waitForText(view.lastFrame, /❯ For the draft prompt/)
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /0 of 500/)
+    await typeInto(view, 'Use sen.')
+    await back(view)
+    await back(view)
+    expect((await saveAndLoad(view)).register).toEqual({ audit: 'Use siz.', translate: 'Use sen.' })
+  })
+
+  // A file may give one register line for both prompts; the screen shows it
+  // in both rows, and leaves the file's one line alone until one is edited.
+  it('shows a single register line under both prompts', async () => {
+    const file = localeRulesFile('tr')
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, 'schema: 2\nregister: Use siz.\n', 'utf8')
+    const view = mount()
+    await openLocale(view)
+    await select(view, /Register/)
+    await waitForText(view.lastFrame, /For the review prompt +8 of 500/)
+    expect(flat(view.lastFrame())).toMatch(/For the draft prompt +8 of 500/)
+  })
+
+  it('sets sentence ends: no final mark, a mark that is not a stop, and a final mark', async () => {
+    const view = mount()
+    await openLocale(view)
+    expect(flat(view.lastFrame())).toMatch(/Sentence ends +not set/)
+    await select(view, /Sentence ends/)
+    await waitForText(view.lastFrame, /❯ \[ \] The language writes no final mark/)
+    view.stdin.write(' ')
+    await waitForText(view.lastFrame, /\[x\] The language writes no final mark/)
+    view.stdin.write(keys.down)
+    await tick()
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Regex:/)
+    await typeInto(view, 'X\\.$')
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Not a stop +X\\\.\$/)
+    view.stdin.write(keys.down)
+    await tick()
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Final marks/)
+    view.stdin.write('a')
+    await waitForText(view.lastFrame, /Final mark \(regex\):/)
+    await typeInto(view, '։')
+    view.stdin.write(keys.enter)
+    await tick()
+    await back(view)
+    await back(view)
+    expect(flat(view.lastFrame())).toMatch(/Sentence ends +no final mark · a mark that is not a stop · 1 final mark/)
+    expect((await saveAndLoad(view)).sentenceEnd).toEqual({ unmarked: true, notEnding: 'X\\.$', answers: [{ text: '։' }] })
+  })
+
+  it('shows a bad regex for a mark that is not a stop as it is typed', async () => {
+    const view = mount()
+    await openLocale(view)
+    await select(view, /Sentence ends/)
+    view.stdin.write(keys.down)
+    await tick()
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Regex:/)
+    await typeInto(view, '(unclosed')
+    await waitForText(view.lastFrame, /not a valid regular expression/)
   })
 })
 
