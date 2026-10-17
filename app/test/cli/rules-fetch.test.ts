@@ -125,7 +125,7 @@ describe('rules fetch', () => {
   it('exits 1 on a refusal and writes nothing', async () => {
     const r = await run(['rules', 'fetch', 'de'])
     expect(r.code).toBe(1)
-    expect(r.stderr).toContain('No polyglots-data entry for de. Available: tr')
+    expect(r.stderr).toContain('No polyglots-data entry for de_DE (de). Available: tr_TR')
     expect(existsSync(localeRulesFile('de'))).toBe(false)
   })
 })

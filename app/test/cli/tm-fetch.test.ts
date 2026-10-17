@@ -93,7 +93,7 @@ describe('tm fetch', () => {
   it('exits 1 on a refusal', async () => {
     const r = await run(['tm', 'fetch', 'de', '--yes'])
     expect(r.code).toBe(1)
-    expect(r.stderr).toContain('No polyglots-data entry for de')
+    expect(r.stderr).toContain('No polyglots-data entry for de_DE (de)')
     expect(client.download).not.toHaveBeenCalled()
   })
 })

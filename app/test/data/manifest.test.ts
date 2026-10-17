@@ -82,12 +82,12 @@ describe('parseManifest: a list left out', () => {
   it('reads a manifest with no tm list as one listing no memory', () => {
     const m = parseManifest({ schema: 1, generated: '', rules: [rulesEntry] })
     expect(findRulesEntry(m, 'tr')).toEqual(rulesEntry)
-    expect(() => findTmEntry(m, 'tr')).toThrow('No polyglots-data entry for tr; the manifest lists none.')
+    expect(() => findTmEntry(m, 'tr')).toThrow('No polyglots-data entry for tr_TR (tr); the manifest lists none.')
   })
 
   it('reads a manifest with no rules list as one listing no rules', () => {
     const m = parseManifest({ schema: 1, generated: '', tm: [] })
-    expect(() => findRulesEntry(m, 'tr')).toThrow('No polyglots-data entry for tr; the manifest lists none.')
+    expect(() => findRulesEntry(m, 'tr')).toThrow('No polyglots-data entry for tr_TR (tr); the manifest lists none.')
   })
 })
 
@@ -118,7 +118,7 @@ describe('findRulesEntry and findTmEntry', () => {
 
   it('still names the locales that have an entry, skipping rows with no slug', () => {
     expect(() => findRulesEntry(manifest([{ ...rulesEntry, slug: 'de', locale: 'de_DE' }, { locale: 'x' }, 7]), 'tr')).toThrow(
-      'No polyglots-data entry for tr. Available: de',
+      'No polyglots-data entry for tr_TR (tr). Available: de_DE',
     )
   })
 
@@ -157,8 +157,17 @@ describe('findEntry', () => {
   })
 
   it('names the locales that have an entry when one is missing', () => {
-    expect(() => findEntry([{ slug: 'tr', locale: 'tr_TR' }], 'de')).toThrow('No polyglots-data entry for de. Available: tr')
-    expect(() => findEntry([], 'de')).toThrow(/No polyglots-data entry for de.*none/)
+    expect(() => findEntry([{ slug: 'tr', locale: 'tr_TR' }], 'de')).toThrow('No polyglots-data entry for de_DE (de). Available: tr_TR')
+    expect(() => findEntry([], 'de')).toThrow(/No polyglots-data entry for de_DE \(de\).*none/)
+  })
+
+  // People type the WordPress code, and a slug such as sv or de/formal reads
+  // as a different locale from the sv_SE or de_DE_formal they asked for.
+  it('names a locale by its WordPress code, with the slug beside it', () => {
+    expect(() => findEntry([], 'de/formal')).toThrow('No polyglots-data entry for de_DE_formal (de/formal); the manifest lists none.')
+    expect(() => findEntry([{ slug: 'de/formal', locale: 'de_DE_formal' }], 'sv')).toThrow('No polyglots-data entry for sv_SE (sv). Available: de_DE_formal')
+    // A slug this build does not know has no code to show, so it is named as it is.
+    expect(() => findEntry([{ slug: 'xx-new', locale: 'xx_NEW' }], 'de')).toThrow('Available: xx-new')
   })
 })
 

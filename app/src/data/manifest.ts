@@ -189,12 +189,21 @@ function judge<T extends { slug: string; locale: string }>(rows: readonly unknow
   return parsed.data
 }
 
+// Named by the WordPress code people type, with the slug beside it the way
+// the rest of the app writes a locale: a bare "sv" or "de/formal" read as a
+// different locale from the sv_SE or de_DE_formal that was asked for. A slug
+// this build does not know has no code, and is named as it is.
+const named = (slug: string) => {
+  const wp = wpCodeOf(slug as Locale)
+  return wp === undefined ? slug : `${wp} (${slug})`
+}
+
 function missingEntry(slugs: readonly string[], slug: Locale): DataError {
-  const available = [...new Set(slugs)].sort()
+  const available = [...new Set(slugs.map((s) => wpCodeOf(s as Locale) ?? s))].sort()
   return new DataError(
     available.length > 0
-      ? `No polyglots-data entry for ${slug}. Available: ${available.join(', ')}`
-      : `No polyglots-data entry for ${slug}; the manifest lists none.`,
+      ? `No polyglots-data entry for ${named(slug)}. Available: ${available.join(', ')}`
+      : `No polyglots-data entry for ${named(slug)}; the manifest lists none.`,
   )
 }
 

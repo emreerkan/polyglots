@@ -103,7 +103,7 @@ describe('planRulesFetch', () => {
 
   it('refuses a locale the manifest does not have, naming the ones it does', async () => {
     await publish(served)
-    await expect(planRulesFetch('de', dataClient)).rejects.toThrow('No polyglots-data entry for de. Available: tr')
+    await expect(planRulesFetch('de', dataClient)).rejects.toThrow('No polyglots-data entry for de_DE (de). Available: tr_TR')
   })
 
   it('refuses an invalid file', async () => {
