@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-17
+
 ### Added
 
 - `polyglots rules fetch` downloads a locale's rules file from polyglots-data after showing what it changes.
