@@ -51,6 +51,15 @@ export interface BatchProgress extends BatchStart {
   // Set when the batch could not be adjudicated and its entries were marked
   // unreviewed.
   failed?: string
+  // Every attempt that failed, the one a retry then rescued included, so a run
+  // can keep the record the screen alone used to show.
+  attempts?: FailedAttempt[]
+}
+
+export interface FailedAttempt {
+  attempt: number
+  reason: string
+  ms: number
 }
 
 // Narrow on purpose: auditEntries needs a map from a key to a verdict, not a
@@ -410,6 +419,7 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
       problems,
       verdicts: decided,
       ...(outcome.failed ? { failed: outcome.failed } : {}),
+      ...(outcome.attempts.length > 0 ? { attempts: outcome.attempts } : {}),
     })
 
     if (outcome.failed) {
@@ -431,7 +441,7 @@ async function runBatch(
   adjudicate: Adjudicator,
   batch: AuditCandidate[],
   opts: AuditOptions,
-): Promise<{ results?: AuditResult[]; failed?: string }> {
+): Promise<{ results?: AuditResult[]; failed?: string; attempts: FailedAttempt[] }> {
   // Assembled field by field rather than spread, so that an option meant for
   // the audit never leaks into an agent invocation. The cost is that a new
   // option is silently dropped until it is added here: `provider` was, and
@@ -464,14 +474,17 @@ async function runBatch(
   // is a new conversation sampled again, and a refusal costs four seconds
   // rather than the minutes a real batch takes. The expensive mistake is
   // skipping it.
+  const attempts: FailedAttempt[] = []
   for (let attempt = 0; attempt < 2; attempt++) {
+    const started = Date.now()
     try {
-      return { results: await adjudicate(batch, agentOpts) }
+      return { results: await adjudicate(batch, agentOpts), attempts }
     } catch (err) {
       failed = err instanceof Error ? err.message : String(err)
+      attempts.push({ attempt: attempt + 1, reason: failed, ms: Date.now() - started })
     }
   }
-  return { failed }
+  return { failed, attempts }
 }
 
 // The one place a candidate genuinely has to become an entry again: judgeFix

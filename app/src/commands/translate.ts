@@ -31,6 +31,7 @@ import {
   putDraftVerdict,
   draftSrcHash,
   engineId,
+  recordBatchFailure,
   startRun,
   translateConfigHash,
   type DraftReview,
@@ -657,7 +658,13 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
         let drafts: Drafts | undefined
         let results: Array<ReviewResult & { notes?: string[] }> | undefined
         let lastError: unknown
+        // Which step an attempt was in when it failed, and every failure, kept
+        // for jobs.db below: the reason used to reach the screen and nowhere else.
+        let phase: 'drafting' | 'reviewing' = 'drafting'
+        const attempts: Array<{ attempt: number; phase: 'drafting' | 'reviewing'; reason: string; ms: number }> = []
         for (let attempt = 0; attempt < 2 && results === undefined; attempt++) {
+          const started = Date.now()
+          phase = 'drafting'
           try {
             drafts ??= await draft(batch, engine, locale, po.nplurals, draftCache)
             // Fixed after the draft cache, never before it: editing a fix
@@ -680,6 +687,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
               break
             }
             emit({ type: 'batch-phase', index, phase: 'reviewing', at: Date.now() })
+            phase = 'reviewing'
             results = (
               await reviewDrafts(batch, fixedDrafts, review, { ...opts, provider }, locale, po.nplurals, pluralForms, mcpConfigPath, reviewCache, checks, localAsk)
             ).map((r) => {
@@ -692,7 +700,21 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
               break batchLoop
             }
             lastError = err
+            attempts.push({ attempt: attempt + 1, phase, reason: errorMessage(err), ms: Date.now() - started })
           }
+        }
+        for (const a of attempts) {
+          recordBatchFailure(jobs, {
+            runId: runId!,
+            batch: index,
+            attempt: a.attempt,
+            size: batch.length,
+            phase: a.phase,
+            reason: a.reason,
+            ms: a.ms,
+            final: results === undefined && a.attempt === attempts.length,
+            at: Date.now(),
+          })
         }
 
         if (results === undefined) {

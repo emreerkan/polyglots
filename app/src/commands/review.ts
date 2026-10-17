@@ -28,6 +28,7 @@ import {
   reapAbandonedRuns,
   pruneStaleConfigs,
   putAuditVerdict,
+  recordBatchFailure,
   startRun,
 } from '../jobs/index.js'
 import { writeMcpConfig, MCP_ENV } from '../mcp/config.js'
@@ -495,6 +496,22 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
         await persist()
       },
       onBatch: async (b) => {
+        // Before anything that can throw, so the reason outlives the run. The
+        // last attempt gave the batch up only when the batch is marked failed;
+        // otherwise the retry rescued it and every row is an attempt that failed.
+        for (const a of b.attempts ?? []) {
+          recordBatchFailure(jobs, {
+            runId: runId!,
+            batch: b.index,
+            attempt: a.attempt,
+            size: b.size,
+            phase: 'review',
+            reason: a.reason,
+            ms: a.ms,
+            final: b.failed !== undefined && a.attempt === b.attempts!.length,
+            at: Date.now(),
+          })
+        }
         decided.push(...b.verdicts)
         marker.done = b.index
         marker.of = b.of

@@ -77,6 +77,29 @@ CREATE TABLE IF NOT EXISTS draft_verdict (
 ) WITHOUT ROWID;
 
 CREATE INDEX IF NOT EXISTS run_started ON run (started_at);
+
+-- One row per failed attempt at a batch. The reason used to reach the screen
+-- and nothing else, so a run looked at afterwards showed entries marked
+-- unreviewed and no way to say why. An attempt the retry rescued is kept too:
+-- it costs nothing in the output, but it is the only record of how often an
+-- agent fails. final is 1 on the attempt that gave the batch up. phase says
+-- which step failed: review, or drafting and reviewing in a translate. ms is
+-- how long the attempt ran, which tells a timeout from an instant refusal.
+-- No foreign key: a run row is never deleted, and a failure written by a run
+-- that did not record itself must not throw in the middle of a batch.
+CREATE TABLE IF NOT EXISTS batch_failure (
+  run_id   INTEGER NOT NULL,
+  batch    INTEGER NOT NULL,
+  attempt  INTEGER NOT NULL,
+  size     INTEGER NOT NULL,
+  phase    TEXT NOT NULL,
+  reason   TEXT NOT NULL,
+  ms       INTEGER NOT NULL,
+  final    INTEGER NOT NULL,
+  at       INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS batch_failure_run ON batch_failure (run_id);
 `
 
 // CREATE TABLE IF NOT EXISTS does nothing to a table that already exists, so a

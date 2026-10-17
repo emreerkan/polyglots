@@ -406,6 +406,30 @@ describe('auditEntries', () => {
     expect(seen[0]).toMatch(/exit code 1/)
   })
 
+  // Every failed attempt, with how long it took, including a first attempt the
+  // retry then rescued: that one costs nothing in the output but says how often
+  // the agent is unreliable, which nothing else records.
+  it('reports each failed attempt, even when the retry succeeds', async () => {
+    const seen: Array<{ failed?: string; attempts?: Array<{ attempt: number; reason: string; ms: number }> }> = []
+    const adjudicate = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('antigravity timed out after 1200000ms'))
+      .mockImplementation(async (batch: { id: number }[]) => batch.map((c) => ({ id: c.id, problem: false, categories: [], reason: 'ok' })))
+    await auditEntries({ entries: [clean], ...base(), adjudicate, onBatch: (p) => void seen.push(p) })
+    expect(seen[0]!.failed).toBeUndefined()
+    expect(seen[0]!.attempts).toEqual([{ attempt: 1, reason: 'antigravity timed out after 1200000ms', ms: expect.any(Number) }])
+  })
+
+  it('reports both attempts of a batch that failed', async () => {
+    const seen: Array<{ attempts?: Array<{ attempt: number; reason: string }> }> = []
+    const adjudicate = vi.fn().mockRejectedValueOnce(new Error('first')).mockRejectedValueOnce(new Error('second'))
+    await auditEntries({ entries: [clean], ...base(), adjudicate, onBatch: (p) => void seen.push(p) })
+    expect(seen[0]!.attempts?.map((a) => [a.attempt, a.reason])).toEqual([
+      [1, 'first'],
+      [2, 'second'],
+    ])
+  })
+
   it('reports batch progress', async () => {
     const events: unknown[] = []
     const adjudicate = vi

@@ -5,11 +5,13 @@ import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { openJobsDb } from '../../src/jobs/db.js'
 import {
+  batchFailures,
   endRun,
   finishRun,
   getRun,
   liveRuns,
   reapAbandonedRuns,
+  recordBatchFailure,
   startRun,
   stopOwnRuns,
 } from '../../src/jobs/runs.js'
@@ -349,5 +351,28 @@ describe('stopOwnRuns', () => {
     expect(stopOwnRuns(db, 4242)).toBe(0)
     expect(getRun(db, other)!.state).toBe('running')
     expect(getRun(db, done)!.state).toBe('done')
+  })
+})
+
+describe('batch failures', () => {
+  let dir: string
+  let jobs: Database.Database
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'polyglots-failures-'))
+    jobs = openJobsDb(join(dir, 'jobs.db'))
+  })
+  afterEach(async () => {
+    jobs.close()
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it('keeps every failed attempt of a run, in order, apart from other runs', () => {
+    recordBatchFailure(jobs, { runId: 7, batch: 3, attempt: 1, size: 100, phase: 'review', reason: 'timed out', ms: 1_200_000, final: false, at: 10 })
+    recordBatchFailure(jobs, { runId: 7, batch: 3, attempt: 2, size: 100, phase: 'review', reason: 'exit code 1', ms: 4_000, final: true, at: 20 })
+    recordBatchFailure(jobs, { runId: 8, batch: 1, attempt: 1, size: 50, phase: 'drafting', reason: 'other run', ms: 1, final: false, at: 30 })
+    expect(batchFailures(jobs, 7)).toEqual([
+      { runId: 7, batch: 3, attempt: 1, size: 100, phase: 'review', reason: 'timed out', ms: 1_200_000, final: false, at: 10 },
+      { runId: 7, batch: 3, attempt: 2, size: 100, phase: 'review', reason: 'exit code 1', ms: 4_000, final: true, at: 20 },
+    ])
   })
 })

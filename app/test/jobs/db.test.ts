@@ -18,7 +18,7 @@ describe('openJobsDb', () => {
       .prepare<[], { name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
       .all()
       .map((r) => r.name)
-    expect(names).toEqual(expect.arrayContaining(['run', 'audit_verdict', 'draft', 'draft_verdict']))
+    expect(names).toEqual(expect.arrayContaining(['run', 'audit_verdict', 'draft', 'draft_verdict', 'batch_failure']))
     db.close()
     await cleanup()
   })

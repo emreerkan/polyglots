@@ -6,6 +6,10 @@ import type Database from 'better-sqlite3'
 import { openDb, replaceGlossary, upsertTm } from '../../../src/storage/index.js'
 import { loadPo } from '../../../src/po/po-file.js'
 import { reviewFile } from '../../../src/commands/review.js'
+import { openJobsDb } from '../../../src/jobs/db.js'
+import { batchFailures } from '../../../src/jobs/runs.js'
+
+const latestRunId = (jobs: Database.Database) => (jobs.prepare('SELECT max(id) AS id FROM run').get() as { id: number }).id
 import type { ReviewEvent } from '../../../src/types.js'
 import { useLocaleFixture } from '../../locale-fixture.js'
 
@@ -357,6 +361,21 @@ msgstr "Bileşen ayarlarını güncelle"
     expect(events.find((e) => e.type === 'batch-failed')).toMatchObject({ reason: expect.stringMatching(/exit code 1/) })
     // One terminal event per batch, or the progress bar counts it twice.
     expect(events.filter((e) => e.type === 'batch-done')).toHaveLength(0)
+  })
+
+  // The reason used to reach the screen and nowhere else, so a run looked at
+  // afterwards had 200 entries marked unreviewed and no way to say why.
+  it('records each failed attempt in jobs.db, marking the one that gave the batch up', async () => {
+    const jobsDb = openJobsDb(join(home, 'jobs.db'))
+    const adjudicate = vi.fn().mockRejectedValueOnce(new Error('timed out')).mockRejectedValueOnce(new Error('exit code 1'))
+    await run({ adjudicate, jobsDb })
+    const rows = batchFailures(jobsDb, latestRunId(jobsDb))
+    jobsDb.close()
+    expect(rows.map((r) => [r.batch, r.attempt, r.reason, r.final])).toEqual([
+      [1, 1, 'timed out', false],
+      [1, 2, 'exit code 1', true],
+    ])
+    expect(rows[0]).toMatchObject({ phase: 'review', size: expect.any(Number), ms: expect.any(Number) })
   })
 
   // A 2831-entry submission is ~114 batches and hours of wall clock; losing all

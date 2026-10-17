@@ -10,6 +10,10 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Added
+
+- Review and translate keep every failed batch attempt, with its reason and duration, in `jobs.db` (`batch_failure`).
+
 ## [1.0.1] - 2026-10-17
 
 ### Fixed

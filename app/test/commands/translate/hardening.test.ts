@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { openDb, upsertTm } from '../../../src/storage/index.js'
 import { dataDir } from '../../../src/paths.js'
 import { translateFile, type TranslateOptions } from '../../../src/commands/translate.js'
+import { openJobsDb } from '../../../src/jobs/db.js'
+import { batchFailures } from '../../../src/jobs/runs.js'
 import type { DraftResult } from '../../../src/types.js'
 import { collect, draftFor, entryOf, fakeEngine, fakeReview, makeWorkspace, ofType, parseFile, type Workspace } from './helpers.js'
 
@@ -84,6 +86,26 @@ describe('translateFile: plural TM fast path is limited to two-form locales', ()
 })
 
 describe('translateFile: engine must return a draft for every unit', () => {
+  // A skipped batch said why on screen and nowhere else.
+  it('records each failed attempt of a skipped batch in jobs.db', async () => {
+    const engine = fakeEngine()
+    engine.translate = async (units, _locale, nplurals): Promise<DraftResult[]> => {
+      engine.calls.push(units.map((u) => u.key))
+      return units.filter((u) => u.key !== 'Form entries').map((u) => ({ key: u.key, drafts: draftFor(u, nplurals) }))
+    }
+    const jobsDb = openJobsDb(join(ws.home, 'jobs-failures.db'))
+    await translateFile(base({ engine, review: fakeReview(), batchSize: 2, jobsDb }))
+    const runId = (jobsDb.prepare('SELECT max(id) AS id FROM run').get() as { id: number }).id
+    const rows = batchFailures(jobsDb, runId)
+    jobsDb.close()
+    expect(rows.map((r) => [r.batch, r.attempt, r.final])).toEqual([
+      [1, 1, false],
+      [1, 2, true],
+    ])
+    expect(rows[0]!.reason).toMatch(/Form entries/)
+    expect(rows[0]).toMatchObject({ phase: 'drafting', size: 2 })
+  })
+
   it('treats a missing draft as an engine error: retry once, then skip the batch naming the key', async () => {
     const engine = fakeEngine()
     engine.translate = async (units, _locale, nplurals): Promise<DraftResult[]> => {

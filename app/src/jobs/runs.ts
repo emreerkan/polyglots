@@ -294,3 +294,46 @@ export function reapAbandonedRuns(db: Database.Database, now: Clock = () => Date
   reap(abandoned)
   return abandoned.length
 }
+
+/**
+ * One failed attempt at a batch, as kept in batch_failure. `batch` is the
+ * 1-based batch the run showed; `attempt` is 1 or 2.
+ */
+export interface BatchFailure {
+  runId: number
+  batch: number
+  attempt: number
+  size: number
+  phase: 'review' | 'drafting' | 'reviewing'
+  reason: string
+  ms: number
+  // The attempt after which the batch was given up: its entries were left
+  // unreviewed (review) or skipped (translate).
+  final: boolean
+  at: number
+}
+
+export function recordBatchFailure(db: Database.Database, f: BatchFailure): void {
+  db.prepare(
+    'INSERT INTO batch_failure (run_id, batch, attempt, size, phase, reason, ms, final, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run(f.runId, f.batch, f.attempt, f.size, f.phase, f.reason, Math.round(f.ms), f.final ? 1 : 0, f.at)
+}
+
+type FailureRow = { run_id: number; batch: number; attempt: number; size: number; phase: string; reason: string; ms: number; final: number; at: number }
+
+export function batchFailures(db: Database.Database, runId: number): BatchFailure[] {
+  return db
+    .prepare<[number], FailureRow>('SELECT * FROM batch_failure WHERE run_id = ? ORDER BY batch, attempt, at')
+    .all(runId)
+    .map((r) => ({
+      runId: r.run_id,
+      batch: r.batch,
+      attempt: r.attempt,
+      size: r.size,
+      phase: r.phase as BatchFailure['phase'],
+      reason: r.reason,
+      ms: r.ms,
+      final: r.final === 1,
+      at: r.at,
+    }))
+}

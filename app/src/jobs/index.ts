@@ -23,12 +23,15 @@ export {
   type VerdictKey,
 } from './verdicts.js'
 export {
+  batchFailures,
   endRun,
   finishRun,
   liveRuns,
   getRun,
   reapAbandonedRuns,
+  recordBatchFailure,
   startRun,
+  type BatchFailure,
   type LiveRun,
   type RunEnding,
   type RunRow,
