@@ -21,12 +21,14 @@ again.
 
 1. **Translation memory first.** An entry whose source your memory holds
    word for word takes the approved wording, and nothing is sent anywhere.
-   When the memory holds several wordings, translate takes the newest one that
-   uses the glossary term, and marks the entry fuzzy, since there was a choice.
+   When the memory holds several wordings, translate takes the first one that
+   uses the glossary term, in the memory's order: interface wordings before
+   long-text ones, then the most recent first. It marks the entry fuzzy, since
+   there was a choice.
    If no wording uses the term, translate looks for the same source in other
    capitals ("Social Icons" for "Social icons") and takes a wording from there
    that does, marked fuzzy with a comment that names that source. If nothing
-   uses the term, the newest wording goes in, marked fuzzy with a comment that
+   uses the term, the first wording in that order goes in, marked fuzzy with a comment that
    names the term.
 2. **A draft.** The rest are drafted in batches by DeepL, OpenAI or a local
    model.
