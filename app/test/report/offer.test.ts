@@ -3,9 +3,10 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ProbeExec } from '../../src/agent/providers.js'
+import { DEFAULT_CONFIG } from '../../src/config.js'
 import { openJobsDb } from '../../src/jobs/db.js'
 import { startRun } from '../../src/jobs/runs.js'
-import { boundedVersion, buildFor, contactLine, providerVersion, VERSION_WAIT_MS } from '../../src/report/offer.js'
+import { boundedVersion, buildFor, contactLine, providerVersion, reportModel, VERSION_WAIT_MS } from '../../src/report/offer.js'
 
 // The report names the provider's version, as the server's mail summary does
 // ("antigravity 1.4.0"). One --version call, never the real binary here: a
@@ -150,5 +151,32 @@ describe('buildFor', () => {
   it('leaves out a model with nothing but control characters, which the endpoint would refuse as empty', () => {
     const report = withRun((jobs, runId) => buildFor(jobs, [runId], { provider: 'claude', model: '\n\t' }))
     expect(report.provider).toEqual({ name: 'claude' })
+  })
+})
+
+describe('reportModel for codex', () => {
+  const config = { ...DEFAULT_CONFIG, reviewProvider: 'codex' as const }
+  let saved: string | undefined
+  afterEach(() => {
+    if (saved === undefined) delete process.env.CODEX_HOME
+    else process.env.CODEX_HOME = saved
+  })
+  function codexHome(toml?: string): void {
+    saved = process.env.CODEX_HOME
+    const dir = mkdtempSync(join(tmpdir(), 'polyglots-report-codex-home-'))
+    dirs.push(dir)
+    if (toml !== undefined) writeFileSync(join(dir, 'config.toml'), toml)
+    process.env.CODEX_HOME = dir
+  }
+
+  it('names the engine label, model and effort', () => {
+    codexHome('model = "gpt-5.6-luna"\nmodel_reasoning_effort = "low"\n')
+    expect(reportModel(config, undefined)).toEqual({ model: 'gpt-5.6-luna (low)' })
+    expect(reportModel(config, 'gpt-5.5')).toEqual({ model: 'gpt-5.5 (low)' })
+  })
+
+  it('says nothing when nothing resolved', () => {
+    codexHome()
+    expect(reportModel(config, undefined)).toEqual({})
   })
 })

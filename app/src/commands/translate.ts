@@ -6,7 +6,7 @@ import { intlTag } from '../wporg/locales.js'
 import { chunk } from '../batch.js'
 import type { RunControl } from '../run-control.js'
 import { loadConfig, loadSecrets } from '../config.js'
-import { configuredModel, type ProbeExec } from '../agent/providers.js'
+import { agentEngineLabel, agentModel, agentSpawnModel, type AgentModel, type AgentRunOptions, type ProbeExec } from '../agent/providers.js'
 import { gateRun, ProviderRefusal, quotaRecheck, type ProviderCheck } from '../agent/agy-check.js'
 import { defaultExec } from '../agent/discover.js'
 import {
@@ -382,7 +382,10 @@ async function reviewDrafts(
   // reading it here sent every such run to the default, claude, while the
   // cache key named the configured provider. Narrowing the type makes the
   // caller hand over what it resolved rather than what it was given.
-  opts: Pick<TranslateOptions, 'bin' | 'model'> & { provider: ReviewChoice },
+  // `spawn` is the model and effort the review pass hands the agent, resolved
+  // by the caller: for codex that is its config's values, for the others the
+  // --model flag alone.
+  opts: Pick<TranslateOptions, 'bin'> & { provider: ReviewChoice; spawn: Pick<AgentRunOptions, 'model' | 'effort'> },
   locale: Locale,
   nplurals: number,
   pluralForms: string | undefined,
@@ -449,7 +452,9 @@ async function reviewDrafts(
           // Never `none` in practice, which skips this pass, but narrowed
           // here so it cannot reach a spawn as a provider name either.
           ...(opts.provider !== 'local' && opts.provider !== 'none' ? { provider: opts.provider } : {}),
-          ...(!local && opts.model ? { model: opts.model } : {}),
+          // Every field is named: reviewBatch is handed this object whole today,
+          // but a field left off this list never reaches the spawn.
+          ...(local ? {} : opts.spawn),
         })
       : []
 
@@ -588,7 +593,12 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
     // verdicts as Pro's on every entry already seen. The same fallback review
     // uses, for the same reason. Only the key learns the model: the spawn
     // below still passes opts.model alone, and antigravity keeps choosing.
-    const reviewModel = opts.model ?? (provider === 'local' || provider === 'none' ? undefined : configuredModel(provider))
+    // codex is the exception: it is given what resolved, model and effort,
+    // and both name its engine.
+    const reviewAgent = provider === 'local' || provider === 'none' ? undefined : provider
+    const reviewResolved: AgentModel = reviewAgent ? agentModel(reviewAgent, settings, opts.model) : {}
+    const reviewSpawn = reviewAgent ? agentSpawnModel(reviewAgent, reviewResolved, opts.model) : {}
+    const reviewModel = reviewAgent ? agentEngineLabel(reviewAgent, reviewResolved) : undefined
     const reviewEngine = localReview ? engineId(localModelId(localReview), 'local') : engineId(reviewModel, provider)
     const { draftCache, reviewCache } = buildCaches(jobs, {
       nplurals: po.nplurals,
@@ -796,7 +806,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
               emit({ type: 'batch-phase', index, phase: 'reviewing', at: Date.now() })
               phase = 'reviewing'
               results = (
-                await reviewDrafts(batch, fixedDrafts, review, { ...opts, provider }, locale, po.nplurals, pluralForms, mcpConfigPath, reviewCache, checks, localAsk, beforeAsk)
+                await reviewDrafts(batch, fixedDrafts, review, { ...(opts.bin === undefined ? {} : { bin: opts.bin }), provider, spawn: reviewSpawn }, locale, po.nplurals, pluralForms, mcpConfigPath, reviewCache, checks, localAsk, beforeAsk)
               ).map((r) => {
                 const unit = unitOf.get(r.key)
                 return unit ? checker.finalize(unit, r) : r

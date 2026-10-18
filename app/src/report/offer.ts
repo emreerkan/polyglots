@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import { defaultExec } from '../agent/discover.js'
-import { configuredModel, PROVIDERS, resolveAgentBin, type ProbeExec } from '../agent/providers.js'
+import { agentEngineLabel, agentModel, PROVIDERS, resolveAgentBin, type ProbeExec } from '../agent/providers.js'
 import { childEnv } from '../agent/run.js'
 import { findOnPath } from '../spawn-plan.js'
 import type { ReviewProvider } from '../types.js'
@@ -69,7 +69,9 @@ export function reportModel(config: PolyglotsConfig, model: string | undefined):
       return {}
     }
   }
-  const chosen = model ?? configuredModel(config.reviewProvider)
+  // codex reports its engine label, "<model> (<effort>)", since the effort
+  // shapes what it said as much as the model does.
+  const chosen = agentEngineLabel(config.reviewProvider, agentModel(config.reviewProvider, config, model))
   return chosen ? { model: chosen } : {}
 }
 

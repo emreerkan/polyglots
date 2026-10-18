@@ -418,9 +418,31 @@ describe('the model and effort codex will run', () => {
   })
 
   it('gives claude the flag and antigravity its own settings', () => {
+    const empty = mkdtempSync(join(tmpdir(), 'polyglots-agy-home-'))
     expect(agentModel('claude', ours, 'opus', env)).toEqual({ model: 'opus' })
     expect(agentModel('claude', ours, undefined, env)).toEqual({})
-    expect(agentModel('antigravity', ours, 'flash', env)).toEqual({ model: 'flash' })
+    expect(agentModel('antigravity', ours, 'flash', env, empty)).toEqual({ model: 'flash' })
+    expect(agentModel('antigravity', ours, undefined, env, empty)).toEqual({})
+  })
+
+  // The home is passed through, so a caller never has to read the real one.
+  it('reads antigravity settings and codex config.toml from the home it is given', () => {
+    const home = mkdtempSync(join(tmpdir(), 'polyglots-agy-home-'))
+    mkdirSync(join(home, '.gemini', 'antigravity-cli'), { recursive: true })
+    writeFileSync(join(home, '.gemini', 'antigravity-cli', 'settings.json'), JSON.stringify({ model: 'Gemini X (Low)' }))
+    expect(agentModel('antigravity', ours, undefined, {}, home)).toEqual({ model: 'Gemini X (Low)' })
+    mkdirSync(join(home, '.codex'))
+    writeFileSync(join(home, '.codex', 'config.toml'), 'model = "home-model"\n')
+    expect(agentModel('codex', none, undefined, {}, home)).toMatchObject({ model: 'home-model', modelFrom: 'codex config' })
+  })
+
+  it('treats an empty or blank --model as no flag', () => {
+    const empty = mkdtempSync(join(tmpdir(), 'polyglots-agy-home-'))
+    toml('model = "toml-model"\n')
+    expect(agentModel('codex', none, '', env)).toMatchObject({ model: 'toml-model', modelFrom: 'codex config' })
+    expect(agentModel('codex', none, '  ', env)).toMatchObject({ model: 'toml-model', modelFrom: 'codex config' })
+    expect(agentModel('claude', ours, '', env)).toEqual({})
+    expect(agentModel('antigravity', ours, ' ', env, empty)).toEqual({})
   })
 
   it('labels the engine with whatever resolved', () => {

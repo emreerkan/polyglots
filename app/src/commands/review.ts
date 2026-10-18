@@ -2,7 +2,7 @@ import { mkdir, rm } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { groupFor, OTHER_GROUP } from '../review/message.js'
-import { configuredModel, type AgentRunOptions } from '../agent/run.js'
+import { agentEngineLabel, agentModel as resolveAgentModel, agentSpawnModel, type AgentRunOptions } from '../agent/providers.js'
 import { gateRun, ProviderRefusal, quotaRecheck, type ProviderCheck } from '../agent/agy-check.js'
 import { defaultExec } from '../agent/discover.js'
 import type { ProbeExec } from '../agent/providers.js'
@@ -309,8 +309,10 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
   // own from its own settings file and a verdict Flash formed must not be
   // served as Pro's. Undefined for claude, and for an antigravity whose
   // settings cannot be read, which records the bare provider name exactly as
-  // every row written before this did.
-  const agentModel = opts.model ?? (agent ? configuredModel(agent) : undefined)
+  // every row written before this did. codex records its model and its effort
+  // both, since the same model at another effort reaches other verdicts.
+  const resolved = agent ? resolveAgentModel(agent, loadConfig(), opts.model) : {}
+  const agentModel = agent ? agentEngineLabel(agent, resolved) : undefined
   const engine = local ? engineId(localModelId(local), 'local') : engineId(agentModel, provider)
   const adjudicate = local ? (opts.adjudicate ?? createLocalAdjudicator(opts.localChat ?? createLocalChat(local, { idleTimeoutMs: localIdleTimeoutMs(localSettings!) }), engine)) : opts.adjudicate
   const glossary = readGlossary(opts.locale, opts.db)
@@ -573,7 +575,10 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
         // never reach runAgent as `local`: the audit would spawn the default CLI.
         ...(agent && opts.bin ? { bin: opts.bin } : {}),
         ...(agent ? { provider: agent } : {}),
-        ...(agent && opts.model ? { model: opts.model } : {}),
+        // Every field the spawn needs is named here: auditEntries builds its own
+        // agent options field by field, so a field left out is dropped without a
+        // word. For codex that is the resolved model and the effort.
+        ...(agent ? agentSpawnModel(agent, resolved, opts.model) : {}),
         onRules: (r) =>
           emit({
             type: 'rules-done',

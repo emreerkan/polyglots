@@ -696,16 +696,22 @@ export interface AgentModel {
 export function agentModel(
   provider: ReviewProvider,
   config: PolyglotsConfig,
-  flagModel?: string,
+  rawFlagModel?: string,
   env: NodeJS.ProcessEnv = process.env,
+  home: string = homedir(),
 ): AgentModel {
+  // An empty or blank --model is no flag, as a blank model in config.toml is
+  // no model. Passed on as a flag it would have beaten every other source
+  // and then been dropped by the argv builder, leaving the run on codex's
+  // own choice while the engine id claimed an empty one came from the flag.
+  const flagModel = rawFlagModel !== undefined && rawFlagModel.trim() !== '' ? rawFlagModel : undefined
   if (provider === 'claude') return flagModel === undefined ? {} : { model: flagModel }
   if (provider === 'antigravity') {
-    const model = flagModel ?? configuredModel('antigravity')
+    const model = flagModel ?? configuredModel('antigravity', home)
     return model === undefined ? {} : { model }
   }
   const own = config.codex ?? {}
-  const theirs = codexSettings(env)
+  const theirs = codexSettings(env, home)
   const theirEffort = (CODEX_EFFORTS as readonly string[]).includes(theirs.effort ?? '')
     ? (theirs.effort as CodexEffort)
     : undefined
@@ -738,6 +744,34 @@ export function codexEngineLabel(model?: string, effort?: string): string | unde
   if (model) return model
   if (effort) return `(${effort})`
   return undefined
+}
+
+/**
+ * What an engine id records for a resolved agent model: codex names model and
+ * effort, the others the model alone.
+ */
+export function agentEngineLabel(provider: ReviewProvider, resolved: AgentModel): string | undefined {
+  return provider === 'codex' ? codexEngineLabel(resolved.model, resolved.effort) : resolved.model
+}
+
+/**
+ * The model and effort to put on the spawn. codex gets what resolved, since
+ * --ignore-user-config stops it reading its own config.toml. The others get
+ * the flag alone: antigravity keeps choosing from its own settings and only
+ * the cache key learns what they say.
+ */
+export function agentSpawnModel(
+  provider: ReviewProvider,
+  resolved: AgentModel,
+  flagModel: string | undefined,
+): Pick<AgentRunOptions, 'model' | 'effort'> {
+  if (provider === 'codex') {
+    return {
+      ...(resolved.model === undefined ? {} : { model: resolved.model }),
+      ...(resolved.effort === undefined ? {} : { effort: resolved.effort }),
+    }
+  }
+  return flagModel ? { model: flagModel } : {}
 }
 
 export function providerSpec(name: ReviewProvider = DEFAULT_PROVIDER): ProviderSpec {

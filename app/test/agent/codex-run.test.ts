@@ -87,13 +87,22 @@ describe('codex through runAgent', () => {
     const bin = fakeCodex(SUCCESS)
     const log = openRunLog({ runId: 1, startedAt: 0, debug: false })
     await withRunLog(log, () => runAgent('p', { type: 'object' }, { provider: 'codex', bin, mcpConfigPath, cwd: dir, timeoutMs: 30_000 }))
-    // close follows the answer; give it a moment to land.
-    await new Promise((r) => setTimeout(r, 300))
-    const exit = readFileSync(log.path, 'utf8')
-      .trim()
-      .split('\n')
-      .map((l) => JSON.parse(l) as Record<string, unknown>)
-      .find((l) => l.kind === 'agent-exit')
+    // close follows the answer and the log write follows close. A fixed sleep
+    // made this fail on a loaded machine and waste 300 ms on a fast one, so
+    // poll for the line with a deadline.
+    const read = (): Record<string, unknown> | undefined =>
+      readFileSync(log.path, 'utf8')
+        .trim()
+        .split('\n')
+        .filter((l) => l !== '')
+        .map((l) => JSON.parse(l) as Record<string, unknown>)
+        .find((l) => l.kind === 'agent-exit')
+    const deadline = Date.now() + 5_000
+    let exit = read()
+    while (exit === undefined && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 25))
+      exit = read()
+    }
     expect(exit?.usage).toEqual({ input: 10, cached: 4, output: 3, reasoning: 2 })
   }, 40_000)
 })

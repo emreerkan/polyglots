@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { homedir } from 'node:os'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { openDb, upsertTm } from '../../../src/storage/index.js'
@@ -503,5 +504,61 @@ describe('translateFile: review provider from settings', () => {
     const review = fakeReview()
     await translateFile(base({ engine: fakeEngine(), review, provider: 'claude' }))
     expect(review.calls[0]!.opts.provider).toBe('claude')
+  })
+})
+
+describe('translateFile: codex model and effort', () => {
+  // codex is given the model and effort that resolved, since --ignore-user-config
+  // stops it reading its own file. CODEX_HOME is a temporary folder, so the
+  // developer's own config.toml cannot decide any of these.
+  let codexHome: string
+  let savedHome: string | undefined
+  beforeEach(() => {
+    savedHome = process.env.CODEX_HOME
+    codexHome = mkdtempSync(join(tmpdir(), 'polyglots-translate-codex-'))
+    process.env.CODEX_HOME = codexHome
+  })
+  afterEach(() => {
+    if (savedHome === undefined) delete process.env.CODEX_HOME
+    else process.env.CODEX_HOME = savedHome
+  })
+  const toml = (text: string) => writeFileSync(join(codexHome, 'config.toml'), text)
+
+  async function runCodex(extra: Partial<TranslateOptions> = {}): Promise<ReturnType<typeof fakeReview>> {
+    // Untouched catalogue each time, so only the review cache decides whether
+    // the entries are asked again.
+    await writeFile(ws.file, ws.original)
+    const review = fakeReview()
+    await translateFile(base({ engine: fakeEngine(), review, provider: 'codex', ...extra }))
+    return review
+  }
+
+  it('hands the review pass the model and effort from codex config.toml', async () => {
+    toml('model = "gpt-5.6-luna"\nmodel_reasoning_effort = "low"\n')
+    const review = await runCodex()
+    expect(review.calls[0]!.opts).toMatchObject({ provider: 'codex', model: 'gpt-5.6-luna', effort: 'low' })
+  })
+
+  it('lets --model override the model and keeps the effort', async () => {
+    toml('model = "gpt-5.6-luna"\nmodel_reasoning_effort = "low"\n')
+    const review = await runCodex({ model: 'gpt-5.5' })
+    expect(review.calls[0]!.opts).toMatchObject({ model: 'gpt-5.5', effort: 'low' })
+  })
+
+  it('passes neither when nothing names them', async () => {
+    const review = await runCodex()
+    expect(review.calls[0]!.opts.model).toBeUndefined()
+    expect(review.calls[0]!.opts.effort).toBeUndefined()
+  })
+
+  it('serves cached reviews until the effort changes, then asks again', async () => {
+    const { saveConfig } = await import('../../../src/config.js')
+    toml('model = "gpt-5.6-luna"\nmodel_reasoning_effort = "low"\n')
+    expect((await runCodex()).calls.length).toBeGreaterThan(0)
+    expect((await runCodex()).calls).toEqual([])
+    saveConfig({ reviewProvider: 'codex', codex: { effort: 'high' } })
+    const again = await runCodex()
+    expect(again.calls.length).toBeGreaterThan(0)
+    expect(again.calls[0]!.opts.effort).toBe('high')
   })
 })

@@ -467,6 +467,9 @@ async function runBatch(
     ...(opts.provider ? { provider: opts.provider } : {}),
     ...(opts.bin ? { bin: opts.bin } : {}),
     ...(opts.model ? { model: opts.model } : {}),
+    // codex only; the other providers ignore it. Added here or it never
+    // reaches the spawn, as `provider` once did not.
+    ...(opts.effort ? { effort: opts.effort } : {}),
     ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}),
     ...(opts.cwd ? { cwd: opts.cwd } : {}),
   }

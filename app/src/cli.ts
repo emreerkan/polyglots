@@ -56,7 +56,7 @@ import { loadPo } from './po/po-file.js'
 import { headerLocaleNotice, localeDefaultHelp, requireLocale, resolveFileLocale } from './cli/locale.js'
 import { parseParallel, printBatchEnd, runBatchJobs, startProviderCheck, type BatchCli } from './cli/batch.js'
 import { buildReport } from './review/message.js'
-import { agentBinOverride, batchAdvice, configuredModel } from './agent/providers.js'
+import { agentBinOverride, agentEngineLabel, agentModel, batchAdvice } from './agent/providers.js'
 import { defaultExec, discoverAgents, type AgentStatus } from './agent/discover.js'
 import { checkAgy, ProviderRefusal, type ProviderCheck } from './agent/agy-check.js'
 import {
@@ -304,7 +304,7 @@ function reviewerLabel(config: PolyglotsConfig, model: string | undefined): stri
       return 'local (no model chosen)'
     }
   }
-  const chosen = model ?? configuredModel(config.reviewProvider)
+  const chosen = agentEngineLabel(config.reviewProvider, agentModel(config.reviewProvider, config, model))
   return chosen ? `${config.reviewProvider}:${chosen}` : config.reviewProvider
 }
 
