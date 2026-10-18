@@ -14,6 +14,9 @@ import { useGlyphs } from '../theme.js'
 
 export interface HeaderProps {
   wordmark: boolean
+  // The locale every run is for. Absent means none is configured, which the
+  // header says outright rather than leaving the slot empty.
+  locale?: string
   provider: string
   model?: string
   // What the provider check adds: the model's quota, or, signed out, what to
@@ -41,10 +44,25 @@ function StepMark({ step, status, focused }: { step: SetupStep; status: SetupSta
   )
 }
 
-function ProviderLine({ provider, model, note }: { provider: string; model?: string | undefined; note?: HeaderProps['providerNote'] }) {
+// The locale leads the line and the model and note trail it, because
+// truncate-end cuts from the right: on a narrow terminal the locale must be
+// the last thing to go, since it is what a run acts on.
+function ProviderLine({
+  locale,
+  provider,
+  model,
+  note,
+}: {
+  locale?: string | undefined
+  provider: string
+  model?: string | undefined
+  note?: HeaderProps['providerNote']
+}) {
   const shownModel = note?.replacesModel ? undefined : model
   return (
     <Text wrap="truncate-end">
+      <Text {...TOKENS.muted.ink}>locale</Text> {locale === undefined ? <Text {...TOKENS.warn.ink}>none</Text> : locale}
+      <Text {...TOKENS.muted.ink}> · </Text>
       <Text {...TOKENS.muted.ink}>review</Text> {provider}
       {shownModel ? <Text {...TOKENS.muted.ink}> · {shownModel}</Text> : null}
       {note ? (
@@ -114,7 +132,7 @@ function Version({ update }: { update?: string | undefined }) {
   )
 }
 
-export function Header({ wordmark, provider, model, providerNote, status, focusedStep, statsUrl, statsError, update }: HeaderProps) {
+export function Header({ wordmark, locale, provider, model, providerNote, status, focusedStep, statsUrl, statsError, update }: HeaderProps) {
   const glyphs = useGlyphs()
   // Narrow terminals stack the status under the name: side by side, the
   // setup line alone is wider than the space beside the wordmark.
@@ -122,8 +140,10 @@ export function Header({ wordmark, provider, model, providerNote, status, focuse
     return (
       <Box flexDirection="column" width="100%" flexShrink={0}>
         <Box justifyContent="space-between">
-          <Version update={update} />
-          <ProviderLine provider={provider} model={model} note={providerNote} />
+          <Box flexShrink={0} marginRight={1}>
+            <Version update={update} />
+          </Box>
+          <ProviderLine locale={locale} provider={provider} model={model} note={providerNote} />
         </Box>
         <Box justifyContent="space-between">
           <SetupLine status={status} focusedStep={focusedStep} />
@@ -143,7 +163,7 @@ export function Header({ wordmark, provider, model, providerNote, status, focuse
       </Box>
       <Box flexDirection="column" alignItems="flex-end">
         <Version update={update} />
-        <ProviderLine provider={provider} model={model} note={providerNote} />
+        <ProviderLine locale={locale} provider={provider} model={model} note={providerNote} />
         <SetupLine status={status} focusedStep={focusedStep} />
         <StatsLine url={statsUrl} error={statsError} />
       </Box>

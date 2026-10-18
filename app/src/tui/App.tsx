@@ -414,6 +414,14 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
     }
   }
 
+  // Read from config like the setup status is, and for the same reason: the
+  // saved file is the truth, and the wizard or the config screen can change it
+  // under a mounted App. The epoch and the TUI state move when they do.
+  const headerLocale = useMemo(
+    () => configuredLocale(tryOr(() => commands.loadConfig(), DEFAULT_CONFIG)),
+    [commands, tuiState, setupEpoch, provider],
+  )
+
   const headerRows = layout.wordmark ? 4 : 2
   const bodyRows = Math.max(1, size.rows - headerRows - 2)
   const model = agents?.find((a) => a.provider === provider)?.model
@@ -525,6 +533,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
       {layout.fits ? (
         <Header
           wordmark={layout.wordmark}
+          {...(headerLocale === undefined ? {} : { locale: headerLocale })}
           provider={providerLabel(provider)}
           {...(model === undefined ? {} : { model })}
           {...(note === undefined ? {} : { providerNote: note })}
