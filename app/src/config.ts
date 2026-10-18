@@ -125,7 +125,8 @@ const configSchema = z.object({
   problemReports: z.enum(['ask', 'never']).optional(),
 })
 
-const SECRET_KEYS: ReadonlyArray<keyof Secrets> = ['DEEPL_API_KEY', 'OPENAI_API_KEY']
+// Exported for the problem report, which redacts these whatever their length.
+export const SECRET_KEYS: ReadonlyArray<keyof Secrets> = ['DEEPL_API_KEY', 'OPENAI_API_KEY']
 
 function writePrivate(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true })

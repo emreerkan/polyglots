@@ -1,6 +1,7 @@
 import type { ProbeExec, ProbeResult } from './providers.js'
 import { resolveAgentBin } from './providers.js'
 import { childEnv } from './run.js'
+import { excerpt as cut } from '../logs/excerpt.js'
 
 /**
  * Whether antigravity can take a batch at all, asked before the first one.
@@ -80,7 +81,7 @@ function excerpt(text: string): string | undefined {
     .map((l) => l.trim())
     .filter((l) => l !== '' && !/^Fetching available models/i.test(l))
     .at(-1)
-  return line === undefined ? undefined : line.slice(0, DETAIL_MAX)
+  return line === undefined ? undefined : cut(line, DETAIL_MAX)
 }
 
 export async function agySignIn(exec: ProbeExec, bin: string = defaultBin(), timeoutMs = STEP_TIMEOUT_MS): Promise<SignIn> {

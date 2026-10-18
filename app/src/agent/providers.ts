@@ -4,6 +4,7 @@ import { homedir, tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { docsUrl } from '../docs-links.js'
 import type { ReviewChoice, ReviewProvider } from '../types.js'
+import { excerpt } from '../logs/excerpt.js'
 
 // The only tools a review is allowed to reach for. Both providers restrict to
 // these, by different means: Claude takes a flag, antigravity takes allow-rules
@@ -161,7 +162,7 @@ function envelopeOf(stdout: string, provider: string): Record<string, unknown> {
   try {
     parsed = JSON.parse(stdout)
   } catch {
-    throw new AgentError(`${provider} stdout is not JSON: ${stdout.slice(0, 200)}`)
+    throw new AgentError(`${provider} stdout is not JSON: ${excerpt(stdout, 200)}`)
   }
   if (typeof parsed !== 'object' || parsed === null) {
     throw new AgentError(`${provider} stdout JSON is not an object`)
@@ -262,7 +263,7 @@ const claude: ProviderSpec = {
       try {
         return JSON.parse(env.result)
       } catch {
-        throw new AgentError(`claude result field is not JSON: ${env.result.slice(0, 200)}`)
+        throw new AgentError(`claude result field is not JSON: ${excerpt(env.result, 200)}`)
       }
     }
     throw new AgentError('claude envelope has neither structured_output nor a string result')
@@ -371,7 +372,7 @@ const antigravity: ProviderSpec = {
       try {
         return JSON.parse(env.response)
       } catch {
-        throw new AgentError(`antigravity response field is not JSON: ${env.response.slice(0, 200)}`)
+        throw new AgentError(`antigravity response field is not JSON: ${excerpt(env.response, 200)}`)
       }
     }
     // A soft-denied tool exits zero with a null structured_output and an empty

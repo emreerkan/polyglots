@@ -8,7 +8,7 @@ import { localModelId, resolveLocalTarget } from '../draft/local-chat.js'
 import { batchFailures, getRun } from '../jobs/index.js'
 import { runLogStem } from '../logs/paths.js'
 import type { PolyglotsConfig } from '../types.js'
-import { buildReport, encodeReport, ReportTooLarge, type Report } from './build.js'
+import { buildReport, encodeReport, oneLine, ReportTooLarge, type Report } from './build.js'
 import { problemRuns, saveReport, type SendResult } from './send.js'
 
 // What the command line and the app share about offering a problem report:
@@ -17,10 +17,6 @@ import { problemRuns, saveReport, type SendResult } from './send.js'
 // one function in the CLI, and the app would otherwise have had to copy the
 // send-then-save order and its wording, which is exactly the kind of copy
 // that drifts.
-
-// The endpoint refuses a longer contact line, and a refusal after the upload
-// would save the whole report over a few characters nobody needs.
-export const CONTACT_MAX = 200
 
 /** What the report says about the command that ran, beside the runs themselves. */
 export interface ReportFacts {
@@ -133,40 +129,25 @@ export function boundedVersion(source: Promise<string | undefined>, ms = VERSION
   return Promise.race([source.catch(() => undefined), late]).finally(() => clearTimeout(timer))
 }
 
-// What the endpoint takes for the provider's model and version
-// (MAX_DETAIL in polyglots-admin's validate.js).
-const DETAIL_MAX = 128
-
 /**
- * Free text made into what the endpoint accepts: one line, no control
- * characters, at most `max` long, and none when nothing is left. The endpoint
- * refuses the whole report over one field it cannot take, and only after the
- * upload, so a pasted tab in the contact line or a colour code in a
- * --version line would cost the report itself. A control character becomes a
- * space rather than nothing, so "slack:<tab>emre" stays two words.
+ * A contact line as typed: one line, and none when empty. Not cut here:
+ * buildReport cuts it to what the endpoint takes, after redaction, so a
+ * key quoted across the limit is never cut in half before it is found.
  */
-function oneLine(text: string, max: number): string | undefined {
-  const line = text.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max).trimEnd()
-  return line === '' ? undefined : line
-}
-
-/** A contact line as typed: one line, cut to what the endpoint takes, and none when empty. */
 export function contactLine(typed: string): string | undefined {
-  return oneLine(typed, CONTACT_MAX)
+  return oneLine(typed)
 }
 
 export function buildFor(jobs: Database.Database, runIds: number[], facts: ReportFacts, contact?: string): Report {
-  // Cleaned here rather than where each is read, since both come from text
-  // polyglots does not control: the model from the agent's own settings file
-  // or a --model flag, the version from a binary's output or, in the app,
-  // from discovery, which does not cut it.
-  const version = facts.version === undefined ? undefined : oneLine(facts.version, DETAIL_MAX)
-  const model = facts.model === undefined ? undefined : oneLine(facts.model, DETAIL_MAX)
+  // Passed as read: buildReport makes the model and version one line within
+  // the endpoint's limit, after redaction. Both come from text polyglots does
+  // not control: the model from the agent's own settings file or a --model
+  // flag, the version from a binary's output or, in the app, discovery.
   return buildReport(jobs, runIds, {
     provider: {
       name: facts.provider,
-      ...(version === undefined ? {} : { version }),
-      ...(model === undefined ? {} : { model }),
+      ...(facts.version === undefined ? {} : { version: facts.version }),
+      ...(facts.model === undefined ? {} : { model: facts.model }),
     },
     ...(facts.batchSize === undefined ? {} : { batchSize: facts.batchSize }),
     ...(facts.parallel === undefined ? {} : { parallel: facts.parallel }),

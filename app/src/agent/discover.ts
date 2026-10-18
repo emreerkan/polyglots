@@ -15,6 +15,7 @@ import {
 } from './providers.js'
 import { childEnv } from './run.js'
 import { agyQuota, agySignIn, type Quota } from './agy-check.js'
+import { excerpt } from '../logs/excerpt.js'
 
 export { findOnPath }
 
@@ -208,7 +209,7 @@ async function probeOne(provider: ReviewProvider, ctx: ProbeCtx, live: boolean):
   const versionFailure = v.timedOut
     ? `${bin} --version timed out after ${PROBE_TIMEOUT_MS / 1000}s`
     : v.code === null
-      ? `${bin} --version could not start${v.stderr.trim() ? `: ${v.stderr.trim().slice(0, 200)}` : ''}`
+      ? `${bin} --version could not start${v.stderr.trim() ? `: ${excerpt(v.stderr.trim(), 200)}` : ''}`
       : v.code !== 0
         ? `${bin} --version failed: exit ${v.code}`
         : undefined
@@ -265,7 +266,7 @@ async function liveProbe(provider: ReviewProvider, path: string, ctx: ProbeCtx):
     input: LIVE_PROMPT,
   })
   const ms = ctx.now() - started
-  const stderr = result.stderr.slice(0, STDERR_EXCERPT).trim()
+  const stderr = excerpt(result.stderr.trim(), STDERR_EXCERPT)
   // stderr folded in the way readAgentOutput does it, because a quota or a
   // denied tool explains itself there and nowhere else.
   const withStderr = (message: string) => (stderr ? `${message}; stderr: ${stderr}` : message)

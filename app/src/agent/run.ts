@@ -12,6 +12,7 @@ import {
   type AgentRunOptions,
   type ProviderSpec,
 } from './providers.js'
+import { excerpt } from '../logs/excerpt.js'
 
 export {
   AgentError,
@@ -216,13 +217,13 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
         process.on('exit', flushDebugCaptures)
       }
     }
-    const excerpt = (): string => stderr.slice(0, STDERR_EXCERPT)
+    const stderrExcerpt = (): string => excerpt(stderr, STDERR_EXCERPT)
     // An agent reports a usage limit on stdout and exits non-zero, so a failure
     // whose stderr is empty still has its reason in hand. Reporting only stderr
     // turned "your quota ran out" into a bare exit code.
     const why = (): string => {
-      const out = stdout.trim().slice(0, STDERR_EXCERPT)
-      const err = excerpt().trim()
+      const out = excerpt(stdout.trim(), STDERR_EXCERPT)
+      const err = excerpt(stderr.trim(), STDERR_EXCERPT)
       return [err && `stderr: ${err}`, out && `stdout: ${out}`].filter(Boolean).join('; ') || 'no output'
     }
 
@@ -239,7 +240,7 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
         }, killGraceMs)
         killTimer.unref()
       }
-      reject(new AgentError(`${spec.name} timed out after ${timeoutMs}ms; stderr: ${excerpt()}`, { stderr: excerpt() }))
+      reject(new AgentError(`${spec.name} timed out after ${timeoutMs}ms; stderr: ${stderrExcerpt()}`, { stderr: stderrExcerpt() }))
     }, timeoutMs)
 
     child.stdin.on('error', () => {})
@@ -264,7 +265,7 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
       if (settled) return
       settled = true
       clearTimeout(timer)
-      reject(new AgentError(`failed to spawn ${command}: ${err.message}`, { stderr: excerpt() }))
+      reject(new AgentError(`failed to spawn ${command}: ${err.message}`, { stderr: stderrExcerpt() }))
     })
 
     // close fires for every ending, a kill included, and after the promise has
@@ -300,7 +301,7 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
       clearTimeout(timer)
       if (code !== 0) {
         const how = code === null ? `signal ${signal}` : `exit code ${code}`
-        reject(new AgentError(`${spec.name} exited with ${how}; ${why()}`, { stderr: excerpt() }))
+        reject(new AgentError(`${spec.name} exited with ${how}; ${why()}`, { stderr: stderrExcerpt() }))
         return
       }
       resolve({ stdout, stderr })
@@ -321,7 +322,7 @@ export function readAgentOutput(output: AgentOutput, opts: AgentRunOptions): unk
     return spec.readEnvelope(output.stdout)
   } catch (err) {
     if (err instanceof AgentError && output.stderr.trim()) {
-      throw new AgentError(`${err.message}; stderr: ${output.stderr.slice(0, STDERR_EXCERPT).trim()}`, {
+      throw new AgentError(`${err.message}; stderr: ${excerpt(output.stderr.trim(), STDERR_EXCERPT)}`, {
         stderr: output.stderr,
       })
     }

@@ -167,6 +167,14 @@ describe('reading an antigravity envelope', () => {
     expect(() => read(stdout, stderr)).toThrow(/mcp.*permission/)
   })
 
+  // A cut marks itself, so a problem report can find a key's start before it
+  // wherever the cut lands in the message (see excerpt and the redactor).
+  it('marks where it cut a long stdout or stderr it quotes', () => {
+    expect(() => read('x'.repeat(300))).toThrow(new RegExp(`not JSON: ${'x'.repeat(200)}…$`))
+    const stdout = JSON.stringify({ status: 'SUCCESS', structured_output: null })
+    expect(() => read(stdout, 'y'.repeat(600))).toThrow(new RegExp(`stderr: ${'y'.repeat(500)}…$`))
+  })
+
   it('reports a non-JSON stdout as such, not as a missing field', () => {
     expect(() => read('command not found: agy')).toThrow(AgentError)
     expect(() => read('command not found: agy')).toThrow(/not JSON/)

@@ -11,6 +11,7 @@ import {
 } from '../agent/run.js'
 import { buildReviewPrompt } from './prompt.js'
 import { reviewBatchJsonSchema, reviewBatchSchema } from './schema.js'
+import { excerpt } from '../logs/excerpt.js'
 
 export const REVIEW_ALLOWED_TOOLS = MCP_TOOLS
 
@@ -44,7 +45,7 @@ export function buildReviewArgs(opts: ReviewOptions): string[] {
 export function mapResults(inputs: ReviewInput[], payload: unknown, nplurals: number): ReviewResult[] {
   const parsed = reviewBatchSchema.safeParse(payload)
   if (!parsed.success) {
-    throw new ReviewError(`agent output failed schema validation: ${parsed.error.message.slice(0, 500)}`)
+    throw new ReviewError(`agent output failed schema validation: ${excerpt(parsed.error.message, 500)}`)
   }
 
   const byId = new Map<number, (typeof parsed.data.results)[number]>()

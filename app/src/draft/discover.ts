@@ -3,6 +3,7 @@ import { loadConfig } from '../config.js'
 import type { LocalServerKind, PolyglotsConfig } from '../types.js'
 import { DEFAULT_QWEN_BASE_URL } from './qwen.js'
 import { normalizeBaseUrl, serverBaseUrl } from './local-chat.js'
+import { excerpt } from '../logs/excerpt.js'
 
 export { normalizeBaseUrl, serverBaseUrl }
 
@@ -152,7 +153,7 @@ function describeFailure(err: unknown, timeoutMs: number): string {
 }
 
 function firstLine(text: string): string {
-  return text.split(/\r?\n/)[0]!.slice(0, 200)
+  return excerpt(text.split(/\r?\n/)[0]!, 200)
 }
 
 type Listing =

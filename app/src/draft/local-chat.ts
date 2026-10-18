@@ -1,4 +1,5 @@
 import type { DraftEngineName, LocalServerKind, LocalServerSettings, PolyglotsConfig } from '../types.js'
+import { excerpt } from '../logs/excerpt.js'
 
 /**
  * Talking to a model on a local server: Ollama's own API, or the
@@ -224,7 +225,7 @@ async function failure(res: Response): Promise<Error> {
   // A short excerpt of what the server said, because a 400 from LM Studio
   // ("no model loaded") or vLLM (a schema it cannot compile) explains itself
   // only in the body.
-  const said = (await res.text().catch(() => '')).trim().slice(0, 200)
+  const said = excerpt((await res.text().catch(() => '')).trim(), 200)
   const status = [`HTTP ${res.status}`, res.statusText].filter(Boolean).join(' ')
   return new Error(said ? `${status}: ${said}` : status)
 }

@@ -118,6 +118,35 @@ describe('buildFor', () => {
     for (const text of [model!, version!]) expect(text).not.toMatch(/[\u0000-\u001f\u007f]/)
   })
 
+  // The redactor writes [redacted], ten characters, for a key polyglots reads
+  // from six characters up, so a short key makes a value longer than it was. Cut
+  // before that, a model or contact line at the limit went out over it.
+  describe('with a key the redactor replaces', () => {
+    const saved = process.env.DEEPL_API_KEY
+    afterEach(() => {
+      if (saved === undefined) delete process.env.DEEPL_API_KEY
+      else process.env.DEEPL_API_KEY = saved
+    })
+
+    it('still sends the model and the contact line within the limits once redacted', () => {
+      process.env.DEEPL_API_KEY = 'qqqqqq'
+      const report = withRun((jobs, runId) =>
+        buildFor(jobs, [runId], { provider: 'antigravity', model: 'q'.repeat(128) }, contactLine('q'.repeat(200))),
+      )
+      expect(report.provider.model).toContain('[redacted]')
+      expect(report.provider.model!.length).toBeLessThanOrEqual(128)
+      expect(report.contact!.length).toBeLessThanOrEqual(200)
+    })
+
+    // Cut first, a key across the limit was cut in half, and the half left
+    // was no longer the key the redactor looks for.
+    it('never sends part of a key that ran across the limit', () => {
+      process.env.DEEPL_API_KEY = 'SECRETKEY99'
+      const report = withRun((jobs, runId) => buildFor(jobs, [runId], { provider: 'antigravity', model: `${'a'.repeat(120)}SECRETKEY99` }))
+      expect(report.provider.model).not.toContain('SECRET')
+    })
+  })
+
   it('leaves out a model with nothing but control characters, which the endpoint would refuse as empty', () => {
     const report = withRun((jobs, runId) => buildFor(jobs, [runId], { provider: 'claude', model: '\n\t' }))
     expect(report.provider).toEqual({ name: 'claude' })

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { excerpt } from '../logs/excerpt.js'
 
 export const AUDIT_CATEGORIES = [
   'meaning',
@@ -65,7 +66,7 @@ export interface AuditCandidateId {
 export function mapAuditResults(candidates: AuditCandidateId[], payload: unknown): AuditResult[] {
   const parsed = auditBatchSchema.safeParse(payload)
   if (!parsed.success) {
-    throw new AuditError(`claude output failed schema validation: ${parsed.error.message.slice(0, 500)}`)
+    throw new AuditError(`claude output failed schema validation: ${excerpt(parsed.error.message, 500)}`)
   }
 
   const byId = new Map<number, AuditResult>()
