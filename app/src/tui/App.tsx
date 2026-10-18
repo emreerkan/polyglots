@@ -62,8 +62,9 @@ export interface AppProps {
 type Overlay = 'help' | 'palette' | 'quit' | 'locale' | 'locale-setup'
 
 // Why the locale picker refuses a pick. Nothing past the refusal is promised:
-// the run may be stopped or finish, and either frees the picker.
-const LOCALE_BUSY = 'The locale changes after the run ends.'
+// the job may be stopped or finish, and either frees the picker. "Job", not
+// "run": a glossary sync, a memory import or a rules fetch holds it too.
+const LOCALE_BUSY = 'The locale changes after the current job ends.'
 const LOCALE_UNSAVED = 'Save or discard the changes first.'
 
 function tryOr<T>(read: () => T, fallback: T): T {
@@ -382,7 +383,10 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
     // Patched onto the file as it is now, not onto the copy read at launch:
     // Interface settings writes the same file, and a stale copy here would
     // put back a setting it had just turned off.
-    const next = patch(tryOr(() => commands.loadTuiState(), tuiState))
+    // Migrated again too: when the launch save failed, the file still holds
+    // the old global lists, and patching it as read would write them back
+    // over the migration the render already has.
+    const next = patch(migrateTuiState(tryOr(() => commands.loadTuiState(), tuiState), locale))
     try {
       commands.saveTuiState(next)
     } catch {
@@ -433,11 +437,13 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   }
 
   // Once per locale, on the first change to it: a locale without a glossary or
-  // rules reviews with the mechanical checks alone, and nothing else on screen
-  // would say so. Asked whatever the answer, and whether or not anything is
-  // missing, so a switch back and forth never asks twice. The memory counts
-  // only when the vault is already known to list it for this locale: no fetch
-  // is started for the question, and an unknown answer is no reason to ask.
+  // rules reviews without their checks, and nothing else on screen would say
+  // so. Asked whatever the answer, and whether or not anything is missing, so
+  // a switch back and forth never asks twice. The memory counts only in
+  // principle, when the vault is already known to list it for this locale: no
+  // fetch is started for the question, and the listing held here is for the
+  // locale being left, so from the picker it never does. The walk the offer
+  // starts still passes the memory step, which reads the vault itself.
   const offerSetup = (id: string) => {
     // Off the file, as record patches it: the render's copy predates the
     // recent-list write changeLocale has just made.

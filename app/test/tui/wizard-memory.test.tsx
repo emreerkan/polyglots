@@ -7,7 +7,7 @@ import { App } from '../../src/tui/App.js'
 import { CommandsProvider, type TuiCommands } from '../../src/tui/commands.js'
 import { Wizard } from '../../src/tui/screens/Wizard.js'
 import { setupStatus } from '../../src/tui/setup.js'
-import { DEFAULT_TUI_STATE, type TuiState } from '../../src/tui/state.js'
+import { DEFAULT_TUI_STATE, LOCALE_STEPS, type SetupStep, type TuiState } from '../../src/tui/state.js'
 import {
   ESC_DELAY,
   agentStatus,
@@ -51,7 +51,7 @@ function plan(): TmFetchPlan {
   return { locale: 'tr', entry: tmEntry(), existing: 0, summary: ['Turkish (tr): 1,002 strings, 98.1 KiB download, built 2026-10-15'] }
 }
 
-function mount(manifest: () => Promise<Manifest>, overrides: Partial<TuiCommands> = {}) {
+function mount(manifest: () => Promise<Manifest>, overrides: Partial<TuiCommands> = {}, steps?: readonly SetupStep[]) {
   let state: TuiState = structuredClone(DEFAULT_TUI_STATE)
   const onRecord = vi.fn((patch: (s: TuiState) => TuiState) => {
     state = patch(state)
@@ -59,7 +59,7 @@ function mount(manifest: () => Promise<Manifest>, overrides: Partial<TuiCommands
   const commands = fakeCommands({ dataClient: { manifest: vi.fn(manifest), download: vi.fn() }, ...overrides })
   const view = render(
     <CommandsProvider value={commands}>
-      <Wizard start="memory" status={STATUS} onRecord={onRecord} onDone={() => undefined} />
+      <Wizard start="memory" {...(steps === undefined ? {} : { steps })} status={STATUS} onRecord={onRecord} onDone={() => undefined} />
     </CommandsProvider>,
   )
   return { ...view, commands, onRecord, state: () => state }
@@ -100,6 +100,23 @@ describe('the wizard memory step', () => {
     expect(frame).toContain('Could not reach polyglots-data; skipped.')
     expect(frame).toContain('Step 6 of 6')
     expect(view.state().wizard.locales.tr?.skipped).toContain('memory')
+  })
+
+  // The walk a change of locale offers goes through memory whether or not it
+  // was missing. Being offline on that walk says nothing about whether the
+  // person wants the memory, and a skip kept for good would stop it ever
+  // being offered for this locale.
+  it('offline on the walk a change of locale offers, moves on without a lasting skip', async () => {
+    const view = mount(
+      async () => {
+        throw new Error('GET https://example.invalid/index.json failed: getaddrinfo ENOTFOUND')
+      },
+      {},
+      LOCALE_STEPS,
+    )
+    await waitFor(() => flat(view.lastFrame()).includes('Step 3 of 3'), 100)
+    expect(flat(view.lastFrame())).toContain('Could not reach polyglots-data; skipped.')
+    expect(view.state().wizard.locales.tr?.skipped ?? []).not.toContain('memory')
   })
 
   it('draws at once while the manifest is read, and esc skips the step', async () => {

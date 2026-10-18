@@ -126,7 +126,7 @@ describe('the locale picker', () => {
     await openPicker(view)
     await type(view.stdin, 'nl')
     view.stdin.write(keys.enter)
-    await waitForText(view.lastFrame, 'The locale changes after the run ends.')
+    await waitForText(view.lastFrame, 'The locale changes after the current job ends.')
     expect(save).not.toHaveBeenCalled()
     expect(loadConfig().defaultLocale).toBe('tr')
   })
@@ -194,6 +194,11 @@ describe('the locale picker', () => {
 })
 
 describe('the setup offer on a change of locale', () => {
+  // The prompt's text, with the border Ink draws at each wrap taken out.
+  const prompt = (frame: string | undefined) => {
+    const text = flat(frame).replace(/(\s*│\s*)+/g, ' ')
+    return text.slice(text.indexOf(' has no '), text.indexOf('not now') + 'not now'.length)
+  }
   async function change(view: ReturnType<typeof render>, id: string) {
     await openPicker(view)
     await type(view.stdin, id)
@@ -206,7 +211,7 @@ describe('the setup offer on a change of locale', () => {
     const view = render(<App commands={fakeCommands(tui)} cwd={cwd} />)
     await change(view, 'nl')
     await waitForText(view.lastFrame, 'nl has no glossary or locale rules yet.')
-    expect(flat(view.lastFrame())).toContain('Without them polyglots runs only the mechanical checks.')
+    expect(prompt(view.lastFrame())).toContain("Until then, reviews go without glossary term checks and this locale's own checks.")
     expect(flat(view.lastFrame())).toContain('Set them up now? y set up · n not now')
     view.stdin.write('n')
     await tick()
@@ -238,6 +243,18 @@ describe('the setup offer on a change of locale', () => {
     await tick(ESC_DELAY)
     await waitForText(view.lastFrame, 'Import Translation Memory · locale nl')
     expect(flat(view.lastFrame())).not.toContain('Setup ·')
+  })
+
+  // With the glossary there, the rules still missing: the consequence named is
+  // only what is lost, and the question is put in the singular.
+  it('one missing step is named alone, in the singular', async () => {
+    const view = render(<App commands={fakeCommands({ ...memoryTuiState(dismissed()), glossaryCount: () => 5 })} cwd={cwd} />)
+    await change(view, 'nl')
+    await waitForText(view.lastFrame, 'nl has no locale rules yet.')
+    const frame = prompt(view.lastFrame())
+    expect(frame).toContain("Until then, reviews go without this locale's own checks.")
+    expect(frame).toContain('Set it up now? y set up · n not now')
+    expect(frame).not.toContain('glossary')
   })
 
   it('a configured locale gets no offer', async () => {
@@ -292,5 +309,27 @@ describe('the setup offer on a change of locale', () => {
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, 'Step 2 of 6')
     expect(tui.loadTuiState().wizard.locales.de?.asked).toBe(true)
+    // As the picker does: the locale replaced stays one key away.
+    expect(tui.loadTuiState().recentLocales).toEqual(['de', 'tr'])
+  })
+
+  // The launch migration's save can fail, and the next write re-reads the
+  // file. Migrated again there, the answers an older file kept in the global
+  // lists still land under the locale they were given for.
+  it('a write after a failed launch save still carries the migration', async () => {
+    let state: TuiState = { ...DEFAULT_TUI_STATE, wizard: { dismissed: true, skipped: ['memory'], confirmed: [], locales: {} } }
+    let saves = 0
+    const tui = {
+      loadTuiState: () => state,
+      saveTuiState: (next: TuiState) => {
+        if (saves++ === 0) throw new Error('read-only')
+        state = next
+      },
+    }
+    const view = render(<App commands={fakeCommands({ ...tui, ...setUp })} cwd={cwd} />)
+    await change(view, 'nl')
+    await tick(20)
+    expect(state.wizard.skipped).not.toContain('memory')
+    expect(state.wizard.locales.tr?.skipped).toContain('memory')
   })
 })

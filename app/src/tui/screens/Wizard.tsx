@@ -95,7 +95,7 @@ function Choice<T extends { id: string; label: string; cost: string }>({ options
 // what imported it from here keeps working.
 export { matchLocales } from '../components/LocaleSearch.js'
 
-function LocaleStep({ onChosen, onSkip }: { onChosen: (id: string) => void; onSkip: () => void }) {
+function LocaleStep({ onChosen, onSkip }: { onChosen: (id: string, previous: string | undefined) => void; onSkip: () => void }) {
   const commands = useCommands()
   // The configured locale when there is one, so re-running setup starts from
   // it. Otherwise empty: this used to open on tr, and enter, the key that
@@ -111,9 +111,17 @@ function LocaleStep({ onChosen, onSkip }: { onChosen: (id: string) => void; onSk
   // The arrows are the search list's own; enter is its field's submit.
   useKeys({ wizard: { skip: onSkip, move: undefined, choose: undefined } })
   const pick = (id: string) => {
+    // Read before the save below replaces it, so the walk can keep it in the
+    // recent list as the picker does.
+    let previous: string | undefined
+    try {
+      previous = configuredLocale(commands.loadConfig())
+    } catch {
+      previous = undefined
+    }
     try {
       commands.saveConfig({ defaultLocale: id })
-      onChosen(id)
+      onChosen(id, previous)
     } catch (err) {
       setError(errorMessage(err))
     }
@@ -301,11 +309,15 @@ export function Wizard({ start, steps, status, agents, onRecord, onAdvance, onDo
   if (step === 'locale') {
     body = (
       <LocaleStep
-        onChosen={(id) => {
+        onChosen={(id, previous) => {
           // Asked as well: the locale chosen here is being set up right now,
           // and offering its setup again on a later switch back to it would
-          // ask what this walk is already answering.
-          onRecord((s) => markAsked({ ...s, recentLocales: pushRecent(s.recentLocales, id) }, id))
+          // ask what this walk is already answering. The locale replaced goes
+          // in under it, as the picker puts it, so the way back is one key.
+          onRecord((s) => {
+            const left = previous === undefined || previous === id ? s.recentLocales : pushRecent(s.recentLocales, previous)
+            return markAsked({ ...s, recentLocales: pushRecent(left, id) }, id)
+          })
           record('confirmed')
           advance()
         }}
@@ -368,7 +380,14 @@ export function Wizard({ start, steps, status, agents, onRecord, onAdvance, onDo
         onSkip={skip}
         onUnlisted={advance}
         onOffline={() => {
-          skip()
+          // In the full wizard an offline step is skipped as esc would skip
+          // it. The walk a change of locale offers passes this step whether
+          // or not the memory was missing, and a lasting skip there would
+          // stop the memory ever being offered for the locale over one
+          // dropped connection; it moves on and records nothing, as a failed
+          // fetch does.
+          if (steps === undefined) skip()
+          else advance()
           setNote(OFFLINE_NOTE)
         }}
         onDone={(outcome) => {
