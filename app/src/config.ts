@@ -13,6 +13,12 @@ import { resolveLocale } from './wporg/locales.js'
 // other default discovery probes.
 export const DEFAULT_OPENAI_COMPATIBLE_BASE_URL = 'http://localhost:1234'
 
+// The reasoning efforts codex exec accepts through its model_reasoning_effort
+// setting. Listed here rather than read from codex, so a typo is refused at
+// config set instead of surfacing as a rejected run.
+export const CODEX_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const
+export type CodexEffort = (typeof CODEX_EFFORTS)[number]
+
 // No defaultLocale: there is no locale that is a safe guess for a stranger.
 // Through 0.25 this said tr, and a German translator's first review ran Turkish
 // rules over German text without a word. A command that needs a locale and
@@ -80,6 +86,15 @@ const configSchema = z.object({
     .refine((v) => v === '' || /^[A-Za-z0-9_-]+$/.test(v), {
       message: 'wporgUsername may only hold letters, digits, hyphens and underscores',
     }),
+  // Optional and never defaulted: absent means codex decides, from the
+  // person's own codex config.toml. Writing a default here would override a
+  // choice they made in codex itself without their knowing.
+  codex: z
+    .object({
+      model: z.string().trim().min(1).optional(),
+      effort: z.enum(CODEX_EFFORTS).optional(),
+    })
+    .optional(),
   // Defaulted rather than required, so a config written before the local
   // engine existed still parses.
   ollama: z

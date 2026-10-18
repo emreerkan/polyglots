@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { configDir, configFile, secretsFile } from '../../src/paths.js'
 import {
+  CODEX_EFFORTS,
   DEFAULT_CONFIG,
   loadConfig,
   loadSecrets,
@@ -425,5 +426,19 @@ describe('loadConfig and the local engine', () => {
       await writeConfigRaw(JSON.stringify({ localModelServers: [bad] }))
       expect(() => loadConfig()).toThrow(/localModelServers/)
     }
+  })
+})
+
+describe('codex settings', () => {
+  it('leaves codex undefined when the config has none, never defaulting it', () => {
+    expect(loadConfig().codex).toBeUndefined()
+    expect(DEFAULT_CONFIG.codex).toBeUndefined()
+  })
+
+  it('keeps a model and an effort, and rejects an effort outside the list', () => {
+    expect(CODEX_EFFORTS).toEqual(['minimal', 'low', 'medium', 'high', 'xhigh'])
+    expect(saveConfig({ codex: { model: 'gpt-5.5', effort: 'low' } }).codex).toEqual({ model: 'gpt-5.5', effort: 'low' })
+    expect(() => saveConfig({ codex: { effort: 'fast' as never } })).toThrow(/codex\.effort/)
+    expect(() => saveConfig({ codex: { model: '  ' } })).toThrow(/codex\.model/)
   })
 })

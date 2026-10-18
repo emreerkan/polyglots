@@ -1480,6 +1480,34 @@ describe('local models', () => {
       expect((await configJson()).ollama).toEqual({ baseUrl: 'http://box:11434/', model: `${DEFAULT_QWEN_MODEL}` })
     })
 
+    it('sets codex.effort and codex.model, and an empty value removes each again', async () => {
+      expect(await harness().run(['config', 'set', 'codex.effort', 'high'])).toBe(0)
+      expect(await harness().run(['config', 'set', 'codex.model', ' gpt-5.5 '])).toBe(0)
+      expect((await configJson()).codex).toEqual({ effort: 'high', model: 'gpt-5.5' })
+      const read = harness()
+      await read.run(['config', 'get', 'codex.model'])
+      expect(read.stdout.text.trim()).toBe('gpt-5.5')
+
+      const h = harness()
+      expect(await h.run(['config', 'set', 'codex.model', ''])).toBe(0)
+      expect(h.stdout.text).toBe('✓ codex.model unset\n')
+      expect((await configJson()).codex).toEqual({ effort: 'high' })
+      expect(await harness().run(['config', 'set', 'codex.effort', ''])).toBe(0)
+      expect((await configJson()).codex).toEqual({})
+    })
+
+    it('refuses a codex.effort that is not one of the five, naming them', async () => {
+      const h = harness()
+      expect(await h.run(['config', 'set', 'codex.effort', 'fast'])).toBe(2)
+      expect(h.stderr.text).toContain('minimal, low, medium, high, xhigh')
+    })
+
+    it('refuses a codex.model with a space in it', async () => {
+      const h = harness()
+      expect(await h.run(['config', 'set', 'codex.model', 'gpt 5'])).toBe(2)
+      expect(h.stderr.text).toContain('codex.model')
+    })
+
     it('refuses an ollama.baseUrl that is not an http URL', async () => {
       const h = harness()
       expect(await h.run(['config', 'set', 'ollama.baseUrl', 'not-a-url'])).toBe(2)

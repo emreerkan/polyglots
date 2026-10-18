@@ -1,3 +1,5 @@
+import type { CodexEffort } from './config.js'
+
 export type Locale = string
 
 export interface TranslationUnit {
@@ -296,6 +298,9 @@ export interface PolyglotsConfig {
   // Absent means ask. Whether a run with a problem offers to send a report to
   // the maintainer (src/report/send.ts); `never` stops the offer, not the logs.
   problemReports?: 'ask' | 'never'
+  // Absent means codex decides (its own config.toml). Overrides for the codex
+  // review provider only; neither field is ever defaulted.
+  codex?: { model?: string; effort?: CodexEffort }
 }
 
 export interface Secrets {

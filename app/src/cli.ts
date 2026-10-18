@@ -38,7 +38,7 @@ import { stopOnSignal } from './jobs/stop-on-signal.js'
 import { openInBrowser, portInUseWarning } from './stats/server.js'
 import { rulesBuilderUrl } from './rules/builder-url.js'
 import { wpCodeOf } from './wporg/locales.js'
-import { DEFAULT_CONFIG, isHttpUrl, loadConfig, loadSecrets, maskSecret, saveConfig, saveSecret, unsetConfig } from './config.js'
+import { CODEX_EFFORTS, DEFAULT_CONFIG, isHttpUrl, loadConfig, loadSecrets, maskSecret, saveConfig, saveSecret, unsetConfig } from './config.js'
 import {
   UsageError,
   expandFileArgs,
@@ -673,7 +673,30 @@ function splitServerKey(key: ServerKey): [ServerGroup, ServerField] {
   return key.split('.') as [ServerGroup, ServerField]
 }
 
-const SETTABLE_KEYS = [...CONFIG_KEYS, ...SERVER_KEYS].join(', ')
+// The codex provider's two overrides. Their own group rather than part of
+// SERVER_KEYS: there is no server, no URL and no model check to run after
+// saving, and an empty value removes the key instead of being refused.
+const CODEX_KEYS = ['codex.model', 'codex.effort'] as const
+type CodexKey = (typeof CODEX_KEYS)[number]
+
+function isCodexKey(key: string): key is CodexKey {
+  return (CODEX_KEYS as readonly string[]).includes(key)
+}
+
+// undefined for an empty value, which removes the override: codex falls back
+// to its own config.toml, the same way an empty contextLength does above.
+function coerceCodexValue(key: CodexKey, raw: string): string | undefined {
+  const value = raw.trim()
+  if (value === '') return undefined
+  if (key === 'codex.effort') {
+    if ((CODEX_EFFORTS as readonly string[]).includes(value)) return value
+    throw new UsageError(`${key} must be one of ${CODEX_EFFORTS.join(', ')}, got "${raw}"`)
+  }
+  if (/\s/.test(value)) throw new UsageError(`${key} must be a model name without spaces, got "${raw}"`)
+  return value
+}
+
+const SETTABLE_KEYS = [...CONFIG_KEYS, ...SERVER_KEYS, ...CODEX_KEYS].join(', ')
 
 function parseHttpUrl(key: string, raw: string): string {
   const url = raw.trim()
@@ -873,6 +896,10 @@ function configGet(cli: Cli, key: string | undefined): void {
     cli.out(String(config[group][field] ?? ''))
     return
   }
+  if (isCodexKey(key)) {
+    cli.out(config.codex?.[key === 'codex.model' ? 'model' : 'effort'] ?? '')
+    return
+  }
   if (key === 'localModelServers') {
     // Comma-joined with no space, the form config set reads back.
     cli.out(config.localModelServers.join(','))
@@ -916,6 +943,14 @@ async function configSet(cli: Cli, key: string, raw: string): Promise<void> {
         model: saved[group].model,
       })
     }
+    return
+  }
+  if (isCodexKey(key)) {
+    const field = key === 'codex.model' ? 'model' : 'effort'
+    const value = coerceCodexValue(key, raw)
+    const { [field]: _previous, ...rest } = cli.config().codex ?? {}
+    saveConfig({ codex: value === undefined ? rest : { ...rest, [field]: value } } as Partial<PolyglotsConfig>)
+    cli.out(okLine(cli.ui.out, value === undefined ? `${key} unset` : `${key} = ${value}`))
     return
   }
   if (!isConfigKey(key)) throw new UsageError(`Unknown config key "${key}"; expected one of ${SETTABLE_KEYS}`)
