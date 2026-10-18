@@ -3,7 +3,7 @@ import { basename, dirname, extname, join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { groupFor, OTHER_GROUP } from '../review/message.js'
 import { agentEngineLabel, agentModel as resolveAgentModel, agentSpawnModel, type AgentRunOptions } from '../agent/providers.js'
-import { gateRun, ProviderRefusal, quotaRecheck, type ProviderCheck } from '../agent/agy-check.js'
+import { gateRun, hasProviderCheck, ProviderRefusal, quotaRecheck, type ProviderCheck } from '../agent/agy-check.js'
 import { defaultExec } from '../agent/discover.js'
 import type { ProbeExec } from '../agent/providers.js'
 import { createLocalChat, localIdleTimeoutMs, localModelId, resolveLocalTarget, type LocalChat } from '../draft/local-chat.js'
@@ -84,12 +84,14 @@ export interface ReviewOptions extends Partial<Omit<AgentRunOptions, 'provider'>
   // Where a warning about the run log itself goes; stderr unless a caller,
   // a test or a screen that owns the terminal, wants the line.
   onWarn?: (line: string) => void
-  // The antigravity sign-in and quota check, started by the caller beside the
-  // run rather than inside it, so it costs the run nothing until the first
-  // batch, where it is awaited for at most ten seconds. Ignored for any other
-  // provider and on a rules-only run.
+  // The provider check, antigravity's sign-in and quota or codex's sign-in
+  // and model, started by the caller beside the run rather than inside it,
+  // so it costs the run nothing until the first batch, where it is awaited
+  // for at most ten seconds (thirty for codex). Ignored for a provider with
+  // no check and on a rules-only run.
   preflight?: Promise<ProviderCheck | undefined>
   // Runs agy for the quota read after a failed batch; tests pass a fake.
+  // codex has no quota to read, so it is never used for codex.
   providerExec?: ProbeExec
   // Told the run's id the moment its row exists, so a caller can ask after
   // the run whether it had a problem worth a report. A run that throws has no
@@ -518,22 +520,36 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
         return annotations.size
       }
 
-      // Only antigravity is checked: a signed-out agy waits a minute on a
-      // sign-in nobody will complete, once per attempt, and an empty quota
-      // fails every batch without saying so. Claude answers its own sign-in
-      // without prompting, and a rules-only run reaches no agent at all.
+      // antigravity and codex are checked. A signed-out agy waits a minute on
+      // a sign-in nobody will complete, once per attempt, and an empty quota
+      // fails every batch without saying so; a signed-out codex, or one whose
+      // plan lacks the model, fails every batch the same way. Claude answers
+      // its own sign-in without prompting, and a rules-only run reaches no
+      // agent at all.
       //
       // Awaited from auditEntries just before its first batch, not here: the
       // rules pass runs beside the check, and a resume the cache answers in
       // full never waits on it or is refused by it. The quota read after a
-      // failed batch exists only once the check said signed in; see
-      // quotaRecheck for why nothing short of that may run /usage.
-      const antigravity = agent === 'antigravity' && !noAi
-      const preflight = antigravity ? opts.preflight : undefined
+      // failed batch is antigravity's alone, and exists only once the check
+      // said signed in; see quotaRecheck for why nothing short of that may
+      // run /usage. codex prints no quota to read.
+      //
+      // The gate gets the bare model and effort, not the engine label: the
+      // label is for the cache key, and codex's verdict is matched on the
+      // model it asked about.
+      const checked = agent !== undefined && hasProviderCheck(agent) && !noAi ? agent : undefined
+      const preflight = checked ? opts.preflight : undefined
       const beforeBatches = preflight
         ? async () => {
-            const check = await gateRun({ preflight, model: agentModel, log: (kind, fields) => runLog?.write(kind, fields), warn })
-            if (check?.signIn.state === 'signed-in') {
+            const check = await gateRun({
+              preflight,
+              provider: checked!,
+              model: resolved.model,
+              ...(resolved.effort === undefined ? {} : { effort: resolved.effort }),
+              log: (kind, fields) => runLog?.write(kind, fields),
+              warn,
+            })
+            if (checked === 'antigravity' && check?.signIn.state === 'signed-in') {
               recheck = quotaRecheck(opts.providerExec ?? defaultExec, (kind, fields) => runLog?.write(kind, fields), opts.bin)
             }
           }

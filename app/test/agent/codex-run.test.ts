@@ -95,7 +95,16 @@ describe('codex through runAgent', () => {
         .trim()
         .split('\n')
         .filter((l) => l !== '')
-        .map((l) => JSON.parse(l) as Record<string, unknown>)
+        // The writer may be part way through the last line when this reads,
+        // and a half line must read as not yet there rather than throw out
+        // of the poll that exists to wait for it.
+        .flatMap((l) => {
+          try {
+            return [JSON.parse(l) as Record<string, unknown>]
+          } catch {
+            return []
+          }
+        })
         .find((l) => l.kind === 'agent-exit')
     const deadline = Date.now() + 5_000
     let exit = read()

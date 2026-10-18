@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from 'react'
 import { defaultExec, discoverAgents } from '../agent/discover.js'
-import { checkAgy, type ProviderCheck } from '../agent/agy-check.js'
+import { checkConfigured, type ProviderCheck } from '../agent/agy-check.js'
 import { checkLocalModel, discoverModels } from '../draft/discover.js'
 import { fetchProjects, resolveProjects } from '../commands/fetch.js'
 import { syncGlossary } from '../commands/glossary-sync.js'
@@ -60,8 +60,10 @@ export interface TuiCommands {
   openInBrowser: typeof openInBrowser
   // Ends this process's in-flight runs as stopped; returns how many.
   stopOwnRuns: () => number
-  // Asks antigravity whether it is signed in and how much quota is left. The
-  // app calls it only while antigravity is the provider.
+  // Asks the configured provider whether it can take a batch: antigravity's
+  // sign-in and quota, codex's sign-in and model. The app calls it only while
+  // one of the two is the provider, and reads the config fresh each time,
+  // since the provider and codex's model can change while the app is open.
   checkProvider: () => Promise<ProviderCheck>
   // Posts an encoded problem report. Handed in so no test, and no website
   // demo, reaches the reports endpoint.
@@ -106,7 +108,7 @@ export const defaultCommands: TuiCommands = {
       db.close()
     }
   },
-  checkProvider: () => checkAgy(defaultExec),
+  checkProvider: () => checkConfigured(defaultExec),
   sendReport: (body) => sendReport(fetch, body),
 }
 

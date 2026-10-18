@@ -58,7 +58,7 @@ import { parseParallel, printBatchEnd, runBatchJobs, startProviderCheck, type Ba
 import { buildReport } from './review/message.js'
 import { agentBinOverride, agentEngineLabel, agentModel, batchAdvice } from './agent/providers.js'
 import { defaultExec, discoverAgents, type AgentStatus } from './agent/discover.js'
-import { checkAgy, ProviderRefusal, type ProviderCheck } from './agent/agy-check.js'
+import { checkConfigured, ProviderRefusal, type ProviderCheck } from './agent/agy-check.js'
 import {
   checkLocalModel,
   discoverModels,
@@ -147,8 +147,9 @@ export interface CliDeps {
   // Opens a URL in the desktop's browser, false when it did not (over SSH,
   // or with no display). Injected so no test, and no website demo, starts one.
   openBrowser?: (url: string) => Promise<boolean>
-  // Asks antigravity whether it is signed in and how much quota is left
-  // (src/agent/agy-check.ts). Injected so no test, and no website demo, runs agy.
+  // Asks the configured provider whether it can take a batch: antigravity's
+  // sign-in and quota, codex's sign-in and model (src/agent/agy-check.ts).
+  // Injected so no test, and no website demo, runs agy or codex.
   checkProvider?: () => Promise<ProviderCheck>
   // Posts an encoded problem report (src/report/send.ts). Injected so no
   // test, and no website demo, reaches the reports endpoint.
@@ -238,7 +239,10 @@ function createCli(deps: CliDeps): Cli {
     makePot: deps.makePot ?? makePot,
     dataClient: deps.dataClient ?? dataClient,
     openBrowser: deps.openBrowser ?? openInBrowser,
-    checkProvider: deps.checkProvider ?? (() => checkAgy(defaultExec)),
+    // The config read when the check starts, not when the CLI was made: the
+    // same cached config the run reads, so the two cannot name different
+    // providers.
+    checkProvider: deps.checkProvider ?? (() => checkConfigured(defaultExec, (cached ??= loadConfig()))),
     sendReport: deps.sendReport ?? ((body) => sendReport(fetch, body, env)),
     providerVersion: deps.providerVersion ?? ((provider) => providerVersion(provider, { env })),
     report,

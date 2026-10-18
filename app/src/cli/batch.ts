@@ -1,5 +1,5 @@
 import { agentBinOverride } from '../agent/providers.js'
-import type { ProviderCheck } from '../agent/agy-check.js'
+import { hasProviderCheck, type ProviderCheck } from '../agent/agy-check.js'
 import { debugEnabled } from '../logs/debug.js'
 import { MAX_PARALLEL, runFileBatch, type BatchItem, type FileBatchOptions } from '../commands/batch.js'
 import { tallyOf, type ProjectEnd } from '../commands/fetch-report.js'
@@ -25,7 +25,7 @@ export interface BatchCli {
   translate: typeof translateFile
   // Records the batch's runs as stopped if a signal ends it; see stopOnSignal.
   stopRunsOnSignal: () => () => void
-  // The antigravity check; see startProviderCheck.
+  // The provider check, antigravity's or codex's; see startProviderCheck.
   checkProvider: () => Promise<ProviderCheck>
   // Told each file's run id as it starts, for the problem report offered
   // after the batch (src/cli/problem-report.ts).
@@ -49,20 +49,20 @@ export function parseParallel(raw: string | undefined): number {
 }
 
 /**
- * The antigravity check, started the moment a run is settled enough to be
+ * The provider check, started the moment a run is settled enough to be
  * worth one and handed to it unawaited. The run awaits it only just before
  * its first call to the agent, so it runs beside everything that comes first:
  * the file read, review's rules pass, translate's memory lookups and its
  * first batch's drafts, and for fetch the project lookups and downloads as
  * well. A run the cache answers in full never awaits it at all. Undefined for
- * any other provider, which is never asked. Never rejects: a check that
+ * a provider with no check (hasProviderCheck), which is never asked. Never rejects: a check that
  * throws is a check with no answer, and no answer never blocks a run.
  */
 export function startProviderCheck(
   cli: Pick<BatchCli, 'config' | 'checkProvider'>,
   reachesAgent: boolean,
 ): Promise<ProviderCheck | undefined> | undefined {
-  if (!reachesAgent || cli.config().reviewProvider !== 'antigravity') return undefined
+  if (!reachesAgent || !hasProviderCheck(cli.config().reviewProvider)) return undefined
   try {
     return cli.checkProvider().catch(() => undefined)
   } catch {

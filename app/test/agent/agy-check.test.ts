@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { agyQuota, agySignIn, checkAgy, judge, parseUsage, quotaFor, quotaRecheck } from '../../src/agent/agy-check.js'
 import type { ProbeExec, ProbeResult } from '../../src/agent/discover.js'
+import { checkCodex, checkFor, gateRun, hasProviderCheck, CODEX_PREFLIGHT_WAIT_MS, PREFLIGHT_WAIT_MS, ProviderRefusal, type ProviderCheck } from '../../src/agent/agy-check.js'
+import { CODEX_DISABLED_FEATURES } from '../../src/agent/codex.js'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // Every case runs against a fake exec. The real agy is never started: signed
 // out, `agy -p /usage` opens a sign-in flow and waits a minute for a code.
@@ -189,5 +194,217 @@ describe('quotaRecheck', () => {
     answer!(USAGE_OK)
     await recheck.settle()
     expect(logged).toHaveLength(2)
+  })
+})
+
+// codex's check, against the same kind of fake exec. The real codex is never
+// started: step two spends a request on the person's plan.
+
+const ev = (o: unknown): string => `${JSON.stringify(o)}\n`
+const LOGGED_IN: ProbeResult = { code: 0, stdout: '', stderr: 'Logged in using ChatGPT\n', timedOut: false }
+const LOGGED_OUT: ProbeResult = { code: 1, stdout: 'Not logged in\n', stderr: '', timedOut: false }
+const turnFailed = (message: string): ProbeResult => ({
+  code: 1,
+  stdout: ev({ type: 'thread.started', thread_id: 't' }) + ev({ type: 'turn.started' }) + ev({ type: 'turn.failed', error: { message } }),
+  stderr: '',
+  timedOut: false,
+})
+const ANSWERED: ProbeResult = {
+  code: 0,
+  stdout: ev({ type: 'thread.started', thread_id: 't' }) + ev({ type: 'item.completed', item: { id: 'i', type: 'agent_message', text: 'OK' } }) + ev({ type: 'turn.completed', usage: {} }),
+  stderr: '',
+  timedOut: false,
+}
+
+interface CodexCall { cmd: string; args: string[]; timeoutMs: number; input?: string }
+function fakeCodex(answers: { login?: ProbeResult; exec?: ProbeResult }) {
+  const calls: CodexCall[] = []
+  const exec: ProbeExec = async (cmd, args, opts) => {
+    calls.push({ cmd, args, timeoutMs: opts.timeoutMs, ...(opts.input === undefined ? {} : { input: opts.input }) })
+    const answer = args[0] === 'login' ? answers.login : args[0] === 'exec' ? answers.exec : undefined
+    return answer ?? { code: null, stdout: '', stderr: 'spawn ENOENT', timedOut: false }
+  }
+  return Object.assign(exec, { calls })
+}
+
+describe('checkCodex', () => {
+  it('stops at signed out and never spends the model request', async () => {
+    const exec = fakeCodex({ login: LOGGED_OUT, exec: ANSWERED })
+    const check = await checkCodex(exec, { bin: '/opt/codex', model: 'gpt-x' })
+    expect(check.provider).toBe('codex')
+    expect(check.signIn.state).toBe('signed-out')
+    expect(check.model).toBeUndefined()
+    expect(exec.calls.map((c) => c.args)).toEqual([['login', 'status']])
+    expect(exec.calls[0]!.cmd).toBe('/opt/codex')
+  })
+
+  it('runs one model check after a sign-in, with the model and effort, the prompt on stdin and no MCP', async () => {
+    const exec = fakeCodex({ login: LOGGED_IN, exec: ANSWERED })
+    const check = await checkCodex(exec, { bin: 'codex', model: 'gpt-x', effort: 'low' })
+    expect(check).toMatchObject({ provider: 'codex', signIn: { state: 'signed-in' }, model: { state: 'ok' }, asked: { model: 'gpt-x', effort: 'low' } })
+    expect(check.quota).toBeUndefined()
+    expect(exec.calls).toHaveLength(2)
+    const step = exec.calls[1]!
+    expect(step.input).toBe('Reply with OK.')
+    expect(step.args.slice(0, 2)).toEqual(['exec', '--ignore-user-config'])
+    expect(step.args).toContain('-m')
+    expect(step.args[step.args.indexOf('-m') + 1]).toBe('gpt-x')
+    expect(step.args).toContain('model_reasoning_effort="low"')
+    for (const f of CODEX_DISABLED_FEATURES) expect(step.args).toContain(f)
+    expect(step.args.some((a) => a.includes('mcp_servers'))).toBe(false)
+  })
+
+  it('leaves -m and the effort off when neither resolved', async () => {
+    const exec = fakeCodex({ login: LOGGED_IN, exec: ANSWERED })
+    const check = await checkCodex(exec, { bin: 'codex' })
+    const step = exec.calls[1]!.args
+    expect(step).not.toContain('-m')
+    expect(step.some((a) => a.startsWith('model_reasoning_effort'))).toBe(false)
+    expect(check.asked).toEqual({})
+  })
+
+  it('reads a model the plan lacks as refused, keeping codex\'s message', async () => {
+    const message = "The 'gpt-x' model is not supported when using Codex with a ChatGPT account."
+    const check = await checkCodex(fakeCodex({ login: LOGGED_IN, exec: turnFailed(message) }), { bin: 'codex', model: 'gpt-x' })
+    expect(check.model).toMatchObject({ state: 'refused', detail: message })
+    for (const m of ['model gpt-x does not exist', 'Unknown model: gpt-x', 'You have no access to gpt-x', 'gpt-x is not available on your plan']) {
+      const c = await checkCodex(fakeCodex({ login: LOGGED_IN, exec: turnFailed(m) }), { bin: 'codex', model: 'gpt-x' })
+      expect(c.model?.state).toBe('refused')
+    }
+  })
+
+  it('reads a rate limit as rate-limited', async () => {
+    for (const m of ['Rate limit reached for requests', "You've hit your usage limit.", 'unexpected status 429 Too Many Requests']) {
+      const c = await checkCodex(fakeCodex({ login: LOGGED_IN, exec: turnFailed(m) }), { bin: 'codex' })
+      expect(c.model).toMatchObject({ state: 'rate-limited', detail: m })
+    }
+  })
+
+  it('reads a timeout, garbage, another failure or a throw as unknown', async () => {
+    const answers: ProbeResult[] = [
+      { code: null, stdout: '', stderr: '', timedOut: true },
+      { code: 0, stdout: 'not json at all\n', stderr: '', timedOut: false },
+      { code: 2, stdout: '', stderr: 'error: unexpected argument', timedOut: false },
+      turnFailed('stream disconnected before completion'),
+    ]
+    for (const answer of answers) {
+      const c = await checkCodex(fakeCodex({ login: LOGGED_IN, exec: answer }), { bin: 'codex' })
+      expect(c.model?.state).toBe('unknown')
+      expect(c.model?.detail).toBeTruthy()
+    }
+    let n = 0
+    const throwing = (async () => {
+      if (n++ === 0) return LOGGED_IN
+      throw new Error('kaboom')
+    }) as unknown as ProbeExec
+    expect((await checkCodex(throwing, { bin: 'codex' })).model).toMatchObject({ state: 'unknown', detail: 'kaboom' })
+  })
+
+  it('never runs the model check on an unknown sign-in', async () => {
+    const exec = fakeCodex({ login: { code: null, stdout: '', stderr: '', timedOut: true }, exec: ANSWERED })
+    const check = await checkCodex(exec, { bin: 'codex' })
+    expect(check.signIn.state).toBe('unknown')
+    expect(exec.calls).toHaveLength(1)
+  })
+})
+
+describe('hasProviderCheck and checkFor', () => {
+  it('names antigravity and codex, and nothing else', () => {
+    expect(hasProviderCheck('antigravity')).toBe(true)
+    expect(hasProviderCheck('codex')).toBe(true)
+    for (const p of ['claude', 'local', 'none'] as const) expect(hasProviderCheck(p)).toBe(false)
+  })
+
+  it('asks antigravity agy, and codex with the model and effort polyglots resolved', async () => {
+    const agy = fakeExec({ models: MODELS_OUT })
+    expect(await checkFor('antigravity', agy)).toMatchObject({ signIn: { state: 'signed-out' } })
+    expect(agy.calls[0]!.args).toEqual(['models'])
+    const codexHome = mkdtempSync(join(tmpdir(), 'polyglots-checkfor-codex-'))
+    writeFileSync(join(codexHome, 'config.toml'), 'model = "toml-model"\nmodel_reasoning_effort = "high"\n')
+    const exec = fakeCodex({ login: LOGGED_IN, exec: ANSWERED })
+    const check = await checkFor('codex', exec, { env: { CODEX_HOME: codexHome } })
+    expect(check).toMatchObject({ provider: 'codex', asked: { model: 'toml-model', effort: 'high' }, model: { state: 'ok' } })
+  })
+})
+
+const codexCheck = (over: Partial<ProviderCheck> = {}): ProviderCheck => ({
+  provider: 'codex',
+  signIn: { state: 'signed-in', ms: 1 },
+  asked: { model: 'gpt-x' },
+  at: 0,
+  ...over,
+})
+
+describe('judge for codex', () => {
+  it('words the sign-in stop for codex', () => {
+    expect(judge(codexCheck({ signIn: { state: 'signed-out', ms: 1 } }), 'gpt-x')).toEqual({
+      stop: 'codex is signed out. Run codex login, then start again.',
+    })
+  })
+
+  it('stops a refused model with codex\'s message and the config hint', () => {
+    const check = codexCheck({ model: { state: 'refused', detail: 'The model is not supported.', ms: 1 } })
+    expect(judge(check, 'gpt-x')).toEqual({
+      stop: 'codex cannot use the model gpt-x: The model is not supported. Choose one your plan has: polyglots config set codex.model <name>',
+    })
+    const none = codexCheck({ asked: {}, model: { state: 'refused', detail: 'no access', ms: 1 } })
+    expect(judge(none, undefined).stop).toBe(
+      'codex cannot use the model its default model: no access. Choose one your plan has: polyglots config set codex.model <name>',
+    )
+  })
+
+  it('warns once on a rate limit, and says nothing on unknown or ok', () => {
+    expect(judge(codexCheck({ model: { state: 'rate-limited', detail: 'Rate limit reached', ms: 1 } }), 'gpt-x')).toEqual({
+      warn: 'codex is rate limited: Rate limit reached',
+    })
+    expect(judge(codexCheck({ model: { state: 'unknown', detail: 'x', ms: 1 } }), 'gpt-x')).toEqual({})
+    expect(judge(codexCheck({ model: { state: 'ok', ms: 1 } }), 'gpt-x')).toEqual({})
+    expect(judge(codexCheck({ signIn: { state: 'unknown', ms: 1 } }), 'gpt-x')).toEqual({})
+  })
+
+  // A check for another model or effort says nothing about this run's: the
+  // command line's --model is not something the check could have known.
+  it('reads a model verdict only for the model and effort it asked about', () => {
+    const refused = codexCheck({ asked: { model: 'gpt-x', effort: 'low' }, model: { state: 'refused', detail: 'not supported', ms: 1 } })
+    expect(judge(refused, 'gpt-y', 'low')).toEqual({})
+    expect(judge(refused, 'gpt-x', 'high')).toEqual({})
+    expect(judge(refused, 'gpt-x', 'low').stop).toMatch(/cannot use the model gpt-x/)
+    // Signed out is true of every model.
+    expect(judge(codexCheck({ asked: { model: 'gpt-x' }, signIn: { state: 'signed-out', ms: 1 } }), 'gpt-y').stop).toMatch(/codex is signed out/)
+  })
+})
+
+describe('gateRun per provider', () => {
+  const log = () => {}
+  const warn = () => {}
+
+  it('waits thirty seconds for codex and ten for antigravity', async () => {
+    expect(CODEX_PREFLIGHT_WAIT_MS).toBe(30_000)
+    vi.useFakeTimers()
+    try {
+      const never = new Promise<ProviderCheck | undefined>(() => {})
+      let codexDone = false
+      const codex = gateRun({ preflight: never, provider: 'codex', model: undefined, log, warn }).then(() => (codexDone = true))
+      let agyDone = false
+      const agy = gateRun({ preflight: never, model: undefined, log, warn }).then(() => (agyDone = true))
+      await vi.advanceTimersByTimeAsync(PREFLIGHT_WAIT_MS)
+      expect(agyDone).toBe(true)
+      expect(codexDone).toBe(false)
+      await vi.advanceTimersByTimeAsync(CODEX_PREFLIGHT_WAIT_MS - PREFLIGHT_WAIT_MS)
+      expect(codexDone).toBe(true)
+      await Promise.all([codex, agy])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // A check carries the provider it asked. One for another provider says
+  // nothing about this run and must never stop it.
+  it('passes over a check for another provider', async () => {
+    const agyOut: ProviderCheck = { signIn: { state: 'signed-out', ms: 1 }, at: 0 }
+    await expect(gateRun({ preflight: Promise.resolve(agyOut), provider: 'codex', model: 'gpt-x', log, warn })).resolves.toBeUndefined()
+    const codexOut = codexCheck({ signIn: { state: 'signed-out', ms: 1 } })
+    await expect(gateRun({ preflight: Promise.resolve(codexOut), model: 'm', log, warn })).resolves.toBeUndefined()
+    await expect(gateRun({ preflight: Promise.resolve(codexOut), provider: 'codex', model: 'gpt-x', log, warn })).rejects.toBeInstanceOf(ProviderRefusal)
   })
 })

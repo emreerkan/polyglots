@@ -3,10 +3,10 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import React from 'react'
 import { App } from '../../src/tui/App.js'
-import { saveConfig } from '../../src/config.js'
+import { loadConfig, saveConfig } from '../../src/config.js'
 import { ProviderRefusal, type ProviderCheck } from '../../src/agent/agy-check.js'
 import type { ReviewFile } from '../../src/tui/commands.js'
-import { createProviderCheckCache, withSignIn } from '../../src/tui/provider-check.js'
+import { createProviderCheckCache, providerCheckKey, withSignIn } from '../../src/tui/provider-check.js'
 import {
   agentStatus,
   cleanup,
@@ -227,3 +227,91 @@ describe('withSignIn', () => {
     expect(withSignIn(agents, { signIn: { state: 'unknown', ms: 1 }, at: 0 })).toBe(agents)
   })
 })
+
+// codex has a check too, and the app keeps one answer per provider, model and
+// effort: an answer is only ever handed to a run that would ask the same.
+describe('the provider check per provider', () => {
+  const codexAnswer = (model: string, over: Partial<ProviderCheck> = {}): ProviderCheck => ({
+    provider: 'codex',
+    signIn: { state: 'signed-in', ms: 1 },
+    model: { state: 'ok', ms: 1 },
+    asked: { model, effort: 'low' },
+    at: Date.now(),
+    ...over,
+  })
+
+  it('keys a check by provider, and for codex by model and effort', () => {
+    expect(providerCheckKey({ ...loadConfig(), reviewProvider: 'antigravity' })).toBe('antigravity')
+    const a = providerCheckKey({ ...loadConfig(), reviewProvider: 'codex', codex: { model: 'gpt-x', effort: 'low' } })
+    const b = providerCheckKey({ ...loadConfig(), reviewProvider: 'codex', codex: { model: 'gpt-y', effort: 'low' } })
+    const c = providerCheckKey({ ...loadConfig(), reviewProvider: 'codex', codex: { model: 'gpt-x', effort: 'high' } })
+    expect(new Set([a, b, c, 'antigravity']).size).toBe(4)
+    expect(providerCheckKey({ ...loadConfig(), reviewProvider: 'claude' })).toBeUndefined()
+  })
+
+  it('never hands an antigravity answer to codex, nor a codex answer for another model or effort', async () => {
+    let next: ProviderCheck = quota(90)
+    const check = vi.fn(async () => next)
+    const cache = createProviderCheckCache(check)
+    const config = (codex: { model: string; effort: 'low' | 'high' }) => ({ ...loadConfig(), reviewProvider: 'codex' as const, codex })
+    await expect(cache.get('antigravity')).resolves.toMatchObject({ quota: expect.anything() })
+    next = codexAnswer('gpt-x')
+    await expect(cache.get(providerCheckKey(config({ model: 'gpt-x', effort: 'low' })))).resolves.toMatchObject({ provider: 'codex' })
+    expect(check).toHaveBeenCalledTimes(2)
+    // Each answer is kept for its own key.
+    await cache.get('antigravity')
+    await cache.get(providerCheckKey(config({ model: 'gpt-x', effort: 'low' })))
+    expect(check).toHaveBeenCalledTimes(2)
+    next = codexAnswer('gpt-y')
+    await expect(cache.get(providerCheckKey(config({ model: 'gpt-y', effort: 'low' })))).resolves.toMatchObject({ asked: { model: 'gpt-y' } })
+    expect(check).toHaveBeenCalledTimes(3)
+    next = codexAnswer('gpt-x', { asked: { model: 'gpt-x', effort: 'high' } })
+    await cache.get(providerCheckKey(config({ model: 'gpt-x', effort: 'high' })))
+    expect(check).toHaveBeenCalledTimes(4)
+  })
+
+  // The check reads the config on its own. Should it answer for something
+  // other than what the run asked for, the run gets no answer, not that one.
+  it('hands a run nothing when the answer is for another key', async () => {
+    const cache = createProviderCheckCache(async () => quota(90))
+    await expect(cache.get('codex|gpt-x|low')).resolves.toBeUndefined()
+  })
+
+  it('does not hand the launch check to a codex review started after the provider changed', async () => {
+    const checkProvider = vi.fn(async (): Promise<ProviderCheck> => (loadConfig().reviewProvider === 'codex' ? codexAnswer('gpt-x') : quota(90)))
+    const reviewFile = vi.fn<ReviewFile>(async (opts) => {
+      opts.onProgress?.({ type: 'start', file: opts.file, total: 1, reviewable: 1 })
+      opts.onProgress?.({ type: 'done', summary: reviewSummaryOf(opts.file) })
+      return reviewSummaryOf(opts.file)
+    })
+    const view = render(
+      <App commands={fakeCommands({ checkProvider, reviewFile, discoverAgents: vi.fn(async () => [agentStatus('claude'), argon]) })} cwd={cwd} />,
+    )
+    await waitForText(view.lastFrame, '90% weekly')
+    saveConfig({ defaultLocale: 'tr', reviewProvider: 'codex', codex: { model: 'gpt-x', effort: 'low' } })
+    await openFromHome(view.stdin, 'review')
+    await waitForText(view.lastFrame, 'submission.po')
+    view.stdin.write(keys.down)
+    await tick()
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Locale/)
+    for (let i = 0; i < 4; i++) {
+      view.stdin.write(keys.down)
+      await tick()
+    }
+    view.stdin.write(keys.enter)
+    await waitFor(() => reviewFile.mock.calls.length > 0)
+    const preflight = reviewFile.mock.calls[0]![0].preflight
+    expect(preflight).toBeDefined()
+    await expect(preflight).resolves.toMatchObject({ provider: 'codex', asked: { model: 'gpt-x' } })
+    expect(checkProvider).toHaveBeenCalledTimes(2)
+  })
+
+  it('marks codex unusable when its check found it signed out, and leaves antigravity alone', () => {
+    const codexRow = agentStatus('codex')
+    const out = withSignIn([argon, codexRow], codexAnswer('gpt-x', { signIn: { state: 'signed-out', ms: 1 } }))!
+    expect(out[0]).toBe(argon)
+    expect(out[1]).toMatchObject({ usable: false, auth: { state: 'signed-out' }, reason: 'codex is signed out: run codex login' })
+  })
+})
+

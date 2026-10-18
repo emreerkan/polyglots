@@ -16,8 +16,8 @@ import { InputGate, TypingProvider, useTyping, type Key } from './input.js'
 import { footerKeys } from './keys.js'
 import { CONFIGURATION, HOME, parentOf, TOOLS, type ScreenId } from './menu.js'
 import { providerLabel } from './local.js'
-import { createProviderCheckCache, providerNote, ProviderCheckProvider, withSignIn } from './provider-check.js'
-import type { ProviderCheck } from '../agent/agy-check.js'
+import { createProviderCheckCache, providerCheckKey, providerNote, ProviderCheckProvider, withSignIn } from './provider-check.js'
+import { hasProviderCheck, providerOf, type CheckedProvider, type ProviderCheck } from '../agent/agy-check.js'
 import { createServices, ServicesProvider, useServices, useStatsError, useStatsUrl, type Services } from './services.js'
 import { memoryState, setupStatus, tmListed, type SetupStatus } from './setup.js'
 import { frameLayout, frameSize, MIN_SIZE, SizeProvider, useSize } from './size.js'
@@ -201,18 +201,30 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
     return check(false)
   }, [])
 
-  // The antigravity check: in the background, never holding home, and only
-  // while antigravity is the provider, at launch or when switched to. Held
-  // here so the header names the answer and the run screens reuse it, and
-  // so a check a run started shows on the header too.
+  // The provider check: in the background, never holding home, and only
+  // while antigravity or codex is the provider, at launch or when switched
+  // to. Held here so the header names the answer and the run screens reuse
+  // it, and so a check a run started shows on the header too. The latest
+  // answer is kept per provider, so a switch back and forth does not drop
+  // what the other one said about its own sign-in.
   const [providerCheck] = useState(() => createProviderCheckCache(() => commands.checkProvider()))
-  const [accountCheck, setAccountCheck] = useState<ProviderCheck | undefined>(() => providerCheck.latest())
-  useEffect(() => providerCheck.subscribe(setAccountCheck), [providerCheck])
-  useEffect(() => {
-    if (provider === 'antigravity') void providerCheck.get()
-  }, [provider])
-  // Discovery read the token file; the check asked agy, so its sign-in wins.
-  const agents = useMemo(() => withSignIn(discovered, accountCheck), [discovered, accountCheck])
+  const [accountChecks, setAccountChecks] = useState<Partial<Record<CheckedProvider, ProviderCheck>>>(() => {
+    const kept = providerCheck.latest()
+    return kept === undefined ? {} : { [providerOf(kept)]: kept }
+  })
+  useEffect(() => providerCheck.subscribe((check) => setAccountChecks((prev) => ({ ...prev, [providerOf(check)]: check }))), [providerCheck])
+  const askProvider = () => {
+    if (!hasProviderCheck(provider)) return
+    const key = providerCheckKey(tryOr(() => commands.loadConfig(), DEFAULT_CONFIG))
+    if (key !== undefined) void providerCheck.get(key)
+  }
+  useEffect(askProvider, [provider])
+  // Discovery read agy's token file; the check asked the agent, so its
+  // sign-in wins.
+  const agents = useMemo(
+    () => withSignIn(withSignIn(discovered, accountChecks.antigravity), accountChecks.codex),
+    [discovered, accountChecks],
+  )
 
   // Counted at launch and after the screens that can change it, not on
   // every navigation like the cheaper facts below: it opens polyglots.db.
@@ -284,7 +296,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   // the launch answer for as long as the app stays open. get() hands back an
   // answer under five minutes old, so going back and forth spawns nothing.
   useEffect(() => {
-    if (screen === 'home' && provider === 'antigravity') void providerCheck.get()
+    if (screen === 'home') askProvider()
   }, [screen])
   const [wizardStart, setWizardStart] = useState<SetupStep>(() => SETUP_STEPS.find((s) => status.steps[s] === 'missing') ?? 'locale')
   const [wizardReturn, setWizardReturn] = useState<ScreenId>('home')
@@ -392,7 +404,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   const headerRows = layout.wordmark ? 4 : 2
   const bodyRows = Math.max(1, size.rows - headerRows - 2)
   const model = agents?.find((a) => a.provider === provider)?.model
-  const note = provider === 'antigravity' ? providerNote(accountCheck, model) : undefined
+  const note = provider === 'antigravity' ? providerNote(accountChecks.antigravity, model) : undefined
 
   const menu = { layout: layout.menu, width: size.columns, onOpen: go }
   const view = (() => {

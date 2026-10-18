@@ -10,6 +10,7 @@ import { openJobsDb } from '../../../src/jobs/db.js'
 import { ProviderRefusal, type ProviderCheck } from '../../../src/agent/agy-check.js'
 import type { ProbeExec } from '../../../src/agent/providers.js'
 import { useLocaleFixture } from '../../locale-fixture.js'
+import { saveConfig } from '../../../src/config.js'
 
 // The provider check gates a review before its first agent batch: signed out
 // or out of quota stops it as a refusal, never as a fault, and a check that
@@ -268,3 +269,119 @@ describe('reviewFile: the provider check', () => {
     expect(logLines().some((l) => l.kind === 'provider-check')).toBe(false)
   })
 })
+
+// codex's check gates a review the same way: signed out and a model the plan
+// lacks stop it as a refusal before batch 1, a rate limit is said once, and
+// unknown never blocks. No quota is ever read for codex. The model and effort
+// come from polyglots config here, and CODEX_HOME is the test's own.
+describe('reviewFile: the codex check', () => {
+  let home: string
+  let file: string
+  let db: Database.Database
+  let jobs: Database.Database
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'polyglots-review-codex-preflight-'))
+    file = join(home, 'plugin-tr.po')
+    await writeFile(file, PO, 'utf8')
+    db = openDb(join(home, 'polyglots.db'))
+    replaceGlossary(db, 'tr', [{ locale: 'tr', sourceTerm: 'sidebar', translation: 'kenar çubuğu', partOfSpeech: 'noun' }])
+    jobs = openJobsDb(join(home, 'jobs.db'))
+    saveConfig({ reviewProvider: 'codex', codex: { model: 'gpt-x', effort: 'low' } })
+  })
+
+  useLocaleFixture('tr_TR.yaml')
+
+  afterEach(async () => {
+    jobs.close()
+    db.close()
+    await rm(home, { recursive: true, force: true })
+  })
+
+  const clearAll = async (batch: { id: number }[]) =>
+    batch.map((c) => ({ id: c.id, problem: false, categories: [] as never[], reason: 'ok' }))
+  const codex = (over: Partial<ProviderCheck> = {}): ProviderCheck => ({
+    provider: 'codex',
+    signIn: { state: 'signed-in', ms: 5 },
+    asked: { model: 'gpt-x', effort: 'low' },
+    at: Date.now(),
+    ...over,
+  })
+
+  function run(overrides: Partial<ReviewOptions> = {}) {
+    return reviewFile({
+      file,
+      locale: 'tr',
+      db,
+      jobsDb: jobs,
+      provider: 'codex',
+      mcpConfigPath: join(home, 'mcp.json'),
+      adjudicate: clearAll,
+      providerExec: fakeExec().exec,
+      onWarn: () => {},
+      ...overrides,
+    })
+  }
+
+  const lastRun = () => jobs.prepare('SELECT state, ended FROM run ORDER BY id DESC LIMIT 1').get() as { state: string; ended: string }
+
+  it('stops before the first batch when codex is signed out, as a refusal', async () => {
+    const adjudicate = vi.fn(clearAll)
+    const refused = run({ adjudicate, preflight: Promise.resolve(codex({ signIn: { state: 'signed-out', ms: 1 } })) })
+    await expect(refused).rejects.toBeInstanceOf(ProviderRefusal)
+    await expect(refused).rejects.toThrow('codex is signed out. Run codex login, then start again.')
+    expect(adjudicate).not.toHaveBeenCalled()
+    expect(lastRun()).toEqual({ state: 'stopped', ended: 'stopped' })
+    expect(logLines().at(-1)).toMatchObject({ kind: 'run-end', ended: 'stopped', reason: 'provider' })
+  })
+
+  // The gate is handed the bare model, not the engine label "gpt-x (low)":
+  // with the label the check's verdict, asked about gpt-x, would never match.
+  it('stops on a model the plan lacks, naming it and the config key', async () => {
+    const adjudicate = vi.fn(clearAll)
+    const refused = run({
+      adjudicate,
+      preflight: Promise.resolve(codex({ model: { state: 'refused', detail: "The 'gpt-x' model is not supported when using Codex with a ChatGPT account.", ms: 900 } })),
+    })
+    await expect(refused).rejects.toThrow(
+      "codex cannot use the model gpt-x: The 'gpt-x' model is not supported when using Codex with a ChatGPT account. Choose one your plan has: polyglots config set codex.model <name>",
+    )
+    expect(adjudicate).not.toHaveBeenCalled()
+    expect(lastRun()).toEqual({ state: 'stopped', ended: 'stopped' })
+    expect(logLines().find((l) => l.kind === 'provider-check')).toMatchObject({ provider: 'codex', model: { state: 'refused' } })
+  })
+
+  it('warns once on a rate limit, and runs', async () => {
+    const warned: string[] = []
+    const summary = await run({
+      preflight: Promise.resolve(codex({ model: { state: 'rate-limited', detail: 'Rate limit reached', ms: 900 } })),
+      onWarn: (l) => warned.push(l),
+    })
+    expect(summary.reviewed).toBe(2)
+    expect(warned.filter((l) => l.includes('rate limit'))).toEqual(['codex is rate limited: Rate limit reached'])
+  })
+
+  it('goes on when the check is unknown, and never reads a quota, even after a failed batch', async () => {
+    const { exec, calls } = fakeExec()
+    const failing = vi.fn(async () => {
+      throw new Error('codex failed: stream disconnected')
+    })
+    await run({ adjudicate: failing, providerExec: exec, preflight: Promise.resolve(codex({ model: { state: 'unknown', detail: 'x', ms: 1 } })) })
+    expect(failing).toHaveBeenCalled()
+    const ok = vi.fn(clearAll)
+    await run({ adjudicate: ok, fresh: true, providerExec: exec, preflight: Promise.resolve(codex({ model: { state: 'ok', ms: 1 } })) })
+    expect(ok).toHaveBeenCalled()
+    expect(calls).toEqual([])
+    expect(logLines().some((l) => l.kind === 'quota')).toBe(false)
+  })
+
+  // A check asked about another model, or a cached antigravity answer, says
+  // nothing about this run.
+  it('is not stopped by a check for another model or for antigravity', async () => {
+    const other = codex({ asked: { model: 'gpt-y', effort: 'low' }, model: { state: 'refused', detail: 'not supported', ms: 1 } })
+    await expect(run({ preflight: Promise.resolve(other) })).resolves.toMatchObject({ reviewed: 2 })
+    const agy: ProviderCheck = { signIn: { state: 'signed-out', ms: 1 }, at: Date.now() }
+    await expect(run({ fresh: true, preflight: Promise.resolve(agy) })).resolves.toMatchObject({ reviewed: 2 })
+  })
+})
+

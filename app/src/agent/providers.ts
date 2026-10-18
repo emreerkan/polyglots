@@ -666,6 +666,21 @@ export function configuredModel(provider: ReviewProvider, home: string = homedir
   }
 }
 
+/**
+ * --model as every reader of it takes it: trimmed, and blank read as unset.
+ *
+ * An empty or blank --model is no flag, as a blank model in config.toml is no
+ * model. Passed on as a flag it would have beaten every other source and then
+ * been dropped by the argv builder, leaving the run on codex's own choice
+ * while the engine id claimed an empty one came from the flag. One function
+ * for the engine id and the spawn both: when each normalised on its own, a
+ * blank flag the id ignored still reached a claude or antigravity spawn.
+ */
+export function flagModelOf(raw: string | undefined): string | undefined {
+  const trimmed = raw?.trim()
+  return trimmed === undefined || trimmed === '' ? undefined : trimmed
+}
+
 /** Where a resolved codex model came from, for the hints that name it. */
 export type ModelSource = 'flag' | 'polyglots config' | 'codex config' | 'codex default'
 export type EffortSource = Exclude<ModelSource, 'flag'>
@@ -700,11 +715,7 @@ export function agentModel(
   env: NodeJS.ProcessEnv = process.env,
   home: string = homedir(),
 ): AgentModel {
-  // An empty or blank --model is no flag, as a blank model in config.toml is
-  // no model. Passed on as a flag it would have beaten every other source
-  // and then been dropped by the argv builder, leaving the run on codex's
-  // own choice while the engine id claimed an empty one came from the flag.
-  const flagModel = rawFlagModel !== undefined && rawFlagModel.trim() !== '' ? rawFlagModel : undefined
+  const flagModel = flagModelOf(rawFlagModel)
   if (provider === 'claude') return flagModel === undefined ? {} : { model: flagModel }
   if (provider === 'antigravity') {
     const model = flagModel ?? configuredModel('antigravity', home)
@@ -771,7 +782,8 @@ export function agentSpawnModel(
       ...(resolved.effort === undefined ? {} : { effort: resolved.effort }),
     }
   }
-  return flagModel ? { model: flagModel } : {}
+  const model = flagModelOf(flagModel)
+  return model === undefined ? {} : { model }
 }
 
 export function providerSpec(name: ReviewProvider = DEFAULT_PROVIDER): ProviderSpec {

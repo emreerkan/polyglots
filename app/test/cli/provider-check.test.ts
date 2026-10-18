@@ -258,3 +258,99 @@ describe('the provider check on the command line', () => {
     expect(checkProvider).not.toHaveBeenCalled()
   })
 })
+
+// codex is checked the same way on the command line: the same seam, its own
+// words, one refusal per batch, and the run ends stopped, not failed.
+describe('the codex check on the command line', () => {
+  const codexOut = (): Promise<ProviderCheck> =>
+    Promise.resolve({ provider: 'codex', signIn: { state: 'signed-out', ms: 3 }, asked: {}, at: Date.now() })
+  const CODEX_STOP = 'codex is signed out. Run codex login, then start again.'
+
+  it('stops a review with codex signed out, and exits 1', async () => {
+    await config({ defaultLocale: 'tr', reviewProvider: 'codex' })
+    const adjudicate = vi.fn(async () => [])
+    const checkProvider = vi.fn(codexOut)
+    const r = await run(['review', file], {
+      checkProvider,
+      reviewFile: (opts) => reviewFile({ ...opts, adjudicate, mcpConfigPath: join(home, 'mcp.json') }),
+    })
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain(CODEX_STOP)
+    expect(checkProvider).toHaveBeenCalledTimes(1)
+    expect(adjudicate).not.toHaveBeenCalled()
+  })
+
+  it('stops a translate with codex signed out', async () => {
+    await config({ defaultLocale: 'tr', reviewProvider: 'codex' })
+    const a = join(home, 'a.po')
+    const b = join(home, 'b.po')
+    await copyFile(samplePo, a)
+    await copyFile(samplePo, b)
+    const checkProvider = vi.fn(codexOut)
+    const files: string[] = []
+    const r = await run(['translate', a, b, '--draft-engine', 'deepl'], {
+      checkProvider,
+      translate: (opts) => {
+        files.push(opts.file)
+        return translateFile({ ...opts, engine: fakeEngine(), review: fakeReview(), mcpConfigPath: join(home, 'mcp.json') })
+      },
+    })
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain(CODEX_STOP)
+    expect(files).toEqual([a])
+    expect(checkProvider).toHaveBeenCalledTimes(1)
+  })
+
+  it('says it once for a review of two files, and records no failure', async () => {
+    await config({ defaultLocale: 'tr', reviewProvider: 'codex' })
+    const a = join(home, 'a-tr.po')
+    const b = join(home, 'b-tr.po')
+    await writeFile(a, PO)
+    await writeFile(b, PO)
+    const adjudicate = vi.fn(async () => [])
+    const checkProvider = vi.fn(codexOut)
+    const r = await run(['review', a, b], {
+      checkProvider,
+      reviewFile: (opts) => reviewFile({ ...opts, adjudicate, mcpConfigPath: join(home, 'mcp.json') }),
+    })
+    expect(r.code).toBe(1)
+    expect(checkProvider).toHaveBeenCalledTimes(1)
+    expect(adjudicate).not.toHaveBeenCalled()
+    expect(r.stderr.split(CODEX_STOP).length - 1).toBe(1)
+    const out = r.stdout.replace(/\s+/g, ' ')
+    expect(out).toContain(`stopped ${CODEX_STOP}`)
+    expect(out).toContain('failed 0')
+  })
+
+  it('checks before fetch reviews the downloads with codex', async () => {
+    await config({ defaultLocale: 'tr', reviewProvider: 'codex' })
+    const outDir = join(home, 'out')
+    await mkdir(outDir, { recursive: true })
+    const resolveProjects: CliDeps['resolveProjects'] = async (refs) =>
+      refs.map((ref): Resolution => ({ input: ref.slug, state: 'ready', type: 'wp-themes', slug: ref.slug, count: 1 }))
+    const fetchProjects: CliDeps['fetchProjects'] = async (ready: Ready[], opts) =>
+      Promise.all(
+        ready.map(async (p): Promise<Fetched> => {
+          const target = join(opts.outDir, `wp-themes-${p.slug}-tr.po`)
+          await writeFile(target, PO)
+          return { input: p.input, state: 'fetched', file: target }
+        }),
+      )
+    const adjudicate = vi.fn(async () => [])
+    const checkProvider = vi.fn(codexOut)
+    const r = await run(['fetch', 'koji', 'sydney', '--get', 'waiting', '--out-dir', outDir], {
+      checkProvider,
+      resolveProjects,
+      fetchProjects,
+      reviewFile: (opts) => reviewFile({ ...opts, adjudicate, mcpConfigPath: join(home, 'mcp.json') }),
+    })
+    expect(checkProvider).toHaveBeenCalledTimes(1)
+    expect(adjudicate).not.toHaveBeenCalled()
+    expect(r.code).toBe(1)
+    expect(r.stderr.split(CODEX_STOP).length - 1).toBe(1)
+    const out = r.stdout.replace(/\s+/g, ' ')
+    expect(out).toContain(`koji stopped ${CODEX_STOP}`)
+    expect(out).toContain('sydney stopped not started')
+  })
+})
+

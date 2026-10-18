@@ -3,6 +3,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { configuredModel } from '../../src/agent/providers.js'
+import { codexSettings } from '../../src/agent/codex.js'
 
 // The setup gives every test its own home folder as well as its own
 // POLYGLOTS_HOME. Code that reads another tool's files, such as antigravity's
@@ -20,5 +21,15 @@ describe('the isolated home', () => {
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'settings.json'), JSON.stringify({ model: 'Test Model' }))
     expect(configuredModel('antigravity')).toBe('Test Model')
+  })
+
+  // codex finds its config.toml through CODEX_HOME before the home folder, so
+  // a developer who exports it would hand every codex test their own model.
+  it('points CODEX_HOME into the isolated home, so a test gets only the codex config it writes', () => {
+    expect(process.env.CODEX_HOME).toBe(join(homedir(), '.codex'))
+    expect(codexSettings()).toEqual({})
+    mkdirSync(process.env.CODEX_HOME!, { recursive: true })
+    writeFileSync(join(process.env.CODEX_HOME!, 'config.toml'), 'model = "test-model"\n')
+    expect(codexSettings()).toEqual({ model: 'test-model' })
   })
 })

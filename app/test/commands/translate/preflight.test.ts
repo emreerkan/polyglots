@@ -6,6 +6,7 @@ import { openJobsDb } from '../../../src/jobs/db.js'
 import { ProviderRefusal, type ProviderCheck } from '../../../src/agent/agy-check.js'
 import type { ProbeExec } from '../../../src/agent/providers.js'
 import { fakeEngine, fakeReview, makeWorkspace, type Workspace } from './helpers.js'
+import { saveConfig } from '../../../src/config.js'
 
 // Translate's review pass is the part that reaches antigravity, so the same
 // gate stands in front of its first batch as in front of a review's.
@@ -227,3 +228,54 @@ describe('translateFile: the provider check', () => {
     expect(logLines().some((l) => l.kind === 'provider-check')).toBe(false)
   })
 })
+
+// codex's review pass is gated the same way, with its own words, and no
+// quota is ever read for it.
+describe('translateFile: the codex check', () => {
+  beforeEach(() => {
+    saveConfig({ reviewProvider: 'codex', codex: { model: 'gpt-x', effort: 'low' } })
+  })
+
+  const codex = (over: Partial<ProviderCheck> = {}): ProviderCheck => ({
+    provider: 'codex',
+    signIn: { state: 'signed-in', ms: 2 },
+    asked: { model: 'gpt-x', effort: 'low' },
+    at: Date.now(),
+    ...over,
+  })
+  function codexBase(overrides: Partial<TranslateOptions> = {}): TranslateOptions {
+    const { model: _flag, ...rest } = base({ provider: 'codex', ...overrides })
+    return rest
+  }
+
+  it('stops before the first review when codex is signed out, and ends the run stopped', async () => {
+    const review = fakeReview()
+    const refused = translateFile(codexBase({ review, preflight: Promise.resolve(codex({ signIn: { state: 'signed-out', ms: 2 } })) }))
+    await expect(refused).rejects.toThrow('codex is signed out. Run codex login, then start again.')
+    expect(review.calls).toHaveLength(0)
+    expect(logLines().at(-1)).toMatchObject({ kind: 'run-end', ended: 'stopped', reason: 'provider' })
+  })
+
+  it('stops on a model the plan lacks with the config hint', async () => {
+    const engine = fakeEngine()
+    const refused = translateFile(
+      codexBase({ engine, preflight: Promise.resolve(codex({ model: { state: 'refused', detail: 'model not supported', ms: 2 } })) }),
+    )
+    await expect(refused).rejects.toBeInstanceOf(ProviderRefusal)
+    await expect(refused).rejects.toThrow(
+      'codex cannot use the model gpt-x: model not supported. Choose one your plan has: polyglots config set codex.model <name>',
+    )
+    expect(engine.calls).toHaveLength(0)
+  })
+
+  it('never reads a quota for codex, even after a failed batch', async () => {
+    const { exec, calls } = fakeExec()
+    const review = fakeReview()
+    review.failWith = () => new Error('codex failed: stream disconnected')
+    const summary = await translateFile(codexBase({ review, providerExec: exec, preflight: Promise.resolve(codex({ model: { state: 'ok', ms: 2 } })) }))
+    expect(summary.skipped).toBeGreaterThan(0)
+    expect(calls).toEqual([])
+    expect(logLines().some((l) => l.kind === 'quota')).toBe(false)
+  })
+})
+

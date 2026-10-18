@@ -9,7 +9,7 @@ import { debugEnabled } from '../../logs/debug.js'
 import { initialBatchSize, providerLabel, screenBatchAdvice } from '../local.js'
 import { headerLocaleOf } from '../../cli/locale.js'
 import { useCommands, useConfig } from '../commands.js'
-import { useProviderCheck } from '../provider-check.js'
+import { preflightFor, useProviderCheck } from '../provider-check.js'
 import { ProviderRefusal } from '../../agent/agy-check.js'
 import { poEntryCount } from '../../po/count.js'
 import { BatchRun, type BatchStage } from '../components/BatchRun.js'
@@ -176,10 +176,11 @@ export function Review({ cwd, onBack }: ReviewProps) {
         debug: debugEnabled({ config, env: process.env }),
         onWarn: (line) => setNotices((prev) => [...prev, line]),
         onRunStarted: report.noteRun,
-        // The app's check from launch when it is fresh, a new one otherwise,
-        // and nothing for a run that reaches no antigravity.
+        // The app's check from launch when it is fresh and for this
+        // provider and model, a new one otherwise, and nothing for a run that
+        // reaches no provider with a check.
         ...(() => {
-          const preflight = !noAi && config.reviewProvider === 'antigravity' ? providerCheck?.get() : undefined
+          const preflight = preflightFor(providerCheck, config, !noAi)
           return preflight === undefined ? {} : { preflight }
         })(),
         // Bounded: a long run's per-entry events would otherwise all stay in memory.

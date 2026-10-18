@@ -27,6 +27,10 @@ let home: string | undefined
 let previous: string | undefined
 const HOME_VARS = ['HOME', 'USERPROFILE'] as const
 let previousHome: Partial<Record<(typeof HOME_VARS)[number], string>> = {}
+// codex reads CODEX_HOME before the home folder, so swapping HOME alone left a
+// developer's exported CODEX_HOME, and the model in its config.toml, in every
+// codex test. It goes to the .codex folder codex would use under the new home.
+let previousCodexHome: string | undefined
 
 // Where an opted-in usage send goes. Port 9 on loopback is the discard port,
 // which nothing listens on, so a test that turns usage statistics on by
@@ -47,6 +51,8 @@ beforeEach(() => {
     if (value !== undefined) previousHome[name] = value
     process.env[name] = home
   }
+  previousCodexHome = process.env.CODEX_HOME
+  process.env.CODEX_HOME = join(home, '.codex')
   // A swap that stopped working, on a platform whose homedir() reads
   // something else or after a refactor of the list above, would let every
   // antigravity test write the developer's own ~/.gemini settings;
@@ -76,4 +82,6 @@ afterEach(() => {
     if (value === undefined) delete process.env[name]
     else process.env[name] = value
   }
+  if (previousCodexHome === undefined) delete process.env.CODEX_HOME
+  else process.env.CODEX_HOME = previousCodexHome
 })

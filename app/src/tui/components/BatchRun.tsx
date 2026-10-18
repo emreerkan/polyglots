@@ -15,7 +15,7 @@ import { resolveLocale } from '../../wporg/locales.js'
 import { batchSizeChoices } from '../batch-size.js'
 import { copyToClipboard } from '../clipboard.js'
 import { useCommands, useConfig } from '../commands.js'
-import { useProviderCheck } from '../provider-check.js'
+import { preflightFor, useProviderCheck } from '../provider-check.js'
 import { createEventStore, fileLine, overall, overallLines, type FileTrack } from '../batch-progress.js'
 import { useElapsed } from '../hooks/useElapsed.js'
 import { useKeys } from '../hooks/useKeys.js'
@@ -366,7 +366,7 @@ export function BatchRun(props: BatchRunProps) {
           onRunStarted: report.noteRun,
           // One check for the whole batch, the app's own when it is fresh.
           ...(() => {
-            const preflight = reaches && config.reviewProvider === 'antigravity' ? providerCheck?.get() : undefined
+            const preflight = preflightFor(providerCheck, config, reaches)
             return preflight === undefined ? {} : { preflight }
           })(),
           onProgress: (file) => {

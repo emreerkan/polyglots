@@ -9,7 +9,7 @@ import { kindLabel, type ModelCheck } from '../../draft/discover.js'
 import { resolveLocalTarget, type LocalTarget } from '../../draft/local-chat.js'
 import { headerLocaleOf } from '../../cli/locale.js'
 import { useCommands, useConfig } from '../commands.js'
-import { useProviderCheck } from '../provider-check.js'
+import { preflightFor, useProviderCheck } from '../provider-check.js'
 import { ProviderRefusal } from '../../agent/agy-check.js'
 import { poEntryCount } from '../../po/count.js'
 import { BatchRun, type BatchStage } from '../components/BatchRun.js'
@@ -187,10 +187,10 @@ export function Translate({ cwd, onBack }: TranslateProps) {
         debug: debugEnabled({ config, env: process.env }),
         onWarn: (line) => setNotices((prev) => [...prev, line]),
         onRunStarted: report.noteRun,
-        // Only the review pass reaches antigravity, and with no engine there
+        // Only the review pass reaches the agent, and with no engine there
         // is nothing to review.
         ...(() => {
-          const preflight = engine !== 'none' && config.reviewProvider === 'antigravity' ? providerCheck?.get() : undefined
+          const preflight = preflightFor(providerCheck, config, engine !== 'none')
           return preflight === undefined ? {} : { preflight }
         })(),
         // Bounded: a long run's per-entry events would otherwise all stay in memory.

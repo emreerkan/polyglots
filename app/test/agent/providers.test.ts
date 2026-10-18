@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   agentModel,
+  agentSpawnModel,
   AgentError,
   codexEngineLabel,
   configuredModel,
@@ -443,6 +444,20 @@ describe('the model and effort codex will run', () => {
     expect(agentModel('codex', none, '  ', env)).toMatchObject({ model: 'toml-model', modelFrom: 'codex config' })
     expect(agentModel('claude', ours, '', env)).toEqual({})
     expect(agentModel('antigravity', ours, ' ', env, empty)).toEqual({})
+  })
+
+  // The spawn and the engine id read the same flag. A blank one the engine id
+  // ignored still reached a claude or antigravity spawn as --model ' ', and
+  // padding the id kept but the spawn trimmed named two different models.
+  it('puts on the spawn exactly the flag the engine id names', () => {
+    const empty = mkdtempSync(join(tmpdir(), 'polyglots-agy-home-'))
+    for (const provider of ['claude', 'antigravity'] as const) {
+      expect(agentSpawnModel(provider, agentModel(provider, ours, '  ', env, empty), '  ')).toEqual({})
+      expect(agentSpawnModel(provider, agentModel(provider, ours, '', env, empty), '')).toEqual({})
+      const padded = agentModel(provider, ours, ' opus ', env, empty)
+      expect(padded).toEqual({ model: 'opus' })
+      expect(agentSpawnModel(provider, padded, ' opus ')).toEqual({ model: 'opus' })
+    }
   })
 
   it('labels the engine with whatever resolved', () => {

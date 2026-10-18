@@ -7,7 +7,7 @@ import { chunk } from '../batch.js'
 import type { RunControl } from '../run-control.js'
 import { loadConfig, loadSecrets } from '../config.js'
 import { agentEngineLabel, agentModel, agentSpawnModel, type AgentModel, type AgentRunOptions, type ProbeExec } from '../agent/providers.js'
-import { gateRun, ProviderRefusal, quotaRecheck, type ProviderCheck } from '../agent/agy-check.js'
+import { gateRun, hasProviderCheck, ProviderRefusal, quotaRecheck, type ProviderCheck } from '../agent/agy-check.js'
 import { defaultExec } from '../agent/discover.js'
 import {
   draftEngineId,
@@ -162,9 +162,8 @@ export interface TranslateOptions {
   // Where a warning about the run log itself goes; stderr unless a caller,
   // a test or a screen that owns the terminal, wants the line.
   onWarn?: (line: string) => void
-  // The antigravity check started beside the run, awaited for at most ten
-  // seconds before the first batch that would reach the reviewer. See
-  // ReviewOptions.preflight.
+  // The provider check started beside the run, awaited before the first
+  // batch that would reach the reviewer. See ReviewOptions.preflight.
   preflight?: Promise<ProviderCheck | undefined>
   // Runs agy for the quota read after a failed batch; tests pass a fake.
   providerExec?: ProbeExec
@@ -730,22 +729,31 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
           : undefined
 
         // Only the review pass reaches an agent, so only a run that will
-        // review anything with antigravity is checked; drafts written
-        // unreviewed and the local reviewer ask it nothing.
+        // review anything with antigravity or codex is checked; drafts
+        // written unreviewed and the local reviewer ask it nothing.
         //
         // Awaited once, by the first batch with a draft to write or the first
         // review that misses the cache, rather than before the loop: a resume
-        // whose every review is cached asks antigravity nothing and must not
-        // be refused by it. The quota read after a failed batch exists only
-        // once the check said signed in; see quotaRecheck for why.
-        const antigravity = provider === 'antigravity' && !unreviewed
-        const preflight = antigravity ? opts.preflight : undefined
+        // whose every review is cached asks the agent nothing and must not
+        // be refused by it. The quota read after a failed batch is
+        // antigravity's alone and exists only once the check said signed in;
+        // see quotaRecheck for why. The gate gets the bare model and effort,
+        // as in review, never the engine label.
+        const checked = hasProviderCheck(provider) && !unreviewed ? provider : undefined
+        const preflight = checked ? opts.preflight : undefined
         let gate: Promise<void> | undefined
         const beforeAsk = preflight
           ? () =>
-              (gate ??= gateRun({ preflight, model: reviewModel, log: (kind, fields) => runLog?.write(kind, fields), warn }).then(
+              (gate ??= gateRun({
+                preflight,
+                provider: checked!,
+                model: reviewResolved.model,
+                ...(reviewResolved.effort === undefined ? {} : { effort: reviewResolved.effort }),
+                log: (kind, fields) => runLog?.write(kind, fields),
+                warn,
+              }).then(
                 (check) => {
-                  if (check?.signIn.state === 'signed-in') {
+                  if (checked === 'antigravity' && check?.signIn.state === 'signed-in') {
                     recheck = quotaRecheck(opts.providerExec ?? defaultExec, (kind, fields) => runLog?.write(kind, fields), opts.bin)
                   }
                 },
