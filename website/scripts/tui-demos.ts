@@ -101,10 +101,11 @@ const AGENTS: AgentStatus[] = [
 // so the header's status shows a step still to do rather than a row of
 // ticks that says nothing.
 const SET_UP: TuiState = {
-  wizard: { dismissed: true, skipped: ['keys'], confirmed: ['locale'] },
+  wizard: { dismissed: true, skipped: ['keys'], confirmed: ['locale'], locales: {} },
   settings: { exitSummary: true },
   // Seen already, so the home demo shows the cards and not this release's news.
   whatsNew: { seen: VERSION },
+  recentLocales: [],
 }
 
 // What a settled install reports: a glossary synced, the locale's memory

@@ -17,7 +17,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { App } from '../../app/src/tui/App.js'
 import type { TuiCommands } from '../../app/src/tui/commands.js'
 import { loadConfig, saveConfig } from '../../app/src/config.js'
-import { DEFAULT_TUI_STATE, type TuiState } from '../../app/src/tui/state.js'
+import { DEFAULT_TUI_STATE, parseTuiState, type TuiState } from '../../app/src/tui/state.js'
 import { ansiToHtml, ansiToText } from './ansi.js'
 import type { TuiClock, TuiDriver, TuiScenario } from './tui-demos.js'
 
@@ -99,9 +99,12 @@ function refuseUnfaked(name: string): TuiCommands {
   return stubs as unknown as TuiCommands
 }
 
-// tui.json, held in memory: the scenario says where the wizard stands.
+// tui.json, held in memory: the scenario says where the wizard stands. The
+// scenario's state goes through the same parse the real file does, so a field
+// added to TuiState later reads as its default here, as it would in an old
+// file, rather than as undefined that the app's first read throws on.
 function memoryState(initial: TuiState): Pick<TuiCommands, 'loadTuiState' | 'saveTuiState'> {
-  let state = initial
+  let state = parseTuiState(JSON.stringify(initial))
   return {
     loadTuiState: () => state,
     saveTuiState: (next) => {
