@@ -494,6 +494,26 @@ describe('buildReport', () => {
     }
   })
 
+  // Keys that share their first characters, as every OpenAI project key
+  // shares sk-proj-, found the head of each in the text, and the scan read
+  // the text once for each of them: ten such keys took 1.6 seconds on five
+  // megabytes of their common start before a quote.
+  it('redacts five megabytes in under a second with ten keys that share their start', () => {
+    mkdirSync(join(home, 'config'), { recursive: true })
+    const keys = Array.from({ length: 10 }, (_, i) => `sk-proj-${String(i).repeat(4)}Ab3dEf6hIj9kLm2nOp5q`)
+    writeFileSync(join(home, 'config', '.env'), keys.map((k, i) => `KEY_${i}=${k}`).join('\n') + '\n')
+    const unit = 'sk-proj-0"'
+    const hostile = unit.repeat(Math.ceil(5_000_000 / unit.length))
+    const runId = seedRun({
+      logText: JSON.stringify({ t: START, kind: 'agent-exit', stdout: hostile }) + '\n',
+      debug: { 'batch-001-attempt-1.stdout.txt': hostile },
+    })
+    const started = performance.now()
+    const [run] = buildReport(db, [runId], { provider, home }).runs
+    expect(performance.now() - started).toBeLessThan(1000)
+    expect(run!.debug[0]!.text).not.toContain('sk-proj-0"')
+  })
+
   // The ranges overlap and do not come in order: the full pass reads one key
   // after another, and the window path collects the cut marks before the
   // quotes. Merged unsorted, a later key's earlier range was skipped as

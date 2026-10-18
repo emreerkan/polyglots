@@ -241,7 +241,7 @@ function secretValues(): string[] {
 // built: agent stderr and stdout at 500 characters, a provider's or local
 // model's answer at 200, agy's check detail at 128. A key that ran across such
 // a cut reaches the report as its first part only, which is not the text the
-// whole-key replace looks for, so its start went out in the clear. Redacting
+// whole-key match looks for, so its start went out in the clear. Redacting
 // at each cut site was the alternative; it is a dozen places in six modules,
 // and the next cut written would not know to do it.
 //
@@ -260,7 +260,7 @@ function secretValues(): string[] {
 const PREFIX_BEFORE_CUT = 4
 const PREFIX_AT_END = 8
 
-// What the whole-key replace looks for, beside each key itself.
+// What the whole-key match looks for, beside each key itself.
 //
 // Its JSON-escaped form, when that differs: a key holding a quote or a
 // backslash is escaped in an agent's JSON envelope, and the envelope reaches
@@ -300,56 +300,78 @@ const alternatives = (forms: Iterable<string>): string =>
 // a value that repeats itself, the placeholder xxxxxxxxxxxxxxxx in a .env,
 // made each alternative match almost to its end at every position before
 // the lookahead refused it: 200 identical characters took five seconds on
-// five megabytes, 40 took more than one. Run as a KMP automaton, each key
-// costs one step per character of text whatever its shape, and at every
-// position the automaton already knows the longest prefix of the key that
-// ends there, which is the one to mask.
+// five megabytes, 40 took more than one.
 //
-// Two shortcuts keep that near the regex's speed with several keys in .env,
-// both exact. A key that is the start of a longer one is left out, since
-// every prefix of it is a prefix of the longer one, masked at the same place;
-// the whole-key replace still has it. And while the automaton holds nothing,
-// it jumps to the next place the key's first PREFIX_BEFORE_CUT characters
-// occur, found by the native search: no prefix worth masking can start
-// before it. Without them, three placeholders of different lengths took over
-// a second on five megabytes of "xxxx…", one full pass each.
+// It is one Aho-Corasick automaton over every key, so each character of text
+// costs one step however many keys there are and whatever their shape. A KMP
+// automaton per key did the same for one key, but read the text once for
+// each, and keys that share their first characters (every OpenAI project key
+// starts sk-proj-) all found their start in the text and all took the pass:
+// ten of them took 1.6 seconds on five megabytes.
+//
+// The automaton's state is the longest suffix of the text read so far that
+// is a prefix of some key. The prefix to mask is the longest proper prefix of
+// a key ending there, and every shorter one lies inside it, so one length per
+// state is enough: the state's own depth when it is a proper prefix of some
+// key, which is when it has a child, and otherwise, at a whole key, which the
+// whole-key match covers, the same length for its failure state. Stepping on
+// from a whole key through its failure state is what lets a key that overlaps
+// itself end a prefix inside the next repeat.
 //
 // Exported for its tests, which hold it to a brute-force definition.
 export function prefixRanges(secrets: string[]): ((text: string, add: (start: number, end: number) => void) => void) | undefined {
-  const keys = [...new Set(secrets)]
-    .filter((secret) => secret.length > PREFIX_BEFORE_CUT)
-    .filter((secret, _, all) => !all.some((other) => other.length > secret.length && other.startsWith(secret)))
-    .map((secret) => {
-      // fail[i]: the length of the longest proper prefix of secret[0..i]
-      // that is also a suffix of it.
-      const fail = new Int32Array(secret.length)
-      for (let i = 1, q = 0; i < secret.length; i++) {
-        while (q > 0 && secret.charCodeAt(i) !== secret.charCodeAt(q)) q = fail[q - 1]!
-        if (secret.charCodeAt(i) === secret.charCodeAt(q)) q++
-        fail[i] = q
-      }
-      return { secret, fail, head: secret.slice(0, PREFIX_BEFORE_CUT) }
-    })
+  const keys = [...new Set(secrets)].filter((secret) => secret.length > PREFIX_BEFORE_CUT)
   if (keys.length === 0) return undefined
-  const longest = Math.max(...keys.map((key) => key.secret.length))
-  // One step of the automaton. At a whole key, which the whole-key match
-  // covers, the longest proper prefix that is also its suffix stands in, so
-  // a key that overlaps itself can end a prefix inside the next repeat.
-  const step = ({ secret, fail }: (typeof keys)[number], q: number, c: number): number => {
-    while (q > 0 && secret.charCodeAt(q) !== c) q = fail[q - 1]!
-    if (secret.charCodeAt(q) === c) q++
-    return q === secret.length ? fail[q - 1]! : q
+  const children: Array<Map<number, number>> = [new Map()]
+  const depth: number[] = [0]
+  for (const key of keys) {
+    let node = 0
+    for (let i = 0; i < key.length; i++) {
+      const c = key.charCodeAt(i)
+      let next = children[node]!.get(c)
+      if (next === undefined) {
+        next = children.length
+        children.push(new Map())
+        depth.push(i + 1)
+        children[node]!.set(c, next)
+      }
+      node = next
+    }
   }
+  // Breadth first, so a node's failure state, being shallower, is done first.
+  const fail = new Int32Array(children.length)
+  const masked = new Int32Array(children.length)
+  const queue = [...children[0]!.values()]
+  for (let head = 0; head < queue.length; head++) {
+    const node = queue[head]!
+    masked[node] = children[node]!.size > 0 ? depth[node]! : masked[fail[node]!]!
+    for (const [c, child] of children[node]!) {
+      let f = fail[node]!
+      while (f > 0 && !children[f]!.has(c)) f = fail[f]!
+      const target = children[f]!.get(c)
+      fail[child] = target !== undefined && target !== child ? target : 0
+      queue.push(child)
+    }
+  }
+  const step = (state: number, c: number): number => {
+    for (;;) {
+      const next = children[state]!.get(c)
+      if (next !== undefined) return next
+      if (state === 0) return 0
+      state = fail[state]!
+    }
+  }
+  const heads = [...new Set(keys.map((key) => key.slice(0, PREFIX_BEFORE_CUT)))]
+  const longest = Math.max(...keys.map((key) => key.length))
   const minAt = (text: string, end: number): number =>
     end === text.length ? PREFIX_AT_END : text[end] === CUT_MARK ? PREFIX_BEFORE_CUT : text[end] === '"' ? PREFIX_AT_END : Infinity
   return (text, add) => {
     // A key whose first characters are nowhere in the text has no prefix to
     // mask in it, and in most text that is every key.
-    const present = keys.filter((key) => text.includes(key.head))
-    if (present.length === 0) return
+    if (!heads.some((head) => text.includes(head))) return
     // The places a prefix may end: before each cut mark and quote, and at the
-    // end. Where there are few, a window of a key's length before each is
-    // read, which holds any proper prefix ending there; where there are many
+    // end. Where there are few, a window of the longest key's length before
+    // each is read, which holds any prefix ending there; where there are many
     // (a JSON envelope is mostly quotes), one pass over the whole text is
     // cheaper. Both are linear in the text.
     const places: number[] = []
@@ -359,24 +381,17 @@ export function prefixRanges(secrets: string[]): ((text: string, add: (start: nu
     }
     places.push(text.length)
     if (places.length <= budget + 1) {
-      for (const key of present) {
-        for (const end of places) {
-          let q = 0
-          for (let i = Math.max(0, end - key.secret.length + 1); i < end; i++) q = step(key, q, text.charCodeAt(i))
-          if (q >= minAt(text, end)) add(end - q, end)
-        }
+      for (const end of places) {
+        let state = 0
+        for (let i = Math.max(0, end - longest); i < end; i++) state = step(state, text.charCodeAt(i))
+        const length = masked[state]!
+        if (length >= minAt(text, end)) add(end - length, end)
       }
     } else {
-      for (const key of present) {
-        for (let i = 0, q = 0; i < text.length; i++) {
-          if (q === 0) {
-            const next = text.indexOf(key.head, i)
-            if (next === -1) break
-            i = next
-          }
-          q = step(key, q, text.charCodeAt(i))
-          if (q >= PREFIX_BEFORE_CUT && q >= minAt(text, i + 1)) add(i + 1 - q, i + 1)
-        }
+      for (let i = 0, state = 0; i < text.length; i++) {
+        state = step(state, text.charCodeAt(i))
+        const length = masked[state]!
+        if (length >= PREFIX_BEFORE_CUT && length >= minAt(text, i + 1)) add(i + 1 - length, i + 1)
       }
     }
   }
@@ -400,6 +415,9 @@ export function prefixRanges(secrets: string[]): ((text: string, add: (start: nu
 // Exported for its tests, which hold it to a sorted merge of brute-force
 // ranges.
 export function keyMasker(secrets: string[]): ((text: string) => string) | undefined {
+  // An empty alternative would match the empty string at every position and
+  // never move the exec loop on. secretValues never passes one.
+  secrets = secrets.filter((secret) => secret !== '')
   if (secrets.length === 0) return undefined
   const whole = new RegExp(alternatives(wholeKeyForms(secrets)), 'g')
   // The escaped forms too: a key holding a quote, cut in an agent's JSON
@@ -413,9 +431,16 @@ export function keyMasker(secrets: string[]): ((text: string) => string) | undef
     }
     // exec over the one regex, not matchAll, which clones it on every call:
     // a run log of tiny lines is hundreds of thousands of strings, and the
-    // clones tripled its time.
+    // clones tripled its time. Each search starts again one character after
+    // the last match began, not where it ended: where the end of one key is
+    // the start of another, written joined, the second starts inside the
+    // first, and a search from the first one's end sent the second one's
+    // tail. Matches are rare, so the searches they add cost nothing.
     whole.lastIndex = 0
-    for (let match = whole.exec(text); match !== null; match = whole.exec(text)) add(match.index, match.index + match[0].length)
+    for (let match = whole.exec(text); match !== null; match = whole.exec(text)) {
+      add(match.index, match.index + match[0].length)
+      whole.lastIndex = match.index + 1
+    }
     prefixes?.(text, add)
     if (furthest === undefined) return text
     let out = ''

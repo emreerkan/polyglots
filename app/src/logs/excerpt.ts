@@ -3,7 +3,7 @@
 //
 // The mark is for the problem report's redactor. A key that ran across a cut
 // reaches a report as its first part only, which is not the text the
-// whole-key replace looks for, so the redactor also masks a key's start
+// whole-key match looks for, so the redactor also masks a key's start
 // where a cut leaves one. Without a mark it could know that place only when
 // the cut was the end of the string, and a reason such as "stderr: <cut>;
 // stdout: <cut>" puts the first cut in the middle of the line, where 13

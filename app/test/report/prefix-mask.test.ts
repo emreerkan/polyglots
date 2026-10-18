@@ -119,8 +119,14 @@ describe('the key prefix scan', () => {
         if (e !== s) forms.push(e)
         for (let k = 1; k <= 3 && s.length - k >= 8; k++) forms.push(s.slice(k))
       }
-      const whole = new RegExp([...new Set(forms)].sort((a, b) => b.length - a.length).map(esc).join('|'), 'g')
-      const ranges: Array<[number, number]> = [...t.matchAll(whole)].map((m) => [m.index, m.index + m[0].length])
+      // Every place a form occurs, overlapping ones too: the longest form
+      // that starts at each position.
+      const whole = new RegExp(`^(?:${[...new Set(forms)].sort((a, b) => b.length - a.length).map(esc).join('|')})`)
+      const ranges: Array<[number, number]> = []
+      for (let i = 0; i < t.length; i++) {
+        const m = whole.exec(t.slice(i))
+        if (m) ranges.push([i, i + m[0].length])
+      }
       const all = [...new Set(keys.flatMap((s) => [s, JSON.stringify(s).slice(1, -1)]))]
       for (const s of all) {
         if (s.length <= 4) continue
@@ -146,5 +152,23 @@ describe('the key prefix scan', () => {
       expected += t.slice(at)
       expect(keyMasker(keys)!(t), JSON.stringify({ keys, t })).toBe(expected)
     }
+  })
+
+  // Two keys where the end of one is the start of the other, written joined:
+  // a match that resumed after the first key's end never saw the second
+  // one's start, and its tail went out.
+  it('masks two whole keys that overlap in the text', () => {
+    const a = 'abcdefgh12345678'
+    const b = '12345678ijklmnop'
+    expect(keyMasker([a, b])!(`x ${a}ijklmnop y`)).toBe('x [redacted] y')
+    expect(keyMasker([b, a])!(`x abcdefgh${b} y`)).toBe('x [redacted] y')
+  })
+
+  // An empty value never reaches the masker from secretValues, which drops
+  // anything under six characters, but the masker is exported and an empty
+  // alternative matched the empty string at every position without moving.
+  it('ignores an empty secret', () => {
+    expect(keyMasker(['', 'abcdefgh'])!('x abcdefgh')).toBe('x [redacted]')
+    expect(keyMasker([''])).toBeUndefined()
   })
 })
