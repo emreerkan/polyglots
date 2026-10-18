@@ -80,7 +80,7 @@ Entries with no translation are skipped and counted as "not submitted".
 | `escaping` | an escaped quote the source does not escape, or the reverse |
 | `punctuation` | sentence-ending punctuation that does not match the source |
 | `line-breaks` | a different number of line breaks |
-| `glossary` | a glossary term the translation does not use |
+| `glossary` | a glossary term the translation does not use, in any of the wordings its row lists |
 | `inconsistent` | one source translated several ways in the same file |
 | `tm-conflict` | a wording that differs from the one your memory approved |
 | `control` | a setting the code reads, such as `on` or `ltr`, that was translated |

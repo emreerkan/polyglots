@@ -22,11 +22,13 @@ Entries say what changed. For why and how, read the commit.
 - When a run has problems, the CLI and the app offer to send a problem report to the maintainer; `--send-report` sends without asking, `problemReports: never` stops the offers.
 - The batch screen shows elapsed time, an estimate and failed batches, and `enter` opens any file's own progress.
 - A batch on the command line prints a line each time a file finishes a batch, with the file's time, the files done, running and queued, the estimate and failed batches.
+- Translate falls back to a memory match that differs only in capitals when it uses the glossary term, written fuzzy.
 
 ### Changed
 
 - Locale rules opens on the current locale and lists maintained polyglots-data rules first.
 - With antigravity, a run checks sign-in and quota beside its rules pass, and stops before its first agent call when signed out or out of quota, ending a batch of files there too and saying it stopped, not failed; `doctor` shows both.
+- Translate prefers a memory match that uses the glossary term, and marks one that does not fuzzy.
 
 ### Fixed
 
@@ -35,6 +37,7 @@ Entries say what changed. For why and how, read the commit.
 - An antigravity batch that answered but never exited is read at once instead of lost to the 20-minute limit and marked unreviewed.
 - A file with a batch given up counts the entries in its failed batches on its batch table line.
 - `fetch --help` lists the environment variables, as `review` and `translate` do.
+- Glossary rows listing several translations (`a/b`, `a, b`) accept any of them.
 
 ## [1.0.1] - 2026-10-17
 

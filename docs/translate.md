@@ -21,6 +21,13 @@ again.
 
 1. **Translation memory first.** An entry whose source your memory holds
    word for word takes the approved wording, and nothing is sent anywhere.
+   When the memory holds several wordings, translate takes the newest one that
+   uses the glossary term, and marks the entry fuzzy, since there was a choice.
+   If no wording uses the term, translate looks for the same source in other
+   capitals ("Social Icons" for "Social icons") and takes a wording from there
+   that does, marked fuzzy with a comment that names that source. If nothing
+   uses the term, the newest wording goes in, marked fuzzy with a comment that
+   names the term.
 2. **A draft.** The rest are drafted in batches by DeepL, OpenAI or a local
    model.
 3. **A review of the draft.** The agent reviews each batch of drafts against
@@ -137,6 +144,10 @@ The summary before the download says how many projects are long text.
 translate.wordpress.org. Both commands use it, and review refuses to run
 without it. `polyglots glossary export glossary.csv` writes it as a CSV with
 Term, Translation and Notes columns, the layout Poedit imports.
+
+A glossary translation that lists several wordings, such as
+`waarschuwing/waarschuwingen` or `ilke, politika`, approves each of them: the
+check accepts a translation that uses any one.
 
 Once a day polyglots asks translate.wordpress.org when each glossary you
 synced last changed. If it changed after your copy, the end of the next
