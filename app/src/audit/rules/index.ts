@@ -620,6 +620,20 @@ export interface GlossaryMatch {
   translations: string[]
 }
 
+// Each row's term lowered once per glossary rather than once per entry: the
+// matcher runs for every row on every entry, and lowering is locale-aware and
+// not cheap. Keyed on the array, which a context holds for its whole life, and
+// on the locale, which decides how a term lowers.
+const LOWERED = new WeakMap<readonly GlossaryEntry[], { locale: Locale; terms: Array<{ item: GlossaryEntry; term: string }> }>()
+
+function loweredTerms(ctx: RuleContext): Array<{ item: GlossaryEntry; term: string }> {
+  const cached = LOWERED.get(ctx.glossary)
+  if (cached && cached.locale === ctx.locale) return cached.terms
+  const terms = ctx.glossary.map((item) => ({ item, term: lower(item.sourceTerm, ctx.locale) }))
+  LOWERED.set(ctx.glossary, { locale: ctx.locale, terms })
+  return terms
+}
+
 /**
  * The binding glossary terms a source string actually contains.
  *
@@ -634,10 +648,12 @@ export interface GlossaryMatch {
 export function glossaryMatches(msgid: string, ctx: RuleContext): GlossaryMatch[] {
   const source = lower(msgid, ctx.locale)
   const byTerm = new Map<string, { term: string; translations: string[] }>()
-  for (const item of ctx.glossary) {
-    const term = lower(item.sourceTerm, ctx.locale)
+  for (const { item, term } of loweredTerms(ctx)) {
     if (term.length < 3) continue
-    if (!hasWord(source, term)) continue
+    // The substring test first: hasWord builds a regex, and this runs for
+    // every glossary row on every entry, which on a real glossary and file
+    // was seconds of a run spent compiling patterns for terms not present.
+    if (!source.includes(term) || !hasWord(source, term)) continue
     const found = byTerm.get(term) ?? { term: item.sourceTerm, translations: [] }
     // Compared under NFC, so a translation stored in both encodings is listed
     // once; the first spelling stored is the one kept.
