@@ -33,8 +33,8 @@ has six steps:
 5. **Translation memory**: your locale's published memory from
    polyglots-data, when it has one: a summary of what would be imported,
    then `y` downloads and imports it. Shown only for a locale polyglots-data
-   has; offline, it is skipped with a note. The skip is kept, so the step is
-   not offered again; fetch the memory later from **Tools** (`o`) > **Import
+   has; offline, it is skipped with a note. The skip is kept for that locale, so the
+   step is not offered again for it; fetch the memory later from **Tools** (`o`) > **Import
    Translation Memory**, or with `polyglots tm fetch`. Optional, like every
    import. See
    [Fetching a locale's memory](translate.md#fetching-a-locales-memory).
@@ -57,6 +57,9 @@ The top of the screen shows:
 
 - the version, and beside it the newer one when npm has a newer release. The
   same notice, with the command to update, is printed when you quit,
+- `locale` and the locale you translate into, or `none` when no locale is set
+  (the header shows it on every screen; see
+  [Changing the locale](#changing-the-locale)),
 - `review` and the agent that reviews (`p` on home switches it),
 - `setup` and how many of the six steps are done, with a tick or a cross for
   each. Press `tab` to move onto them, arrows to choose one, and `enter` to
@@ -91,6 +94,7 @@ it waits until the window is taller.
 |---|---|
 | `?` | Help for the screen you are on: what it is for and all of its keys. |
 | `ctrl+k` or `:` | Go to any screen. Type to filter, arrows to choose, `enter` to go. |
+| `l` | Change the locale, from any screen with a frame except the setup wizard. Not while you type into a field. |
 | `esc` | Back. |
 | `q` | Back one level; quits from home; stops a run. |
 | `ctrl+c` | Quit. If a run is going it asks first; a second `ctrl+c` quits. |
@@ -101,6 +105,24 @@ The bottom line of every screen shows the keys that matter at that moment, so
 during a run it shows pause and stop, and once the run is done it shows how to
 open the result. When you type into a field, letters go into the field;
 `ctrl+k` still opens the go-to list.
+
+## Changing the locale
+
+Press `l`, or choose **Change locale** in the go-to list (`ctrl+k`), and a
+picker opens. Type a few letters to search. With nothing typed, it lists your
+current locale first, marked `current`, and then up to five locales you used
+before. `enter` saves the choice as your default locale, the same setting the
+setup wizard writes, and the screen you are on loads again in the new locale.
+
+The picker refuses in two cases. While a review or a translation runs, it says
+"The locale changes after the run ends." In **Locale rules** or in the reply
+templates editor with unsaved changes, it says "Save or discard the changes
+first."
+
+The first time you change to a locale that has no glossary and no locale
+rules, or that polyglots-data has memory for, the app asks once whether to set
+it up. `y` walks the setup steps for that locale (glossary, memory, rules) and
+returns you to the screen you were on. It does not ask again for that locale.
 
 ## Running a review or a translation
 
@@ -210,7 +232,7 @@ again once stopped.
 | Key | Screen | What it does |
 |---|---|---|
 | `g` | Sync WordPress.org glossary | Downloads your locale's glossary. Run it again when your team changes it. |
-| `r` | Locale rules | Edits your locale's rules: which built-in checks run, proper nouns, common mistakes, patterns, and guidance for the reviewer. `s` saves. **Fetch from polyglots-data** shows what the published file would change and writes it on `y`. **Open the rules builder in your browser** opens the website's rules builder for the locale, and shows its address. |
+| `r` | Locale rules | Edits your locale's rules: which built-in checks run, proper nouns, common mistakes, patterns, and guidance for the reviewer. `s` saves. It opens on the current locale, and asks which locale only when none is set. **Fetch from polyglots-data** comes first in the list when polyglots-data has maintained rules for the locale; it shows what the published file would change and writes it on `y`. **Open the rules builder in your browser** opens the website's rules builder for the locale, and shows its address. |
 | `t` | Reply templates | Your locale's [reply templates](reply-templates.md): `e` edits one, `n` creates one from a starter, `d` deletes one, `v` previews it clean or with problems. |
 | `a` | Check AI agents | Shows whether each review agent is installed, signed in and set up for polyglots. `r` checks again. `d` turns [debug mode](review.md#debug-mode) on or off. |
 | `m` | Local models | Finds model servers on this machine, such as Ollama or LM Studio, and chooses the drafting model. See [Local models](local-models.md). |

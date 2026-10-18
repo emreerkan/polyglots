@@ -12,6 +12,8 @@ Entries say what changed. For why and how, read the commit.
 
 ### Added
 
+- The header shows the current locale, and `l` changes it from any screen.
+- The first change to a locale without a glossary or rules offers setup for it.
 - `codex` as a review provider (`codex exec`, ChatGPT sign-in), with `codex.model` and `codex.effort` settings.
 - Review and translate keep every failed batch attempt, with its reason and duration, in `jobs.db` (`batch_failure`).
 - Review and translate write a run log in `~/.local/share/polyglots/logs`, kept 14 days, holding counts and failure reasons but not the entries.
@@ -23,10 +25,12 @@ Entries say what changed. For why and how, read the commit.
 
 ### Changed
 
+- Locale rules opens on the current locale and lists maintained polyglots-data rules first.
 - With antigravity, a run checks sign-in and quota beside its rules pass, and stops before its first agent call when signed out or out of quota, ending a batch of files there too and saying it stopped, not failed; `doctor` shows both.
 
 ### Fixed
 
+- A wizard skip no longer counts for every locale.
 - Quitting the app or stopping a run with Ctrl+C or a kill no longer leaves a running agent (such as a hung `agy`) behind.
 - An antigravity batch that answered but never exited is read at once instead of lost to the 20-minute limit and marked unreviewed.
 - A file with a batch given up counts the entries in its failed batches on its batch table line.
