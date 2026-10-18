@@ -238,8 +238,9 @@ export const HOME: MenuNode[] = [
 ]
 
 // Keys a menu level may not bind, because the frame or the home screen
-// already does: `?` help, `:` palette, `q` back or quit, `p` provider on home.
-export const RESERVED_KEYS: readonly string[] = ['?', ':', 'q', 'p', 'x']
+// already does: `?` help, `:` palette, `l` locale, `q` back or quit, `p`
+// provider on home, `x` stop stats.
+export const RESERVED_KEYS: readonly string[] = ['?', ':', 'l', 'q', 'p', 'x']
 
 /** Every node in the tree, depth first, with the path of keys that reaches it. */
 export function walk(nodes: MenuNode[] = HOME, path: string[] = []): Array<{ node: MenuNode; keys: string[]; parent?: MenuNode }> {

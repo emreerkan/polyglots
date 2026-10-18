@@ -11,6 +11,7 @@ import { NeedsLocale } from '../components/NeedsLocale.js'
 import { useBackKeys } from '../hooks/useBackKeys.js'
 import { useKeys } from '../hooks/useKeys.js'
 import { TextArea, TextInput } from '../input.js'
+import { useReportUnsaved } from '../unsaved.js'
 
 // The TUI's half of `polyglots template`. The app owns these files: a person
 // creates, edits, previews and deletes them here and never needs to know the
@@ -132,6 +133,9 @@ function TemplateList({ locale, onBack }: { locale: Locale; onBack: () => void }
   }
 
   const changed = current !== undefined && draft !== current.text
+  // The draft keeps the last text edited after the editor closes, so it counts
+  // only while the editor holds it, or while the save question is up.
+  useReportUnsaved((stage === 'edit' && changed) || stage === 'unsaved')
 
   const remove = () => {
     if (!current) return

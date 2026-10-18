@@ -178,7 +178,7 @@ describe('the key table and the bindings cannot drift', () => {
   })
 
   it('lists the keys bound everywhere under one heading', () => {
-    expect(GLOBAL_KEYS.map((k) => k.keys)).toEqual(['?', 'ctrl+k  :', 'esc', 'q', 'ctrl+c', 'x', 'pgup pgdn'])
+    expect(GLOBAL_KEYS.map((k) => k.keys)).toEqual(['?', 'ctrl+k  :', 'l', 'esc', 'q', 'ctrl+c', 'x', 'pgup pgdn'])
   })
 
   // The listings the table used to get wrong while it was only documentation.
@@ -191,6 +191,18 @@ describe('the key table and the bindings cannot drift', () => {
       'esc back',
     ])
     expect(SCREEN_KEYS['import-tm'].map((k) => k.keys)).not.toContain('space')
+  })
+})
+
+describe('the locale key', () => {
+  it('is a plain l, not L and not ctrl+l', () => {
+    expect(KEYS.global.locale.match('l', NO_KEY)).toBe(true)
+    expect(KEYS.global.locale.match('L', { ...NO_KEY, shift: true })).toBe(false)
+    expect(KEYS.global.locale.match('l', { ...NO_KEY, ctrl: true })).toBe(false)
+  })
+
+  it('is listed under the keys bound everywhere', () => {
+    expect(GLOBAL_KEYS).toContainEqual({ keys: 'l', does: 'change the locale' })
   })
 })
 

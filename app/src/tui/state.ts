@@ -49,6 +49,17 @@ export interface TuiState {
     // from a new one (src/tui/whats-new.ts).
     seen?: string
   }
+  // The locales last chosen, newest first, which the locale picker lists
+  // before anything is typed. Ids as defaultLocale stores them.
+  recentLocales: string[]
+}
+
+// Enough for a developer who moves between a handful of locales; a longer
+// list would push the search results under it off a short terminal.
+const RECENT_LIMIT = 5
+
+export function pushRecent(list: readonly string[], id: string): string[] {
+  return [id, ...list.filter((x) => x !== id)].slice(0, RECENT_LIMIT)
 }
 
 export const DEFAULT_TUI_STATE: TuiState = {
@@ -58,6 +69,7 @@ export const DEFAULT_TUI_STATE: TuiState = {
   // whom nothing is new. A damaged file lands here too, which costs at most
   // one release's lines.
   whatsNew: { seen: VERSION },
+  recentLocales: [],
 }
 
 export function tuiStateFile(): string {
@@ -104,6 +116,9 @@ export function parseTuiState(raw: string): TuiState {
     },
     // Not the default's version: a file without one predates the feature.
     whatsNew: typeof whatsNew.seen === 'string' ? { seen: whatsNew.seen } : {},
+    recentLocales: Array.isArray(root.recentLocales)
+      ? root.recentLocales.filter((v): v is string => typeof v === 'string').slice(0, RECENT_LIMIT)
+      : [],
   }
 }
 

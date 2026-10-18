@@ -7,6 +7,7 @@ import { DEFAULT_PROVIDER } from '../agent/providers.js'
 import type { Locale, PolyglotsConfig, ReviewChoice, Secrets } from '../types.js'
 import { TOKENS } from '../ui/tokens.js'
 import { Footer, Header } from './components/Chrome.js'
+import { LocalePicker } from './components/LocalePicker.js'
 import { HelpOverlay, Palette, QuitPrompt } from './components/Overlays.js'
 import { Viewport, type PageBy } from './components/Viewport.js'
 import { FooterStageProvider } from './footer-stage.js'
@@ -21,7 +22,8 @@ import { hasProviderCheck, providerOf, type CheckedProvider, type ProviderCheck 
 import { createServices, ServicesProvider, useServices, useStatsError, useStatsUrl, type Services } from './services.js'
 import { memoryState, setupStatus, tmListed, type SetupStatus } from './setup.js'
 import { frameLayout, frameSize, MIN_SIZE, SizeProvider, useSize } from './size.js'
-import { localeWizard, migrateTuiState, SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
+import { localeWizard, migrateTuiState, pushRecent, SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
+import { UnsavedContext } from './unsaved.js'
 import { Agents } from './screens/Agents.js'
 import { ConfigureKeys } from './screens/ConfigureKeys.js'
 import { Fetch } from './screens/Fetch.js'
@@ -56,7 +58,12 @@ export interface AppProps {
   whatsNew?: Readonly<Record<string, readonly string[]>>
 }
 
-type Overlay = 'help' | 'palette' | 'quit'
+type Overlay = 'help' | 'palette' | 'quit' | 'locale'
+
+// Why the locale picker refuses a pick. Nothing past the refusal is promised:
+// the run may be stopped or finish, and either frees the picker.
+const LOCALE_BUSY = 'The locale changes after the run ends.'
+const LOCALE_UNSAVED = 'Save or discard the changes first.'
 
 function tryOr<T>(read: () => T, fallback: T): T {
   try {
@@ -159,6 +166,13 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
     }
     return migrated
   })
+  // The locale the app works in, held here so the header, the screen's key and
+  // the picker agree. Changed by the picker, and re-read after the wizard,
+  // whose locale step is the other place that writes it.
+  const [locale, setLocale] = useState<string | undefined>(() => configuredLocale(tryOr(() => commands.loadConfig(), DEFAULT_CONFIG)))
+  const syncLocale = () => setLocale(configuredLocale(tryOr(() => commands.loadConfig(), DEFAULT_CONFIG)))
+  // Set by a screen holding edits it has not written (src/tui/unsaved.ts).
+  const unsaved = useRef(false)
   // Worked out once, from the state as launched: recording the version moves
   // tuiState on, and the block stays for the session rather than vanishing the
   // moment it is first drawn.
@@ -317,13 +331,16 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   const [overlay, setOverlay] = useState<Overlay | undefined>(undefined)
 
   const [paletteBlocked, setPaletteBlocked] = useState(false)
+  const [localeNote, setLocaleNote] = useState<{ blocked?: string; error?: string }>({})
   // The warning is about the run, so it goes when the run does, whether or
   // not the palette was closed in between.
   useEffect(() => {
     if (!busy) setPaletteBlocked(false)
+    if (!busy) setLocaleNote((note) => (note.blocked === LOCALE_BUSY ? {} : note))
   }, [busy])
 
   const go = (next: ScreenId) => {
+    if (screen === 'setup') syncLocale()
     setSetupEpoch((e) => e + 1)
     if (screen === 'sync-glossary' || screen === 'setup') refreshGlossary()
     if (screen === 'import-tm' || screen === 'setup') refreshMemory()
@@ -366,6 +383,41 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
     setTuiState(next)
   }
 
+  // Each opening starts clean: a note left from the last one, closed by
+  // ctrl+c's prompt rather than esc, would speak about a pick not made yet.
+  const openLocale = () => {
+    setLocaleNote({})
+    setOverlay('locale')
+  }
+  const closeLocale = () => {
+    setLocaleNote({})
+    setOverlay(undefined)
+  }
+  // The one way the locale changes outside setup. The screen on show is
+  // mounted again under the new locale (the Viewport's key), because most of
+  // them read the locale once, at mount, into a title, a prefilled field or a
+  // memory count, and would otherwise go on showing the old one. That is why a
+  // run refuses it, as leaving its screen would, and why unsaved edits do: the
+  // remount would throw them away.
+  const changeLocale = (id: string) => {
+    if (id === locale) return closeLocale()
+    if (busy) return setLocaleNote({ blocked: LOCALE_BUSY })
+    if (unsaved.current) return setLocaleNote({ blocked: LOCALE_UNSAVED })
+    try {
+      commands.saveConfig({ defaultLocale: id })
+    } catch (err) {
+      // As the setup locale step does: the picker stays, with the reason, and
+      // nothing else moves, since a run reads the saved config.
+      return setLocaleNote({ error: errorMessage(err) })
+    }
+    record((s) => ({ ...s, recentLocales: pushRecent(s.recentLocales, id) }))
+    setLocale(id)
+    setSetupEpoch((e) => e + 1)
+    refreshGlossary()
+    refreshMemory()
+    closeLocale()
+  }
+
   // A second Ctrl+C at the quit prompt answers yes: someone pressing it
   // twice means it. Everything else waits while an overlay is up, and while
   // the terminal is too small: there is nothing to draw an overlay on, and
@@ -384,6 +436,8 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
       quit: () => (overlay === 'quit' ? quit() : requestQuit()),
       palette: framed ? unlessTyping(() => setOverlay('palette')) : undefined,
       help: framed ? unlessTyping(() => setOverlay('help')) : undefined,
+      // Not on setup, whose first step is choosing the locale.
+      locale: framed && screen !== 'setup' ? unlessTyping(openLocale) : undefined,
       // Stops the stats server from anywhere, since it keeps serving after its
       // screen is left. The stats screen binds x itself, to show that it stopped.
       stopStats: framed && statsUrl !== undefined && screen !== 'stats' ? unlessTyping(() => void services.stopStats()) : undefined,
@@ -413,14 +467,6 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
       setProviderError(errorMessage(err))
     }
   }
-
-  // Read from config like the setup status is, and for the same reason: the
-  // saved file is the truth, and the wizard or the config screen can change it
-  // under a mounted App. The epoch and the TUI state move when they do.
-  const headerLocale = useMemo(
-    () => configuredLocale(tryOr(() => commands.loadConfig(), DEFAULT_CONFIG)),
-    [commands, tuiState, setupEpoch, provider],
-  )
 
   const headerRows = layout.wordmark ? 4 : 2
   const bodyRows = Math.max(1, size.rows - headerRows - 2)
@@ -513,6 +559,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
             {...(agents === undefined ? {} : { agents })}
             onRecord={record}
             onAdvance={() => {
+              syncLocale()
               setSetupEpoch((e) => e + 1)
               refreshGlossary()
               refreshMemory()
@@ -533,7 +580,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
       {layout.fits ? (
         <Header
           wordmark={layout.wordmark}
-          {...(headerLocale === undefined ? {} : { locale: headerLocale })}
+          {...(locale === undefined ? {} : { locale })}
           provider={providerLabel(provider)}
           {...(model === undefined ? {} : { model })}
           {...(note === undefined ? {} : { providerNote: note })}
@@ -547,12 +594,17 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
       <Box flexDirection="column" flexGrow={1} marginTop={layout.fits ? 1 : 0} overflow="hidden">
         <Box display={hidden ? 'none' : 'flex'} flexDirection="column" flexGrow={1}>
           <InputGate open={!hidden}>
-            {/* Keyed by screen, so the next screen starts at its top. */}
+            {/* Keyed by screen, so the next screen starts at its top, and by
+                locale, so a change of locale mounts the screen again in it.
+                Not setup's: its locale step writes the locale part way
+                through a walk, and a remount would start the walk over. */}
             <FooterStageProvider value={setFooterStage}>
               <ProviderCheckProvider value={providerCheck}>
-                <Viewport key={screen} pageRef={pageBody}>
-                  {view}
-                </Viewport>
+                <UnsavedContext.Provider value={unsaved}>
+                  <Viewport key={screen === 'setup' ? screen : `${screen}:${locale ?? ''}`} pageRef={pageBody}>
+                    {view}
+                  </Viewport>
+                </UnsavedContext.Provider>
               </ProviderCheckProvider>
             </FooterStageProvider>
           </InputGate>
@@ -569,7 +621,15 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
         {layout.fits && overlay === 'palette' && (
           <Palette
             blocked={paletteBlocked}
+            withLocale={screen !== 'setup'}
             onPick={(id) => {
+              // Not a screen: the picker opens over this one, which stays,
+              // so a run here is no reason to refuse. The picker refuses the
+              // pick itself.
+              if (id === 'locale') {
+                setPaletteBlocked(false)
+                return openLocale()
+              }
               // Leaving a screen with a run in it would unmount the run's
               // controls and progress while the run carried on, and leave a
               // second run on the same file one keypress away.
@@ -581,6 +641,16 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
               setPaletteBlocked(false)
               setOverlay(undefined)
             }}
+          />
+        )}
+        {layout.fits && overlay === 'locale' && (
+          <LocalePicker
+            {...(locale === undefined ? {} : { current: locale })}
+            recent={tuiState.recentLocales}
+            {...(localeNote.blocked === undefined ? {} : { blocked: localeNote.blocked })}
+            {...(localeNote.error === undefined ? {} : { error: localeNote.error })}
+            onPick={changeLocale}
+            onClose={closeLocale}
           />
         )}
         {overlay === 'quit' && <QuitPrompt onQuit={quit} onCancel={() => setOverlay(undefined)} />}

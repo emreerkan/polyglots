@@ -5,14 +5,13 @@ import type { ModelServer } from '../../draft/discover.js'
 import { agentModel, codexHint } from '../../agent/providers.js'
 import { configuredLocale, DEFAULT_CONFIG } from '../../config.js'
 import { TOKENS } from '../../ui/tokens.js'
-import { WPORG_LOCALES, localeId } from '../../wporg/locales.js'
 import { errorMessage, useCommands, useConfig } from '../commands.js'
+import { LocaleSearch } from '../components/LocaleSearch.js'
 import { useKeys } from '../hooks/useKeys.js'
 import { useTmListing } from '../hooks/useTmListing.js'
-import { TextInput } from '../input.js'
 import { DRAFT_ENGINES, REVIEW_PROVIDERS, type DraftEngineOption, type ProviderOption } from '../providers.js'
 import { STEP_LABELS, type SetupStatus } from '../setup.js'
-import { recordStep, SETUP_STEPS, type SetupStep, type TuiState } from '../state.js'
+import { pushRecent, recordStep, SETUP_STEPS, type SetupStep, type TuiState } from '../state.js'
 import { useGlyphs } from '../theme.js'
 import { ConfigureKeys } from './ConfigureKeys.js'
 import { TmFetch } from './ImportTm.js'
@@ -88,50 +87,29 @@ function Choice<T extends { id: string; label: string; cost: string }>({ options
   )
 }
 
-/** The locales that match what has been typed: by WordPress code, slug, or slug/set. */
-export function matchLocales(query: string, limit = 8): Array<{ id: string; wp: string }> {
-  const q = query.trim().toLowerCase().replace(/-/g, '_')
-  const all = WPORG_LOCALES.map((l) => ({ id: localeId(l.slug, l.set), wp: l.wp }))
-  if (q === '') return all.slice(0, limit)
-  const exact = all.filter((l) => l.id === query.trim().toLowerCase() || l.wp.toLowerCase() === q)
-  const starts = all.filter((l) => !exact.includes(l) && (l.wp.toLowerCase().startsWith(q) || l.id.startsWith(query.trim().toLowerCase())))
-  const contains = all.filter((l) => !exact.includes(l) && !starts.includes(l) && (l.wp.toLowerCase().includes(q) || l.id.includes(q)))
-  return [...exact, ...starts, ...contains].slice(0, limit)
-}
+// Moved to the shared search, which the locale picker uses too; re-exported so
+// what imported it from here keeps working.
+export { matchLocales } from '../components/LocaleSearch.js'
 
 function LocaleStep({ onChosen, onSkip }: { onChosen: (id: string) => void; onSkip: () => void }) {
   const commands = useCommands()
-  const glyphs = useGlyphs()
   // The configured locale when there is one, so re-running setup starts from
   // it. Otherwise empty: this used to open on tr, and enter, the key that
   // moves a wizard on, quietly made a stranger a Turkish translator.
-  const [query, setQuery] = useState(() => {
+  const [initial] = useState(() => {
     try {
       return commands.loadConfig().defaultLocale ?? ''
     } catch {
       return ''
     }
   })
-  const [at, setAt] = useState(0)
   const [error, setError] = useState<string>()
-  // Nothing listed, and so nothing to choose, until something is typed: an
-  // unfiltered list would put a cursor on whichever locale sorts first.
-  const matches = query.trim() === '' ? [] : matchLocales(query)
-  const chosen = Math.min(at, Math.max(0, matches.length - 1))
-  // Enter is the search field's own submit.
-  useKeys({
-    wizard: {
-      skip: onSkip,
-      move: (_input, key) => (key.upArrow ? setAt(Math.max(0, chosen - 1)) : setAt(Math.min(matches.length - 1, chosen + 1))),
-      choose: undefined,
-    },
-  })
-  const submit = () => {
-    const pick = matches[chosen]
-    if (!pick) return
+  // The arrows are the search list's own; enter is its field's submit.
+  useKeys({ wizard: { skip: onSkip, move: undefined, choose: undefined } })
+  const pick = (id: string) => {
     try {
-      commands.saveConfig({ defaultLocale: pick.id })
-      onChosen(pick.id)
+      commands.saveConfig({ defaultLocale: id })
+      onChosen(id)
     } catch (err) {
       setError(errorMessage(err))
     }
@@ -139,29 +117,7 @@ function LocaleStep({ onChosen, onSkip }: { onChosen: (id: string) => void; onSk
   return (
     <Box flexDirection="column">
       <Text>The locale you translate into, as translate.wordpress.org names it.</Text>
-      <Box>
-        <Text>Search: </Text>
-        <TextInput
-          value={query}
-          onChange={(v) => {
-            setQuery(v)
-            setAt(0)
-          }}
-          onSubmit={submit}
-        />
-      </Box>
-      {matches.map((m, i) => (
-        <Text key={m.id}>
-          <Text {...TOKENS.accent.ink}>{i === chosen ? glyphs.next : ' '}</Text> <Text bold={i === chosen}>{m.id}</Text>{' '}
-          <Text {...TOKENS.muted.ink}>{m.wp}</Text>
-        </Text>
-      ))}
-      {query.trim() === '' ? (
-        <Text {...TOKENS.muted.ink}>Type the locale's code: de, pt_BR, nl_NL_formal, es_ES…</Text>
-      ) : (
-        matches.length === 0 && <Text {...TOKENS.warn.ink}>translate.wordpress.org lists no locale like that.</Text>
-      )}
-      {error && <Text {...TOKENS.error.ink}>Could not save that: {error}</Text>}
+      <LocaleSearch initial={initial} onPick={pick} {...(error === undefined ? {} : { error })} />
     </Box>
   )
 }
@@ -340,7 +296,8 @@ export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: W
   if (step === 'locale') {
     body = (
       <LocaleStep
-        onChosen={() => {
+        onChosen={(id) => {
+          onRecord((s) => ({ ...s, recentLocales: pushRecent(s.recentLocales, id) }))
           record('confirmed')
           advance()
         }}

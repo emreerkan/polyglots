@@ -210,6 +210,7 @@ describe('tui.json', () => {
       wizard: { dismissed: true, skipped: ['keys' as const], confirmed: ['locale' as const], locales: { tr: { skipped: ['memory' as const], confirmed: [], asked: true as const } } },
       settings: { exitSummary: false },
       whatsNew: { seen: '0.31.0' },
+      recentLocales: ['tr', 'nl/formal'],
     }
     saveTuiState(state)
     expect(tuiStateFile()).toBe(join(home.path, 'config', 'tui.json'))
@@ -222,6 +223,7 @@ describe('tui.json', () => {
       wizard: { dismissed: false, skipped: ['keys'], confirmed: [], locales: {} },
       settings: { exitSummary: true },
       whatsNew: {},
+      recentLocales: [],
     })
   })
 

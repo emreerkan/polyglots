@@ -71,19 +71,25 @@ export function HelpOverlay({ screen, rows, onClose }: { screen: ScreenId; rows:
 }
 
 export interface PaletteEntry {
-  id: ScreenId
+  // 'locale' is the locale picker, which is an overlay rather than a screen.
+  id: ScreenId | 'locale'
   label: string
 }
 
-/** Every screen, named by its path through the menu: "Tools › Split a .po into parts". */
+/**
+ * Every screen, named by its path through the menu: "Tools › Split a .po into
+ * parts". Then the locale picker, which is reached from anywhere and so sits
+ * under no menu: someone who has forgotten l finds it here by typing "locale".
+ */
 export function paletteEntries(separator = '›'): PaletteEntry[] {
   const labelOf = new Map(HOME.map((n) => [n.id, n.label]))
-  return walk()
+  const screens: PaletteEntry[] = walk()
     .filter((e) => !e.node.children)
     .map((e) => ({
       id: e.node.id,
       label: e.parent ? `${labelOf.get(e.parent.id)} ${separator} ${e.node.label}` : e.node.label,
     }))
+  return [...screens, { id: 'locale', label: 'Change locale' }]
 }
 
 /**
@@ -118,11 +124,22 @@ export function rankPalette(query: string, entries: PaletteEntry[]): PaletteEntr
 
 const PALETTE_ROWS = 8
 
-export function Palette({ onPick, onClose, blocked = false }: { onPick: (id: ScreenId) => void; onClose: () => void; blocked?: boolean }) {
+export interface PaletteProps {
+  onPick: (id: PaletteEntry['id']) => void
+  onClose: () => void
+  blocked?: boolean
+  // Off on setup, whose own first step chooses the locale.
+  withLocale?: boolean
+}
+
+export function Palette({ onPick, onClose, blocked = false, withLocale = true }: PaletteProps) {
   const glyphs = useGlyphs()
   const [query, setQuery] = useState('')
   const [at, setAt] = useState(0)
-  const matches = rankPalette(query, paletteEntries(glyphs.next))
+  const matches = rankPalette(
+    query,
+    paletteEntries(glyphs.next).filter((e) => withLocale || e.id !== 'locale'),
+  )
   const chosen = Math.min(at, Math.max(0, matches.length - 1))
   useKeys({
     palette: {

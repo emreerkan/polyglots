@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_TUI_STATE, localeWizard, markAsked, migrateTuiState, parseTuiState, recordStep, type TuiState } from '../../src/tui/state.js'
+import { DEFAULT_TUI_STATE, localeWizard, markAsked, migrateTuiState, parseTuiState, pushRecent, recordStep, type TuiState } from '../../src/tui/state.js'
 
 const withWizard = (wizard: Partial<TuiState['wizard']>): TuiState => ({ ...DEFAULT_TUI_STATE, wizard: { ...DEFAULT_TUI_STATE.wizard, ...wizard } })
 
@@ -71,5 +71,24 @@ describe('localeWizard and markAsked', () => {
   it('marks a locale asked and keeps its steps', () => {
     const s = markAsked(recordStep(DEFAULT_TUI_STATE, 'nl', 'skipped', 'memory'), 'nl')
     expect(localeWizard(s, 'nl')).toEqual({ skipped: ['memory'], confirmed: [], asked: true })
+  })
+})
+
+describe('recent locales', () => {
+  it('puts the locale first and drops its earlier place', () => {
+    expect(pushRecent(['tr', 'de'], 'de')).toEqual(['de', 'tr'])
+  })
+
+  it('keeps five', () => {
+    let list: string[] = []
+    for (const id of ['a', 'b', 'c', 'd', 'e', 'f']) list = pushRecent(list, id)
+    expect(list).toEqual(['f', 'e', 'd', 'c', 'b'])
+  })
+
+  it('parses strings only, at most five, and none from a file without the field', () => {
+    expect(parseTuiState(JSON.stringify({ recentLocales: ['tr', 3, null, 'de'] })).recentLocales).toEqual(['tr', 'de'])
+    expect(parseTuiState(JSON.stringify({ recentLocales: ['a', 'b', 'c', 'd', 'e', 'f'] })).recentLocales).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(parseTuiState(JSON.stringify({ recentLocales: 'tr' })).recentLocales).toEqual([])
+    expect(parseTuiState('{}').recentLocales).toEqual([])
   })
 })

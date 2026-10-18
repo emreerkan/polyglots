@@ -22,6 +22,7 @@ import { useKeys } from '../hooks/useKeys.js'
 import { useTask, type TaskState } from '../hooks/useTask.js'
 import { useSize } from '../size.js'
 import { TextInput } from '../input.js'
+import { useReportUnsaved } from '../unsaved.js'
 import { ScrollTarget } from '../components/Viewport.js'
 
 export interface LocaleRulesProps {
@@ -257,6 +258,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   const [builderOpened, setBuilderOpened] = useState<boolean>()
 
   const dirty = draft !== undefined && JSON.stringify(value) !== JSON.stringify(draft.value)
+  useReportUnsaved(dirty)
   // A locale with no file can be saved as it stands: that is how someone
   // content with the built-in rules says so, and what the setup step counts.
   // The defaults are written commented out, so nothing is re-reviewed.

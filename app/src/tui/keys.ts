@@ -80,6 +80,7 @@ export const KEYS = {
     quit: { keys: 'ctrl+c', does: 'quit, asking first while a run is going', match: (input, key) => key.ctrl && input === 'c' },
     palette: { keys: 'ctrl+k  :', does: 'go to any screen', match: (input, key) => (key.ctrl && input === 'k') || char(':')(input, key) },
     help: { keys: '?', does: 'help for this screen', match: char('?') },
+    locale: { keys: 'l', does: 'change the locale', match: char('l') },
     stopStats: { keys: 'x', does: 'stop the stats server while it serves', match: char('x') },
     scroll: { keys: 'pgup pgdn', does: 'scroll a screen taller than the window', match: (_input, key) => key.pageUp || key.pageDown },
   },
@@ -329,6 +330,12 @@ export const KEYS = {
     close: { keys: 'esc', does: 'close', match: esc },
     move: { keys: '↑↓', does: 'choose', match: vertical },
   },
+  // The list under a locale search, in the setup locale step and in the
+  // locale picker. Its own group because the search component binds it, and
+  // the wizard's move would otherwise be bound twice on the locale step.
+  localeSearch: {
+    move: { keys: '↑↓', does: 'choose a locale', match: vertical },
+  },
   quitPrompt: {
     quit: { keys: 'y', does: 'quit anyway', match: (input) => input === 'y' || input === 'Y' },
     stay: { keys: 'n  esc', does: 'keep going', match: (input, key) => input === 'n' || input === 'N' || key.escape },
@@ -369,7 +376,7 @@ export function groupOf(entry: KeyEntry): Group {
 
 const help = ({ keys, does }: KeyEntry): KeyHelp => ({ keys, does })
 
-export const GLOBAL_KEYS: KeyHelp[] = [KEYS.global.help, KEYS.global.palette, KEYS.back.esc, KEYS.back.q, KEYS.global.quit, KEYS.global.stopStats, KEYS.global.scroll].map(
+export const GLOBAL_KEYS: KeyHelp[] = [KEYS.global.help, KEYS.global.palette, KEYS.global.locale, KEYS.back.esc, KEYS.back.q, KEYS.global.quit, KEYS.global.stopStats, KEYS.global.scroll].map(
   help,
 )
 
@@ -553,7 +560,7 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   agents: { shown: [KEYS.agents.recheck, KEYS.agents.debug, KEYS.agents.effort] },
   'local-models': { shown: [KEYS.localModels.recheck, KEYS.localModels.choose], more: [KEYS.localModels.move] },
   'configure-keys': { shown: [fields.saveKey], more: [finished.close] },
-  setup: { shown: [KEYS.wizard.choose, KEYS.wizard.skip], more: [KEYS.wizard.move] },
+  setup: { shown: [KEYS.wizard.choose, KEYS.wizard.skip], more: [KEYS.wizard.move, KEYS.localeSearch.move] },
   interface: { shown: [KEYS.interface.move, KEYS.interface.toggle] },
   'usage-stats': { shown: [KEYS.usageStats.toggle, KEYS.usageStats.move, KEYS.usageStats.reset] },
 }
