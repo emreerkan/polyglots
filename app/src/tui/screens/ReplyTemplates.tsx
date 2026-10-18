@@ -193,9 +193,7 @@ function TemplateList({ locale, onBack }: { locale: Locale; onBack: () => void }
   if ((stage === 'edit' || stage === 'unsaved') && current) {
     return (
       <Box flexDirection="column">
-        <Text {...TOKENS.heading.ink}>
-          Editing {current.name} · {label}
-        </Text>
+        <Text {...TOKENS.heading.ink}>Editing {current.name}</Text>
         <Text {...TOKENS.muted.ink} wrap="wrap">
           {'{username}'} is the requester, {'{results}'} the message for them, and {'{no problems|some problems}'} takes
           its first text when the review found nothing.
@@ -234,7 +232,7 @@ function TemplateList({ locale, onBack }: { locale: Locale; onBack: () => void }
 
   return (
     <Box flexDirection="column">
-      <Text {...TOKENS.heading.ink}>Reply templates · {label}</Text>
+      <Text {...TOKENS.heading.ink}>Reply templates</Text>
       <Text {...TOKENS.muted.ink} wrap="wrap">
         The comment you post back on a PTE request, filled in after every review. Each choice like{' '}
         {'{no problems|some problems}'} takes its first text when the review found nothing.

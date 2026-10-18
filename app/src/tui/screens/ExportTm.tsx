@@ -130,7 +130,7 @@ function ExportTmInLocale({ onBack, locale }: ExportTmProps & { locale: Locale }
 
   return (
     <Box flexDirection="column">
-      <Text bold>Export Translation Memory · locale {locale}</Text>
+      <Text bold>Export Translation Memory</Text>
       {configError && <Text color="yellow">Config error, using defaults: {configError}</Text>}
 
       {stage === 'format' && (

@@ -164,11 +164,13 @@ describe('the locale picker', () => {
   it('remounts the current screen in the new locale', async () => {
     const view = render(<App commands={fakeCommands(setUp)} cwd={cwd} />)
     await openFromHome(view.stdin, 'import-tm')
-    await waitForText(view.lastFrame, 'Import Translation Memory · locale tr')
+    await waitForText(view.lastFrame, 'Import Translation Memory')
+    // The header names the locale; the screen's title no longer repeats it.
+    expect(flat(view.lastFrame())).not.toContain('· locale tr')
     await openPicker(view)
     await type(view.stdin, 'nl')
     view.stdin.write(keys.enter)
-    await waitForText(view.lastFrame, 'Import Translation Memory · locale nl')
+    await waitForText(() => flat(view.lastFrame()), /locale nl .*Import Translation Memory/)
   })
 
   it('a failed save keeps the picker open with the error', async () => {
@@ -233,7 +235,7 @@ describe('the setup offer on a change of locale', () => {
     const tui = memoryTuiState(dismissed())
     const view = render(<App commands={fakeCommands(tui)} cwd={cwd} />)
     await openFromHome(view.stdin, 'import-tm')
-    await waitForText(view.lastFrame, 'Import Translation Memory · locale tr')
+    await waitForText(view.lastFrame, 'Import Translation Memory')
     await change(view, 'nl')
     await waitForText(view.lastFrame, 'Set them up now?')
     view.stdin.write('y')
@@ -245,7 +247,7 @@ describe('the setup offer on a change of locale', () => {
     await waitForText(view.lastFrame, 'Locale rules')
     view.stdin.write(keys.esc)
     await tick(ESC_DELAY)
-    await waitForText(view.lastFrame, 'Import Translation Memory · locale nl')
+    await waitForText(() => flat(view.lastFrame()), /locale nl .*Import Translation Memory/)
     expect(flat(view.lastFrame())).not.toContain('Setup ·')
   })
 

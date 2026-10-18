@@ -66,7 +66,8 @@ describe('ExportTm', () => {
     const commands = fakeCommands()
     const view = mount(commands)
     await waitForText(view.lastFrame, /TMX/)
-    expect(flat(view.lastFrame())).toMatch(/· locale tr(?![_\w])/)
+    // The header names the locale; the title does not repeat it.
+    expect(flat(view.lastFrame())).not.toContain('· locale')
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, /Write to/)
     view.stdin.write(keys.enter)

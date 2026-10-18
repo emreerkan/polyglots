@@ -56,6 +56,19 @@ describe('Reply templates screen', () => {
     expect(flat(view.lastFrame())).toContain('No reply templates for tr_TR yet. Press n to create one from a starter.')
   })
 
+  // The header names the locale on every screen, so the titles do not.
+  it('leaves the locale out of its titles', async () => {
+    const view = mount()
+    await waitForText(view.lastFrame, /Reply templates/)
+    expect(flat(view.lastFrame())).not.toContain('Reply templates · ')
+    view.stdin.write('n')
+    await waitForText(view.lastFrame, /New template name/)
+    await type(view, 'declined')
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Editing declined/)
+    expect(flat(view.lastFrame())).not.toContain('Editing declined · ')
+  })
+
   // A wp code in a config.json edited by hand. templatesDir files templates
   // under the wp code whichever form it is given, so this held before the
   // screen resolved the locale too; it guards that the screen, now reading

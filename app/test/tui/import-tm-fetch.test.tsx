@@ -71,7 +71,6 @@ describe('ImportTm: fetch from polyglots-data', () => {
     saveConfig({ defaultLocale: 'tr_TR' })
     const view = mount({ dataClient: listed() })
     await waitForText(view.lastFrame, 'Fetch from polyglots-data')
-    expect(flat(view.lastFrame())).toContain('locale tr')
   })
 
   // The fetch is put first when the manifest answers, which happens while

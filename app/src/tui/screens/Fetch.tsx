@@ -186,7 +186,7 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
     <Box flexDirection="column">
       <Text bold>Fetch from translate.wordpress.org</Text>
       {configError && <Text color="yellow">Config error, using defaults: {configError}</Text>}
-      {shown !== 'list' && shown !== 'get' && <Text dimColor>Provider: {providerLabel(config.reviewProvider)} · locale {locale}</Text>}
+      {shown !== 'list' && shown !== 'get' && <Text dimColor>Provider: {providerLabel(config.reviewProvider)}</Text>}
 
       {shown === 'list' && (
         <>

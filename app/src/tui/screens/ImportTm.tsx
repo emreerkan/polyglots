@@ -92,7 +92,7 @@ function ImportTmInLocale({ cwd, onBack, locale }: ImportTmProps & { locale: Loc
 
   return (
     <Box flexDirection="column">
-      <Text bold>Import Translation Memory · locale {locale}</Text>
+      <Text bold>Import Translation Memory</Text>
       {configError && <Text color="yellow">Config error, using defaults: {configError}</Text>}
       {choosing && (
         <>

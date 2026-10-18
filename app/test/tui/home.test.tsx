@@ -175,7 +175,7 @@ describe('Home', () => {
   it('reaches the TM import picker through Tools', async () => {
     const { lastFrame, stdin } = render(<App commands={fakeCommands()} cwd={cwd} />)
     await openFromHome(stdin, 'import-tm')
-    await waitForText(lastFrame, /Import Translation Memory · locale/)
+    await waitForText(lastFrame, 'Import Translation Memory')
     // The fake manifest lists no memory, so the file is the one way in.
     expect(flat(lastFrame())).toContain('Import a file')
   })
