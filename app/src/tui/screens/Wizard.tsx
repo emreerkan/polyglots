@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Box, Text } from 'ink'
 import type { AgentStatus } from '../../agent/discover.js'
 import type { ModelServer } from '../../draft/discover.js'
-import { configuredLocale } from '../../config.js'
+import { agentModel, codexHint } from '../../agent/providers.js'
+import { configuredLocale, DEFAULT_CONFIG } from '../../config.js'
 import { TOKENS } from '../../ui/tokens.js'
 import { WPORG_LOCALES, localeId } from '../../wporg/locales.js'
 import { errorMessage, useCommands, useConfig } from '../commands.js'
@@ -358,6 +359,17 @@ export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: W
           if (!save({ reviewProvider: p.id })) return
           record('confirmed')
           advance()
+          // After advance, which clears the note: the hint is about the
+          // choice just made and belongs on the step that follows it.
+          if (p.id === 'codex') {
+            let config = DEFAULT_CONFIG
+            try {
+              config = commands.loadConfig()
+            } catch {
+              // An unreadable config still gets the hint, from codex's own settings.
+            }
+            setNote(codexHint(agentModel('codex', config)))
+          }
         }}
         onSkip={skip}
       />

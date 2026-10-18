@@ -133,6 +133,37 @@ describe('the steps', () => {
     expect(config.saved).toContainEqual({ reviewProvider: 'claude' })
   })
 
+  it('offers Codex after Antigravity, with its cost, and says what it will use once chosen', async () => {
+    const config = configStore()
+    const commands = fakeCommands({
+      ...config,
+      ...memoryTuiState(fresh()),
+      discoverAgents: async () => [
+        unusableAgent('claude', 'not on PATH'),
+        agentStatus('antigravity'),
+        agentStatus('codex', { bin: 'codex', path: '/opt/bin/codex' }),
+      ],
+      discoverModels: async () => [],
+    })
+    const { lastFrame, stdin } = render(<App commands={commands} />)
+    await waitForText(lastFrame, 'Step 1 of 6')
+    stdin.write(keys.esc)
+    await tick(ESC_DELAY)
+    await waitForText(lastFrame, 'Codex')
+    const frame = flat(lastFrame())
+    expect(frame).toContain("Uses your ChatGPT plan's Codex limits.")
+    expect(frame.indexOf('Antigravity')).toBeLessThan(frame.indexOf('Codex'))
+    expect(frame.indexOf('Codex')).toBeLessThan(frame.indexOf('No AI'))
+    stdin.write(keys.down)
+    await tick()
+    stdin.write(keys.enter)
+    await waitForText(lastFrame, 'Step 3 of 6')
+    expect(config.saved).toContainEqual({ reviewProvider: 'codex' })
+    expect(flat(lastFrame())).toContain(
+      'codex will use its default model (codex default), effort its default effort (codex default). To choose another model: polyglots config set codex.model <name>',
+    )
+  })
+
   // Someone who wants no AI has no agent to find. The choice is always on the
   // list, last so enter on the first row still picks an agent, and it is the
   // whole list when nothing is installed.

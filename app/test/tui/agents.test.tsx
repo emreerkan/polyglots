@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import React from 'react'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { App } from '../../src/tui/App.js'
 import type { AgentStatus } from '../../src/agent/discover.js'
 import { DEFAULT_CONFIG } from '../../src/config.js'
@@ -135,5 +137,55 @@ describe('Check AI agents', () => {
     stdin.write('d')
     await waitForText(() => flat(lastFrame()), 'Debug mode: off')
     expect(saved).toEqual([{ debug: true }, { debug: false }])
+  })
+  describe('codex', () => {
+    function codexConfig(initial: Partial<PolyglotsConfig> = {}) {
+      let current: PolyglotsConfig = { ...DEFAULT_CONFIG, defaultLocale: 'tr', ...initial }
+      const saved: Partial<PolyglotsConfig>[] = []
+      return {
+        saved,
+        loadConfig: () => current,
+        saveConfig: (patch: Partial<PolyglotsConfig>) => {
+          saved.push(patch)
+          current = { ...current, ...patch }
+          return current
+        },
+      }
+    }
+
+    it("shows the model and effort codex will use, each with where it came from", async () => {
+      mkdirSync(process.env.CODEX_HOME!, { recursive: true })
+      writeFileSync(join(process.env.CODEX_HOME!, 'config.toml'), 'model = "gpt-5.6-luna"\nmodel_reasoning_effort = "low"\n')
+      const store = codexConfig()
+      const { lastFrame, stdin } = render(
+        <App commands={fakeCommands({ ...store, discoverAgents: async () => [agentStatus('claude'), agentStatus('codex')] })} />,
+      )
+      await openAgents(stdin, lastFrame)
+      const frame = flat(lastFrame())
+      expect(frame).toContain('Codex: gpt-5.6-luna (codex config), effort low (codex config)')
+      expect(frame).toContain('r re-check · d debug mode · e codex effort · esc/q back to menu')
+    })
+
+    it('cycles codex.effort with e through the five values, then removes it', async () => {
+      const store = codexConfig({ codex: { model: 'gpt-5.6-luna' } })
+      const { lastFrame, stdin } = render(
+        <App commands={fakeCommands({ ...store, discoverAgents: async () => [agentStatus('codex')] })} />,
+      )
+      await openAgents(stdin, lastFrame)
+      for (const effort of ['minimal', 'low', 'medium', 'high', 'xhigh']) {
+        stdin.write('e')
+        await waitForText(() => flat(lastFrame()), `effort ${effort} (polyglots config)`)
+      }
+      stdin.write('e')
+      await waitForText(() => flat(lastFrame()), 'effort its default effort (codex default)')
+      expect(store.saved.map((p) => p.codex)).toEqual([
+        { model: 'gpt-5.6-luna', effort: 'minimal' },
+        { model: 'gpt-5.6-luna', effort: 'low' },
+        { model: 'gpt-5.6-luna', effort: 'medium' },
+        { model: 'gpt-5.6-luna', effort: 'high' },
+        { model: 'gpt-5.6-luna', effort: 'xhigh' },
+        { model: 'gpt-5.6-luna' },
+      ])
+    })
   })
 })

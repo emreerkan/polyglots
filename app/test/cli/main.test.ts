@@ -1077,9 +1077,17 @@ describe('usage errors through injected streams', () => {
   })
 })
 
+  it('config set reviewProvider codex prints what codex will use', async () => {
+    const h = harness()
+    expect(await h.run(['config', 'set', 'reviewProvider', 'codex'])).toBe(0)
+    expect(h.stdout.text + h.stderr.text).toContain(
+      'codex will use its default model (codex default), effort its default effort (codex default). To choose another model: polyglots config set codex.model <name>',
+    )
+  })
+
 describe('doctor', () => {
   function agent(provider: AgentStatus['provider'], patch: Partial<AgentStatus> = {}): AgentStatus {
-    const bin = provider === 'claude' ? 'claude' : 'agy'
+    const bin = provider === 'claude' ? 'claude' : provider === 'codex' ? 'codex' : 'agy'
     return {
       provider,
       bin,
@@ -1104,6 +1112,31 @@ describe('doctor', () => {
     }
     return { fn, calls }
   }
+
+  describe('codex', () => {
+    const codexRow = (version: string) => agent('codex', { bin: 'codex', path: '/opt/bin/codex', version })
+
+    it('warns for a version below 0.155.1, naming it, and leaves the exit code alone', async () => {
+      const h = harness()
+      const code = await h.run(['doctor'], { discoverAgents: fakeDiscover([agent('claude'), codexRow('codex-cli 0.150.0')]).fn })
+      expect(code).toBe(0)
+      expect(h.stdout.text).toMatch(/codex 0\.150\.0 is older than 0\.155\.1/)
+    })
+
+    it.each(['codex-cli 0.155.1', 'codex-cli 0.160.0'])('does not warn for %s', async (version) => {
+      const h = harness()
+      await h.run(['doctor'], { discoverAgents: fakeDiscover([agent('claude'), codexRow(version)]).fn })
+      expect(h.stdout.text).not.toContain('is older than')
+    })
+
+    it('prints what codex will use under its row', async () => {
+      const h = harness()
+      await h.run(['doctor'], { discoverAgents: fakeDiscover([agent('claude'), codexRow('codex-cli 0.155.1')]).fn })
+      expect(h.stdout.text).toContain(
+        'codex will use its default model (codex default), effort its default effort (codex default). To choose another model: polyglots config set codex.model <name>',
+      )
+    })
+  })
 
   const agyMissing = agent('antigravity', { usable: false, reason: 'agy not on PATH', auth: { state: 'unknown' } })
   delete agyMissing.path

@@ -261,7 +261,7 @@ export function reviewSummaryOf(file: string, patch: Partial<ReviewSummary> = {}
 // reports both providers usable, so every test that does not care about
 // discovery sees the menu behave as it did before discovery existed.
 export function agentStatus(provider: ReviewProvider, patch: Partial<AgentStatus> = {}): AgentStatus {
-  const bin = provider === 'claude' ? 'claude' : 'agy'
+  const bin = provider === 'claude' ? 'claude' : provider === 'codex' ? 'codex' : 'agy'
   return {
     provider,
     bin,

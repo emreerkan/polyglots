@@ -744,6 +744,46 @@ export function agentModel(
 }
 
 /**
+ * The oldest codex this build has been driven against. doctor warns below it
+ * and never refuses: an older codex may well work, and the check that decides
+ * that is the run's own first batch, not a version string.
+ */
+export const MIN_CODEX_VERSION = '0.155.1'
+
+/**
+ * True when a `codex --version` line names a version below the minimum. A
+ * line with no x.y.z in it is not a verdict either way, so it is not below:
+ * a warning about a number we could not read would only be noise.
+ */
+export function codexBelowMinimum(versionLine: string | undefined): boolean {
+  const found = /(\d+)\.(\d+)\.(\d+)/.exec(versionLine ?? '')
+  if (!found) return false
+  const have = [Number(found[1]), Number(found[2]), Number(found[3])]
+  const want = MIN_CODEX_VERSION.split('.').map(Number)
+  for (let i = 0; i < 3; i++) {
+    if (have[i]! !== want[i]!) return have[i]! < want[i]!
+  }
+  return false
+}
+
+/**
+ * What codex will use, as the words every surface shares: the hint when codex
+ * becomes the provider, doctor, and the AI agents screen. A value that did not
+ * resolve is codex's to pick, and is said as that rather than left blank.
+ */
+export function codexChoiceText(resolved: AgentModel): { model: string; effort: string } {
+  return {
+    model: `${resolved.model ?? 'its default model'} (${resolved.modelFrom ?? 'codex default'})`,
+    effort: `${resolved.effort ?? 'its default effort'} (${resolved.effortFrom ?? 'codex default'})`,
+  }
+}
+
+export function codexHint(resolved: AgentModel): string {
+  const text = codexChoiceText(resolved)
+  return `codex will use ${text.model}, effort ${text.effort}. To choose another model: polyglots config set codex.model <name>`
+}
+
+/**
  * The label engineId puts after `codex:`. Both parts name the engine, since
  * the same model at another effort does not reach the same verdicts, and a
  * part that resolved to nothing is left out rather than guessed, so nothing

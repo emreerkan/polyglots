@@ -362,6 +362,33 @@ describe('antigravity sign-in and setup', () => {
   })
 })
 
+describe('codex', () => {
+  const codexExec = (login: Partial<ProbeResult>) =>
+    fakeExec({
+      codex: (args) => {
+        if (args[0] === '--version') return { stdout: 'codex-cli 0.155.1\n' }
+        if (args[0] === 'login') return login
+        return undefined
+      },
+    })
+
+  it('is usable when signed in, with its version line', async () => {
+    script(binDir, 'codex')
+    const codex = statusOf(await discover(codexExec({ stderr: 'Logged in using ChatGPT\n' })), 'codex')
+    expect(codex.usable).toBe(true)
+    expect(codex.version).toBe('codex-cli 0.155.1')
+    expect(codex.auth.state).toBe('signed-in')
+  })
+
+  it('is listed with the reason when signed out', async () => {
+    script(binDir, 'codex')
+    const codex = statusOf(await discover(codexExec({ code: 1, stderr: 'Not logged in' })), 'codex')
+    expect(codex.usable).toBe(false)
+    expect(codex.reason).toContain('codex')
+    expect(codex.reason).toContain('codex login')
+  })
+})
+
 describe('the model shown', () => {
   it('is what configuredModel reads, so it matches the engine id', async () => {
     const statuses = await discover(fakeExec())

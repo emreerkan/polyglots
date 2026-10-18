@@ -56,7 +56,7 @@ import { loadPo } from './po/po-file.js'
 import { headerLocaleNotice, localeDefaultHelp, requireLocale, resolveFileLocale } from './cli/locale.js'
 import { parseParallel, printBatchEnd, runBatchJobs, startProviderCheck, type BatchCli } from './cli/batch.js'
 import { buildReport } from './review/message.js'
-import { agentBinOverride, agentEngineLabel, agentModel, batchAdvice } from './agent/providers.js'
+import { agentBinOverride, agentEngineLabel, agentModel, batchAdvice, codexBelowMinimum, codexHint, MIN_CODEX_VERSION } from './agent/providers.js'
 import { defaultExec, discoverAgents, type AgentStatus } from './agent/discover.js'
 import { checkConfigured, ProviderRefusal, type ProviderCheck } from './agent/agy-check.js'
 import {
@@ -970,6 +970,8 @@ async function configSet(cli: Cli, key: string, raw: string): Promise<void> {
   cli.out(okLine(cli.ui.out, `${key} = ${formatConfigValue(key, saved[key])}`))
   // The one door to the experimental reviewer, so the warning is said here.
   if (key === 'reviewProvider' && saved.reviewProvider === 'local') cli.err(warnLine(cli.ui.err, LOCAL_REVIEW_NOTICE))
+  // On stderr so stdout stays the one confirmation line a script can read.
+  if (key === 'reviewProvider' && saved.reviewProvider === 'codex') cli.err(hintLine(cli.ui.err, codexHint(agentModel('codex', saved))))
 }
 
 async function configSetKey(cli: Cli, rawName: string, value: string | undefined): Promise<number> {
@@ -1088,6 +1090,12 @@ async function runDoctor(cli: Cli, flags: { json?: boolean; live?: boolean }): P
     // about to switch to one.
     for (const q of a.quota?.lines ?? []) cli.out(hintLine(p, `quota: ${q.group} ${q.remaining}% left (${q.limit}, resets ${q.resetsAt})`))
     for (const note of a.notes) cli.out(hintLine(p, `note: ${note}`))
+    if (a.provider === 'codex' && a.path !== undefined) {
+      if (codexBelowMinimum(a.version)) {
+        cli.out(warnLine(p, `codex ${a.version?.match(/\d+\.\d+\.\d+/)?.[0]} is older than ${MIN_CODEX_VERSION}; polyglots was built against ${MIN_CODEX_VERSION} or later`))
+      }
+      cli.out(hintLine(p, codexHint(agentModel('codex', cli.config()))))
+    }
   })
   // The closing line is the answer the exit code gives, so it carries the
   // glyph; the table above is detail.

@@ -177,6 +177,7 @@ export const KEYS = {
   agents: {
     recheck: { keys: 'r', does: 're-check', match: char('r') },
     debug: { keys: 'd', does: 'turn debug mode on or off', match: char('d') },
+    effort: { keys: 'e', does: "change codex's effort", match: char('e') },
   },
   localModels: {
     recheck: { keys: 'r', does: 're-check', match: char('r') },
@@ -549,7 +550,7 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
       KEYS.needsLocale.setup,
     ],
   },
-  agents: { shown: [KEYS.agents.recheck, KEYS.agents.debug] },
+  agents: { shown: [KEYS.agents.recheck, KEYS.agents.debug, KEYS.agents.effort] },
   'local-models': { shown: [KEYS.localModels.recheck, KEYS.localModels.choose], more: [KEYS.localModels.move] },
   'configure-keys': { shown: [fields.saveKey], more: [finished.close] },
   setup: { shown: [KEYS.wizard.choose, KEYS.wizard.skip], more: [KEYS.wizard.move] },

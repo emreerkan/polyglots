@@ -1,8 +1,8 @@
 import type { ReviewChoice } from '../types.js'
 
 // The review providers the setup wizard can offer, as data. A row is
-// everything the wizard says about one, so adding a provider (OpenAI's codex
-// is planned) is a row here plus its discovery, not a change to any screen.
+// everything the wizard says about one, so adding a provider is a row here
+// plus its discovery, not a change to any screen. codex is a row now.
 //
 // Only providers the tool can actually drive belong here. The wizard filters
 // these down further to what discovery found installed and signed in.
@@ -30,6 +30,12 @@ export const REVIEW_PROVIDERS: readonly ProviderOption[] = [
     id: 'antigravity',
     label: 'Antigravity',
     cost: "Uses your Google account's Antigravity quota.",
+    needs: 'agent',
+  },
+  {
+    id: 'codex',
+    label: 'Codex',
+    cost: "Uses your ChatGPT plan's Codex limits.",
     needs: 'agent',
   },
   {
