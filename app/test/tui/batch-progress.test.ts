@@ -247,6 +247,25 @@ describe('fileLine', () => {
     expect(fileLine(t, 60 * MIN, 'review')).toEqual({ text: 'finished · 58m · 1 batch failed', near: false })
   })
 
+  // A file the provider check refused, or one a stop reached before it
+  // opened a batch, ended at once: "finished · 0s" said it had done its work
+  // in no time. It says how it ended, and its time only once it did any.
+  it('says a file stopped or failed instead of finished, with no time when it never opened a batch', () => {
+    const store = createEventStore('review')
+    for (const f of ['a.po', 'b.po', 'c.po', 'd.po']) store.queue(f, 10)
+    for (const f of ['a.po', 'b.po', 'c.po', 'd.po']) store.start(f, 0)
+    store.push('b.po', { type: 'batch-start', index: 1, of: 2, size: 5, at: 0 })
+    store.finish('a.po', 0, 'stopped')
+    store.finish('b.po', 3 * MIN, 'stopped')
+    store.finish('c.po', 0, 'failed')
+    store.finish('d.po', 0, 'done')
+    const line = (f: string): string => fileLine(store.tracks().find((t) => t.input === f)!, 4 * MIN, 'review').text
+    expect(line('a.po')).toBe('stopped')
+    expect(line('b.po')).toBe('stopped · 3m')
+    expect(line('c.po')).toBe('failed · 0s')
+    expect(line('d.po')).toBe('finished · 0s')
+  })
+
   it('shows the open batch with its seconds, and no marker without a limit', () => {
     const t = reviewing('a.po', { size: 5, ms: MIN, done: 1, of: 2 })
     expect(fileLine(t, MIN + 19 * MIN + 5_000, 'review')).toEqual({ text: 'running · batch 2/2 · 19m 05s in this batch', near: false })

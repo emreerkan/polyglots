@@ -18,6 +18,8 @@ export interface FileTrack {
   state: 'queued' | 'running' | 'finished'
   startedAt?: number
   endedAt?: number
+  // How a finished file ended, when the caller said. Absent reads as done.
+  ended?: 'done' | 'failed' | 'stopped'
   events: Array<ReviewEvent | TranslateEvent>
   entries: number
 }
@@ -66,8 +68,8 @@ export function createEventStore(action: 'review' | 'translate') {
     start(input: string, at: number): void {
       set(input, { state: 'running', startedAt: at })
     },
-    finish(input: string, at: number): void {
-      set(input, { state: 'finished', endedAt: at })
+    finish(input: string, at: number, ended?: FileTrack['ended']): void {
+      set(input, { state: 'finished', endedAt: at, ...(ended === undefined ? {} : { ended }) })
     },
     push(input: string, e: AnyEvent): void {
       if (e.type === 'entries' && !opened.has(input)) return
@@ -303,15 +305,6 @@ export function failedBatches(track: FileTrack): number {
   return track.events.filter((e) => e.type === 'batch-failed' || e.type === 'batch-skipped').length
 }
 
-/**
- * One file's line in the batch list, after its name: what state it is in,
- * its open batch and how long that has run, or its total time once finished.
- *
- * `near` is set past the agent's timeout less a minute, and the words say so
- * as well as the colour, so the marker survives a terminal without colour and
- * a test can read it. Without a `timeoutMs` (a local model, or no AI) nothing
- * is ever near: there is no limit to be near.
- */
 // A pause is asked for at once and reached only when the open batch has
 // closed and saved, so while a batch is open the file is pausing, not
 // paused: the file's own screen keeps the two apart (ReviewProgress's
@@ -324,13 +317,27 @@ const intentText = (intent: 'pause' | 'stop' | undefined, batchOpen: boolean): s
   return ''
 }
 
+/**
+ * One file's line in the batch list, after its name: what state it is in,
+ * its open batch and how long that has run, or its total time once finished.
+ *
+ * `near` is set past the agent's timeout less a minute, and the words say so
+ * as well as the colour, so the marker survives a terminal without colour and
+ * a test can read it. Without a `timeoutMs` (a local model, or no AI) nothing
+ * is ever near: there is no limit to be near.
+ */
 export function fileLine(track: FileTrack, now: number, action: 'review' | 'translate', timeoutMs?: number): { text: string; near: boolean } {
   if (track.state === 'queued') return { text: 'queued', near: false }
   const failed = failedBatches(track)
   const failedText = failed > 0 ? ` · ${failed} ${failed === 1 ? 'batch' : 'batches'} failed` : ''
   if (track.state === 'finished') {
-    const total = track.startedAt !== undefined && track.endedAt !== undefined ? ` · ${formatDuration(track.endedAt - track.startedAt)}` : ''
-    return { text: `finished${total}${failedText}`, near: false }
+    // A file the provider check refused, or one a stop reached before its
+    // first batch, ended at once, and "finished · 0s" said it had done its
+    // work in no time. Its time is left off until it opened a batch.
+    const word = track.ended === 'stopped' ? 'stopped' : track.ended === 'failed' ? 'failed' : 'finished'
+    const idle = track.ended === 'stopped' && !track.events.some((e) => e.type === 'batch-start')
+    const total = !idle && track.startedAt !== undefined && track.endedAt !== undefined ? ` · ${formatDuration(track.endedAt - track.startedAt)}` : ''
+    return { text: `${word}${total}${failedText}`, near: false }
   }
   let last: { index: number; of: number } | undefined
   for (const e of track.events) if (e.type === 'batch-start') last = { index: e.index, of: e.of }

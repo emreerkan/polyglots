@@ -394,7 +394,7 @@ export function BatchRun(props: BatchRunProps) {
           onEvent: (e) => {
             try {
               if (e.type === 'start') events.start(e.item.input, Date.now())
-              else events.finish(e.item.input, Date.now())
+              else events.finish(e.item.input, Date.now(), e.outcome.state)
             } catch {}
             if (e.type === 'end') {
               const reason = e.outcome.state === 'stopped' ? e.outcome.reason : undefined
