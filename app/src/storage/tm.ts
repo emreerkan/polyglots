@@ -140,27 +140,57 @@ export function findMemory(db: Database.Database, source: string, locale: Locale
  * exact rows are left out: findMemory has already answered for them.
  *
  * Only a fallback, asked when none of the exact wordings uses the glossary
- * term, and that rarity is what makes its cost acceptable. No index serves a
- * case-blind match on `source`, so this scans the locale's rows, and one is
+ * term. No index serves a case-blind match on `source`, and one is
  * deliberately not added: the database holding the memory cannot be
- * regenerated, and its schema is not changed to speed up a fallback. A test
- * measures the scan on a memory of 150,000 rows.
+ * regenerated, and its schema is not changed to speed up a fallback. A plain
+ * scan read every locale's rows, about 25 ms on a real 356,000-row memory,
+ * synchronously and so with the TUI frozen, and a long file can ask hundreds
+ * of times. The full-text index the memory already keeps for search, which
+ * the tm triggers hold in step with every insert, update and delete, narrows
+ * the rows to those holding the source's words as a phrase first; it folds
+ * case itself, so a case variant is never narrowed away. The comparison that
+ * decides is still the NOCASE one. A source with no words, or one the index
+ * cannot parse, falls back to the scan.
  *
  * NOCASE folds ASCII letters only, so "Ä" and "ä" still differ. The sources
  * are English, where that covers what matters, and a fold that also matched
  * what it should not would put a stranger's wording in the file.
+ *
+ * Prepared per call, as findMemory and searchTm are: the file keeps no
+ * statement cache, and a fallback this rare does not earn the first one.
  */
 export function findMemoryIgnoringCase(db: Database.Database, source: string, locale: Locale, context?: string): TmEntry[] {
-  const stmt = db.prepare<[string, string, string, string], TmRow>(
+  const words = tokens(source)
+  // One quoted phrase of the source's words. tokens() keeps letters and
+  // digits only, so no quote can reach the query to need doubling.
+  const phrase = words.length > 0 ? `"${words.join(' ')}"` : undefined
+  const indexed = db.prepare<[string, string, string, string, string], TmRow>(
+    `SELECT t.source, t.target, t.locale, t.context, t.project, t.weight
+     FROM tm_fts f JOIN tm t ON t.id = f.rowid
+     WHERE tm_fts MATCH ? AND t.source = ? COLLATE NOCASE AND t.source <> ? AND t.locale = ? AND t.context = ?
+     ORDER BY t.weight DESC, t.updated_at DESC, t.id DESC`,
+  )
+  const scan = db.prepare<[string, string, string, string], TmRow>(
     `SELECT source, target, locale, context, project, weight FROM tm
      WHERE source = ? COLLATE NOCASE AND source <> ? AND locale = ? AND context = ?
      ORDER BY weight DESC, updated_at DESC, id DESC`,
   )
+  const rows = (ctx: string): TmRow[] => {
+    if (phrase !== undefined) {
+      try {
+        return indexed.all(phrase, source, source, locale, ctx)
+      } catch {
+        // An FTS syntax the tokenizer and tokens() disagree on: the scan is
+        // slower but cannot be wrong.
+      }
+    }
+    return scan.all(source, source, locale, ctx)
+  }
   if (context) {
-    const scoped = stmt.all(source, source, locale, context)
+    const scoped = rows(context)
     if (scoped.length > 0) return scoped.map(toEntry)
   }
-  return stmt.all(source, source, locale, '').map(toEntry)
+  return rows('').map(toEntry)
 }
 
 /**

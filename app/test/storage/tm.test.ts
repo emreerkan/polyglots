@@ -354,18 +354,37 @@ describe('tm', () => {
       expect(findMemoryIgnoringCase(db, 'Post', 'tr', 'noun').map((e) => e.target)).toEqual(['YAZI'])
     })
 
-    // No index serves a case-blind match, and none is added: polyglots.db
-    // cannot be regenerated, so its schema is not changed for a fallback.
-    // This records what the scan costs on a memory the size of a real one.
-    it('scans a 150,000-row memory quickly enough for a rare fallback', () => {
-      const rows = Array.from({ length: 150_000 }, (_, i) => ({ source: `Source string ${i}`, target: `Doel ${i}`, locale: i % 3 === 0 ? 'tr' : 'nl' }))
-      insertTmIfAbsent(db, rows, '2026-01-01T00:00:00Z')
-      upsertTm(db, [{ source: 'SOURCE STRING 77', target: 'DOEL', locale: 'nl' }])
-      const started = performance.now()
-      const hits = findMemoryIgnoringCase(db, 'Source string 77', 'nl')
-      const took = performance.now() - started
-      expect(hits.map((h) => h.target)).toEqual(['DOEL'])
-      expect(took).toBeLessThan(250)
+    // No index serves a case-blind match on source, and none is added:
+    // polyglots.db cannot be regenerated. The FTS index the memory already
+    // keeps narrows the rows instead. A row the index does not hold is
+    // invisible to that path and visible to the scan, which is how these
+    // tell the two apart without timing anything.
+    const unindex = (source: string) => {
+      const row = db.prepare('SELECT id, source FROM tm WHERE source = ?').get(source) as { id: number; source: string }
+      db.prepare("INSERT INTO tm_fts(tm_fts, rowid, source) VALUES ('delete', ?, ?)").run(row.id, row.source)
+    }
+
+    it('narrows by the full-text index when the source has words', () => {
+      upsertTm(db, [
+        { source: 'Social Icons', target: 'Sociale iconen', locale: 'nl' },
+        { source: 'SOCIAL ICONS', target: 'SOCIALE ICONEN', locale: 'nl' },
+      ])
+      unindex('SOCIAL ICONS')
+      expect(findMemoryIgnoringCase(db, 'Social icons', 'nl').map((e) => e.target)).toEqual(['Sociale iconen'])
+    })
+
+    it('finds a source with a double quote in it', () => {
+      upsertTm(db, [{ source: 'Use "Social" Icons', target: 'Gebruik "sociale" iconen', locale: 'nl' }])
+      expect(findMemoryIgnoringCase(db, 'Use "social" icons', 'nl').map((e) => e.target)).toEqual(['Gebruik "sociale" iconen'])
+    })
+
+    // A source of punctuation alone gives the index nothing to match, and
+    // has no capitals to differ in either, so the scan it falls back to finds
+    // nothing; what matters is that it answers rather than throws.
+    it('answers for a source with no words for the index to match', () => {
+      upsertTm(db, [{ source: '-->', target: '-->', locale: 'nl' }])
+      expect(findMemoryIgnoringCase(db, '-->', 'nl')).toEqual([])
+      expect(findMemoryIgnoringCase(db, '"', 'nl')).toEqual([])
     })
   })
 })
