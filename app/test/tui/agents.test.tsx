@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import React from 'react'
 import { App } from '../../src/tui/App.js'
 import type { AgentStatus } from '../../src/agent/discover.js'
+import { DEFAULT_CONFIG } from '../../src/config.js'
+import type { PolyglotsConfig } from '../../src/types.js'
 import {
   agentStatus,
   ESC_DELAY,
@@ -104,5 +106,34 @@ describe('Check AI agents', () => {
     stdin.write('r')
     await waitForText(() => flat(lastFrame()), 'claude ready')
     expect(lastFrame()).not.toContain('Could not check agents')
+  })
+
+  // The CLI reads the same key, so the setting lives in config rather than in
+  // Interface settings, which hold what only the app reads.
+  it('turns debug mode on and off with d, saving it to config', async () => {
+    let current: PolyglotsConfig = { ...DEFAULT_CONFIG, defaultLocale: 'tr' }
+    const saved: Partial<PolyglotsConfig>[] = []
+    const saveConfig = (patch: Partial<PolyglotsConfig>) => {
+      saved.push(patch)
+      current = { ...current, ...patch }
+      return current
+    }
+    const { lastFrame, stdin } = render(
+      <App commands={fakeCommands({ discoverAgents: async () => [agentStatus('claude')], loadConfig: () => current, saveConfig })} />,
+    )
+    await openAgents(stdin, lastFrame)
+    expect(flat(lastFrame())).toContain('Debug mode: off')
+    // The off hint says what turning it on would do, as a condition, rather
+    // than starting "On," as if it were already on.
+    expect(flat(lastFrame())).toContain(
+      "When on, each batch's prompt and agent output are saved beside the run log, to find out why a batch failed.",
+    )
+    stdin.write('d')
+    await waitForText(() => flat(lastFrame()), 'Debug mode: on')
+    expect(saved).toEqual([{ debug: true }])
+    expect(flat(lastFrame())).toContain('saved beside each run log')
+    stdin.write('d')
+    await waitForText(() => flat(lastFrame()), 'Debug mode: off')
+    expect(saved).toEqual([{ debug: true }, { debug: false }])
   })
 })

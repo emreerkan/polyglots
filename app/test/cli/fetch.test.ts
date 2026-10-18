@@ -165,6 +165,32 @@ describe('fetch', () => {
     expect(calls[0]).toMatchObject({ noAi: true, fresh: true, batchSize: 40, locale: 'tr' })
   })
 
+  // Fetch resolves debug mode the way review does, from the flag, the
+  // environment or config, and hands it to every run it starts.
+  it('passes debug mode from POLYGLOTS_DEBUG to review and from config to translate', async () => {
+    const reviews: ReviewOptions[] = []
+    await run(['fetch', 'koji', '--get', 'waiting', '--out-dir', home], {
+      ...fakeWporg(),
+      env: { POLYGLOTS_DEBUG: '1' },
+      reviewFile: async (opts) => {
+        reviews.push(opts)
+        return reviewSummary(opts.file)
+      },
+    })
+    expect(reviews[0]).toMatchObject({ debug: true })
+
+    await writeFile(join(home, 'config', 'config.json'), JSON.stringify({ defaultLocale: 'tr', debug: true }))
+    const translations: TranslateOptions[] = []
+    await run(['fetch', 'koji', '--get', 'untranslated', '--out-dir', home, '--draft-engine', 'deepl'], {
+      ...fakeWporg(),
+      translate: async (opts) => {
+        translations.push(opts)
+        return translateSummary(opts.file)
+      },
+    })
+    expect(translations[0]).toMatchObject({ debug: true })
+  })
+
   // The strings were fetched as untranslated, so there is nothing for --all to
   // re-translate: mode is always pending.
   it('translates untranslated projects in pending mode with translate options', async () => {

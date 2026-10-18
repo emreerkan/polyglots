@@ -1,4 +1,5 @@
 import { agentBinOverride } from '../agent/providers.js'
+import { debugEnabled } from '../logs/debug.js'
 import { MAX_PARALLEL, runFileBatch, type BatchItem, type FileBatchOptions } from '../commands/batch.js'
 import { tallyOf, type ProjectEnd } from '../commands/fetch-report.js'
 import type { reviewFile } from '../commands/review.js'
@@ -20,6 +21,8 @@ export interface BatchCli {
   translate: typeof translateFile
   // Records the batch's runs as stopped if a signal ends it; see stopOnSignal.
   stopRunsOnSignal: () => () => void
+  // Read for POLYGLOTS_DEBUG; process.env when not given.
+  env?: NodeJS.ProcessEnv
   ui: { out: Painter; err: Painter }
   out(line: string): void
   err(line: string): void
@@ -51,7 +54,9 @@ const EXIT_STOPPED = 3
 export async function runBatchJobs(
   cli: BatchCli,
   items: BatchItem[],
-  opts: Omit<FileBatchOptions, 'control' | 'onEvent' | 'onProgress' | 'wporgUsername' | 'bin'> & {
+  // debug here is the --debug flag alone; config and POLYGLOTS_DEBUG are
+  // added below, so fetch, which has no flag, still honours both.
+  opts: Omit<FileBatchOptions, 'control' | 'onEvent' | 'onProgress' | 'onWarn' | 'wporgUsername' | 'bin'> & {
     // Files that were already there and kept, which fetch notes as they start.
     kept?: ReadonlySet<string>
     noun: string
@@ -70,7 +75,7 @@ export async function runBatchJobs(
     if (state === 'running') cli.err('Resumed.')
     if (state === 'stopping') cli.err(`Stopping after the current batches. ${capitalise(opts.noun)}s not started yet will not start.`)
   })
-  const { kept, noun: _noun, ...batch } = opts
+  const { kept, noun: _noun, debug: flag, ...batch } = opts
   let finished = 0
   try {
     return await runFileBatch(
@@ -84,6 +89,8 @@ export async function runBatchJobs(
         // the single-file commands do it.
         bin: agentBinOverride(cli.config().reviewProvider, process.env),
         wporgUsername: cli.config().wporgUsername,
+        debug: debugEnabled({ ...(flag === undefined ? {} : { flag }), config: cli.config(), env: cli.env ?? process.env }),
+        onWarn: (line) => cli.err(line),
         onEvent: (e) => {
           if (e.type === 'start') {
             const note = kept?.has(e.item.file) ? ' (existing file kept)' : ''

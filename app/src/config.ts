@@ -117,6 +117,9 @@ const configSchema = z.object({
   // Optional and absent means on: the update check is the default, and
   // writing it into every config would make an untouched one look set.
   updateCheck: z.boolean().optional(),
+  // Optional and absent means off: a debug run keeps prompts and catalogue
+  // text on disk, which nobody should get without asking (src/logs/debug.ts).
+  debug: z.boolean().optional(),
 })
 
 const SECRET_KEYS: ReadonlyArray<keyof Secrets> = ['DEEPL_API_KEY', 'OPENAI_API_KEY']

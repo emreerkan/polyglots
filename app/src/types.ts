@@ -290,6 +290,9 @@ export interface PolyglotsConfig {
   usageStats?: boolean
   // Absent means on. Whether to ask npm once a day for a newer version (src/update).
   updateCheck?: boolean
+  // Absent means off. Keeps each batch's prompt and agent output beside the
+  // run log (src/logs/debug.ts); --debug and POLYGLOTS_DEBUG=1 do the same.
+  debug?: boolean
 }
 
 export interface Secrets {

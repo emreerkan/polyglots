@@ -154,6 +154,10 @@ export interface FileBatchOptions {
   bin?: string
   control?: RunControl
   wporgUsername: string
+  // Debug mode for every file, already decided from the flag, the variable and
+  // config (debugEnabled), and where each run's notices and log warnings go.
+  debug?: boolean
+  onWarn?: (line: string) => void
   onProgress?: (file: string) => (e: ReviewEvent | TranslateEvent) => void
   onEvent?: (e: BatchItemEvent) => void
 }
@@ -193,6 +197,8 @@ export async function runFileBatch(items: BatchItem[], jobs: FileBatchJobs, opts
                 ...(opts.outDir === undefined ? {} : { outDir: opts.outDir }),
                 ...(opts.noAi ? { noAi: true } : {}),
                 ...(opts.fresh ? { fresh: true } : {}),
+                ...(opts.debug ? { debug: true } : {}),
+                ...(opts.onWarn === undefined ? {} : { onWarn: opts.onWarn }),
                 ...(onProgress === undefined ? {} : { onProgress }),
               })
             : jobs.translateFile({
@@ -207,6 +213,8 @@ export async function runFileBatch(items: BatchItem[], jobs: FileBatchJobs, opts
                 ...(opts.bin === undefined ? {} : { bin: opts.bin }),
                 ...(opts.fresh ? { fresh: true } : {}),
                 ...(opts.secrets === undefined ? {} : { secrets: opts.secrets }),
+                ...(opts.debug ? { debug: true } : {}),
+                ...(opts.onWarn === undefined ? {} : { onWarn: opts.onWarn }),
                 ...(onProgress === undefined ? {} : { onProgress }),
               })
         },

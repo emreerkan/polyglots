@@ -1,4 +1,5 @@
 import { killAgents } from '../agent/children.js'
+import { flushDebugCaptures } from '../agent/run.js'
 
 // A run killed by a signal leaves its row at running, which the reaper later
 // files as abandoned, and stats counts that beside crashes. SIGINT and SIGTERM
@@ -40,7 +41,9 @@ export function stopOnSignal({ busy, stop, raise = (signal) => process.kill(proc
       }
     }
     // The signal's default action ends the process without running exit
-    // handlers, so the agents it started are killed here or not at all.
+    // handlers, so the agents it started are killed here or not at all. A
+    // debug run's output so far is written first: no close event follows.
+    flushDebugCaptures()
     killAgents()
     raise(signal)
   }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Box, Text } from 'ink'
 import { agentBinOverride } from '../../agent/providers.js'
+import { debugEnabled } from '../../logs/debug.js'
 import { MAX_PARALLEL, runFileBatch, type BatchItem } from '../../commands/batch.js'
 import { tallyLine, tallyOf, type ProjectEnd } from '../../commands/fetch-report.js'
 import { resolveFileLocale } from '../../cli/locale.js'
@@ -148,6 +149,11 @@ export function BatchRun(props: BatchRunProps) {
   const [phase, setPhase] = useState<'preparing' | 'running'>('preparing')
   const [waiting, setWaiting] = useState<string | undefined>(undefined)
   const [live, setLive] = useState<Map<string, Live>>(new Map())
+  // Every run's onWarn lines: the debug notice, one per file, or a run log
+  // that could not be written. The last few are shown; each file's own folder
+  // is in its run log either way, and fifty notices would push the files off
+  // the screen.
+  const [notices, setNotices] = useState<string[]>([])
   const [paused, setPaused] = useState<'running' | 'paused' | 'stopping'>('running')
   const control = useRef<RunControl | undefined>(undefined)
   const task = useTask<Finished>()
@@ -225,6 +231,7 @@ export function BatchRun(props: BatchRunProps) {
     if (resolve === undefined) return
     setStage('running')
     setPhase('preparing')
+    setNotices([])
     const run = createRunControl()
     control.current = run
     run.subscribe(setPaused)
@@ -256,6 +263,8 @@ export function BatchRun(props: BatchRunProps) {
           ...(review && noAi ? { noAi: true } : {}),
           ...(fresh ? { fresh: true } : {}),
           wporgUsername: config.wporgUsername,
+          debug: debugEnabled({ config, env: process.env }),
+          onWarn: (line) => setNotices((prev) => [...prev, line].slice(-3)),
           onProgress: (file) => (e) => {
             if (e.type === 'batch-start') mark(inputOf.get(file)!, { batch: `batch ${e.index}/${e.of}` })
           },
@@ -403,6 +412,11 @@ export function BatchRun(props: BatchRunProps) {
           ))
         )}
         {phase === 'preparing' && waiting && <Text color="yellow">{waiting}</Text>}
+        {notices.map((line, i) => (
+          <Text key={i} color="yellow">
+            {line}
+          </Text>
+        ))}
         {paused === 'paused' && <Text color="yellow">Paused. Running {noun.many} stop after their current batch.</Text>}
         {paused === 'stopping' && (
           <Text color="yellow">Stopping after the current batches. Queued {noun.many} will not start.</Text>

@@ -93,4 +93,22 @@ describe('translateFile: the run log', () => {
     }
     expect(errs.filter((l) => /run log/.test(l))).toHaveLength(1)
   })
+
+  it('says once, at the start, where a debug run keeps its files, and writes it in the log', async () => {
+    const warned: string[] = []
+    await translateFile(base({ debug: true, onWarn: (l: string) => warned.push(l) }))
+    const notices = warned.filter((l) => l.startsWith('Debug mode: '))
+    expect(notices).toHaveLength(1)
+    const dir = notices[0]!.replace('Debug mode: prompts and agent output are saved in ', '')
+    expect(dir.startsWith(logsDir())).toBe(true)
+    const lines = runLogText().trim().split('\n').map((l) => JSON.parse(l))
+    expect(lines[1]).toMatchObject({ kind: 'debug', dir })
+  })
+
+  it('says nothing about debug mode when it is off', async () => {
+    const warned: string[] = []
+    await translateFile(base({ onWarn: (l: string) => warned.push(l) }))
+    expect(warned).toEqual([])
+    expect(runLogText()).not.toContain('"kind":"debug"')
+  })
 })

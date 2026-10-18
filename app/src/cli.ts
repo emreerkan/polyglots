@@ -82,6 +82,7 @@ import type { DraftEngineChoice, Locale, PolyglotsConfig } from './types.js'
 import { VERSION } from './version.js'
 import { previewUsagePayload, resetUsageState, sendUsageInBackground, usageStatus, usageStateFile } from './usage/index.js'
 import { checkForUpdate, updateCheckEnabled, updateNotice } from './update/index.js'
+import { debugEnabled } from './logs/debug.js'
 import { checkGlossaries, glossaryNotice, type StaleGlossary } from './glossary/freshness.js'
 
 const EXIT_OK = 0
@@ -168,6 +169,8 @@ interface Cli {
   // Listens for SIGINT and SIGTERM until the returned function is called.
   stopRunsOnSignal: () => () => void
   config: () => PolyglotsConfig
+  // deps.env or process.env: what POLYGLOTS_DEBUG and the painters are read from.
+  env: NodeJS.ProcessEnv
   // One painter per stream, because the two can disagree: stdout piped into
   // a file while stderr is still on a terminal.
   ui: { out: Painter; err: Painter }
@@ -191,6 +194,7 @@ function createCli(deps: CliDeps): Cli {
   const env = deps.env ?? process.env
   return {
     streams,
+    env,
     ui: { out: createPainter(streams.stdout, env, streams.stderr), err: createPainter(streams.stderr, env, streams.stdout) },
     translate: deps.translate ?? translateFile,
     importTmx: deps.importTmx ?? importTmx,
@@ -304,6 +308,7 @@ interface TranslateFlags {
   model?: string
   localModel?: string
   yes?: boolean
+  debug?: boolean
 }
 
 interface ReviewFlags {
@@ -315,6 +320,7 @@ interface ReviewFlags {
   requester?: string
   template?: string
   parallel?: string
+  debug?: boolean
 }
 
 async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags): Promise<number> {
@@ -370,6 +376,7 @@ async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags)
     }
   }
 
+  const debug = debugEnabled({ ...(flags.debug === undefined ? {} : { flag: flags.debug }), config, env: cli.env })
   // One unreadable file must not abort the rest of a multi-file run; report it and move on.
   let failed = 0
   for (const file of files) {
@@ -395,6 +402,8 @@ async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags)
         secrets,
         // No agent is spawned when nothing is drafted, so none is named.
         bin: draftEngine === 'none' ? undefined : agentBinOverride(config.reviewProvider, process.env),
+        debug,
+        onWarn: (line) => cli.err(warnLine(cli.ui.err, line)),
         onProgress: report,
       })
     } catch (error) {
@@ -503,6 +512,7 @@ async function runReviewMany(cli: Cli, files: string[], flags: ReviewFlags): Pro
     reviewFile: cli.reviewFile,
     translate: cli.translate,
     stopRunsOnSignal: cli.stopRunsOnSignal,
+    env: cli.env,
     ui: cli.ui,
     out: cli.out,
     err: cli.err,
@@ -516,6 +526,7 @@ async function runReviewMany(cli: Cli, files: string[], flags: ReviewFlags): Pro
     ...(rulesOnly ? { noAi: true } : {}),
     ...(flags.fresh ? { fresh: true } : {}),
     ...(flags.outDir ? { outDir: flags.outDir } : {}),
+    ...(flags.debug ? { debug: true } : {}),
     noun: 'file',
   })
   // Read at the end of the run, as for one file, so an edit made while it ran
@@ -574,7 +585,8 @@ function resolveBatchSize(config: PolyglotsConfig, flag: string | undefined): nu
 // of DEFAULT_CONFIG, and leaving it out would make it impossible to set.
 // usageStats likewise: absent means never asked, so it has no default either.
 // updateCheck too: absent means on, so it is not written into every config.
-const CONFIG_KEYS = ['defaultLocale', ...Object.keys(DEFAULT_CONFIG), 'usageStats', 'updateCheck'] as Array<keyof PolyglotsConfig>
+// debug likewise, absent meaning off.
+const CONFIG_KEYS = ['defaultLocale', ...Object.keys(DEFAULT_CONFIG), 'usageStats', 'updateCheck', 'debug'] as Array<keyof PolyglotsConfig>
 // The parts of the two local server settings, settable on their own. Dotted
 // rather than a nested `config set ollama '{...}'`, because nobody should have
 // to type JSON to change a model name.
@@ -654,7 +666,8 @@ function coerceConfigValue(key: keyof PolyglotsConfig, raw: string): PolyglotsCo
     // on and off, the words the issue and the docs use; true and false too,
     // since that is what config.json holds and what someone will type.
     case 'usageStats':
-    case 'updateCheck': {
+    case 'updateCheck':
+    case 'debug': {
       const value = raw.trim().toLowerCase()
       if (value === 'on' || value === 'true') return true
       if (value === 'off' || value === 'false') return false
@@ -694,6 +707,7 @@ function formatConfigValue(key: keyof PolyglotsConfig, value: PolyglotsConfig[ke
   if (key === 'defaultLocale' && value === undefined) return '(not set)'
   if (key === 'usageStats') return value === true ? 'on' : value === false ? 'off' : '(not asked; off)'
   if (key === 'updateCheck') return value === false ? 'off' : 'on'
+  if (key === 'debug') return value === true ? 'on' : 'off'
   return String(value)
 }
 
@@ -868,12 +882,17 @@ const ENVIRONMENT_HELP = [
   '  POLYGLOTS_AGENT_BIN   agent executable for the review pass, whichever provider is set (default: claude or agy on PATH)',
   '  POLYGLOTS_CLAUDE_BIN  the older name, applied to claude only',
   '  POLYGLOTS_HOME        root for config/ and data/ instead of the XDG directories',
+  '  POLYGLOTS_DEBUG=1     what --debug does, for every review and translate run (also: config set debug on)',
   '  POLYGLOTS_WP_BIN      wp executable for polyglots lint (default: wp on PATH, else WP-CLI downloaded and run with php)',
   '  POLYGLOTS_ASCII=1     plain ASCII glyphs instead of Unicode; =0 keeps Unicode (also NO_COLOR, FORCE_COLOR)',
   '  DO_NOT_TRACK=1        never send usage statistics, whatever usageStats says',
   '  POLYGLOTS_USAGE_URL   where opted-in usage statistics go (default: https://ada.tools/polyglots/api/usage)',
   '  NO_UPDATE_NOTIFIER=1  never check npm for a newer version (also CI, or: config set updateCheck off)',
 ].join('\n')
+
+// Names what is kept, because that is the reason to think twice: the prompts
+// hold the catalogue, and the folder is the one a problem report sends.
+const DEBUG_HELP = "Save each batch's prompt and the agent's output beside the run log (also POLYGLOTS_DEBUG=1, or: config set debug on)"
 
 const LIVE_WARNING = 'Sends one prompt to each usable agent; this spends a request on metered plans.'
 
@@ -1069,6 +1088,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .option('--batch-size <n>', `Entries per draft/review batch (default: ${shown.batchSize})`)
     .option('--model <model>', 'Model for the review pass (the agent\'s, or the local reviewer\'s)')
     .option('--yes', 'Skip the --all confirmation prompt (required with --all when stdin is not a terminal)')
+    .option('--debug', DEBUG_HELP)
     .addHelpText('after', ENVIRONMENT_HELP)
     .action(async (files: string[], flags: TranslateFlags) => {
       setExitCode(await runTranslate(cli, files, flags))
@@ -1294,6 +1314,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
             reviewFile: cli.reviewFile,
             translate: cli.translate,
             stopRunsOnSignal: cli.stopRunsOnSignal,
+            env: cli.env,
             checkLocalModel: cli.checkLocalModel,
             out: cli.out,
             err: cli.err,
@@ -1316,6 +1337,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .option('--requester <username>', 'The requester\'s wp.org username, for {username} in the reply template')
     .option('--template <name>', `Reply template to fill after the review (default: ${DEFAULT_TEMPLATE})`)
     .option('--parallel <n>', 'With several files: files to review at once, 1 to 8 (default: 1)')
+    .option('--debug', DEBUG_HELP)
     .addHelpText('after', ENVIRONMENT_HELP)
     .action(async (patterns: string[], flags: ReviewFlags) => {
       // expandFileArgs drops a file named twice, so two jobs never write one
@@ -1406,6 +1428,8 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
         batchSize,
         ...(flags.fresh ? { fresh: true } : {}),
         bin: agentBinOverride(config.reviewProvider, process.env),
+        debug: debugEnabled({ ...(flags.debug === undefined ? {} : { flag: flags.debug }), config, env: cli.env }),
+        onWarn: (line) => cli.err(warnLine(cli.ui.err, line)),
         onProgress: report,
       }).finally(() => {
         unwatchSignals()

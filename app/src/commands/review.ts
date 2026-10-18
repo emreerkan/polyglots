@@ -401,11 +401,12 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
     const id = runId
 
     pruneLogs()
+    const warn = opts.onWarn ?? ((line: string) => process.stderr.write(line + '\n'))
     runLog = openRunLog({
       runId: id,
       startedAt: getRun(jobs, id)!.startedAt,
       debug: opts.debug === true,
-      warn: opts.onWarn ?? ((line) => process.stderr.write(line + '\n')),
+      warn,
     })
     runLog.write('run-start', {
       command: 'review',
@@ -420,6 +421,13 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
       platform: process.platform,
       pid: process.pid,
     })
+    // Said once, on screen and in the log, with the folder: a debug run keeps
+    // every prompt and answer, catalogue text included, and a setting left on
+    // by accident should be noticed at the next run rather than found later.
+    if (runLog.debugDir) {
+      runLog.write('debug', { dir: runLog.debugDir })
+      warn(`Debug mode: prompts and agent output are saved in ${runLog.debugDir}`)
+    }
 
     // Made current for everything the run does from here, so spawnAgent finds
     // the log without an agent option of its own.

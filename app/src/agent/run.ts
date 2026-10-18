@@ -1,6 +1,9 @@
 import { spawn } from 'node:child_process'
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 import { findOnPath, killTree, spawnPlan, type SpawnPlan } from '../spawn-plan.js'
-import { currentRunLog } from '../logs/run-log.js'
+import { agyLogsBetween } from '../logs/debug.js'
+import { currentRunLog, type RunLog } from '../logs/run-log.js'
 import { trackAgent } from './children.js'
 import {
   AgentError,
@@ -35,6 +38,47 @@ function sessionOf(stdout: string): string | null {
     return typeof id === 'string' ? id : null
   } catch {
     return null
+  }
+}
+
+// What a debug run keeps of one call, named by the same batch and attempt the
+// agent lines carry, so a file and its agent-exit line are matched by name.
+// Every write is its own try: a debug file is never worth a run, and one that
+// cannot be written must not take the others with it.
+function debugStem(log: RunLog | undefined, call: { batch: number; attempt: number } | undefined): string | undefined {
+  if (!log?.debugDir || !call) return undefined
+  return join(log.debugDir, `batch-${String(call.batch).padStart(3, '0')}-attempt-${call.attempt}`)
+}
+
+function saveDebug(path: string, write: (path: string) => void): void {
+  try {
+    mkdirSync(dirname(path), { recursive: true })
+    write(path)
+  } catch {
+    // ignored: see debugStem
+  }
+}
+
+// The calls in debug mode that have not closed yet, each with what writes its
+// output so far. Writing on close covers a timeout and an early answer, but
+// not the endings a person chooses: Ctrl+C and SIGTERM end the process by the
+// signal's default action once stopOnSignal has killed the agents, and the app
+// quits through process.exit(), whose exit hook kills them too. Both are over
+// before any child's close event runs, so a hung call that was given up on,
+// which is the call debug mode exists to explain, kept only its prompt. The
+// buffers are still in memory at that moment; flushDebugCaptures writes them
+// synchronously from the signal handler and from the exit hook.
+const debugFlushers = new Set<() => void>()
+let flushHooked = false
+
+/** Writes the output so far of every debug call still in flight. Synchronous, so it can run on exit and in a signal handler. */
+export function flushDebugCaptures(): void {
+  for (const flush of [...debugFlushers]) {
+    try {
+      flush()
+    } catch {
+      // ignored: see debugStem
+    }
   }
 }
 
@@ -124,6 +168,14 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
   const timeoutMs = opts.timeoutMs ?? spec.defaultTimeoutMs
   const killGraceMs = opts.killGraceMs ?? DEFAULT_KILL_GRACE_MS
   return new Promise((resolve, reject) => {
+    // The run this call belongs to, found through AsyncLocalStorage rather than
+    // an agent option (see run-log.ts). Outside a run, nothing is written.
+    const log = currentRunLog()
+    const call = log?.nextCall()
+    const stem = debugStem(log, call)
+    // Before the spawn, so a call that never gets as far as an answer, or
+    // takes the process down with it, still leaves what it was asked.
+    if (stem) saveDebug(`${stem}.prompt.txt`, (path) => writeFileSync(path, prompt))
     const env = childEnv(process.env)
     const plan = agentSpawnPlan(command, argv, env, process.platform)
     const child = spawn(plan.file, plan.args, {
@@ -135,10 +187,6 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
     })
     // Killed if this process ends first, so a hung agent is never left behind.
     trackAgent(child)
-    // The run this call belongs to, found through AsyncLocalStorage rather than
-    // an agent option (see run-log.ts). Outside a run, nothing is written.
-    const log = currentRunLog()
-    const call = log?.nextCall()
     const t0 = Date.now()
     log?.write('agent-spawn', { provider: spec.name, bin: command, pid: child.pid, timeoutMs, ...call })
     // Why polyglots ended the process, when it did. 'answered' is dropped when
@@ -149,6 +197,25 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
     let stderr = ''
     let settled = false
     let killTimer: NodeJS.Timeout | undefined
+    // Close writes again with whatever arrived after a flush, so the files
+    // always end with the most the call printed.
+    const flushDebug = (): void => {
+      if (!stem) return
+      saveDebug(`${stem}.stdout.txt`, (path) => writeFileSync(path, stdout))
+      saveDebug(`${stem}.stderr.txt`, (path) => writeFileSync(path, stderr))
+      if (spec.name === 'antigravity') {
+        for (const file of agyLogsBetween(t0, Date.now())) {
+          saveDebug(`${stem}.agy-${basename(file)}`, (path) => copyFileSync(file, path))
+        }
+      }
+    }
+    if (stem) {
+      debugFlushers.add(flushDebug)
+      if (!flushHooked) {
+        flushHooked = true
+        process.on('exit', flushDebugCaptures)
+      }
+    }
     const excerpt = (): string => stderr.slice(0, STDERR_EXCERPT)
     // An agent reports a usage limit on stdout and exits non-zero, so a failure
     // whose stderr is empty still has its reason in hand. Reporting only stderr
@@ -222,6 +289,11 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
         stderrBytes: Buffer.byteLength(stderr),
         session: sessionOf(stdout),
       })
+      // On close rather than on the answer, so a timed-out or killed call
+      // keeps everything it printed up to the end, which is the part that
+      // says why it hung.
+      debugFlushers.delete(flushDebug)
+      flushDebug()
       if (killTimer) clearTimeout(killTimer)
       if (settled) return
       settled = true

@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Box, Text } from 'ink'
 import type { AgentStatus } from '../../agent/discover.js'
+import { errorMessage, useCommands } from '../commands.js'
 import { Hint } from '../components/Hint.js'
 import { useBackKeys } from '../hooks/useBackKeys.js'
 import { useKeys } from '../hooks/useKeys.js'
@@ -35,8 +37,32 @@ function setup(status: AgentStatus): string {
  * purpose.
  */
 export function Agents({ agents, checking, error, onRecheck, onBack }: AgentsProps) {
+  const commands = useCommands()
+  // Here rather than in Interface settings, which hold what only the app
+  // reads: the CLI reads this key too, and this is the screen about what the
+  // agents do. Read fresh, so a config set debug typed since is what shows.
+  const [debug, setDebug] = useState(() => {
+    try {
+      return commands.loadConfig().debug === true
+    } catch {
+      return false
+    }
+  })
+  const [saveError, setSaveError] = useState<string>()
   useBackKeys(onBack)
-  useKeys({ agents: { recheck: checking ? undefined : onRecheck } })
+  useKeys({
+    agents: {
+      recheck: checking ? undefined : onRecheck,
+      debug: () => {
+        try {
+          setDebug(commands.saveConfig({ debug: !debug }).debug === true)
+          setSaveError(undefined)
+        } catch (err) {
+          setSaveError(errorMessage(err))
+        }
+      },
+    },
+  })
   return (
     <Box flexDirection="column">
       <Text bold>AI agents</Text>
@@ -63,8 +89,19 @@ export function Agents({ agents, checking, error, onRecheck, onBack }: AgentsPro
           ))}
         </Box>
       ))}
+      <Box marginTop={1} flexDirection="column">
+        <Text>
+          Debug mode: <Text color={debug ? 'yellow' : undefined}>{debug ? 'on' : 'off'}</Text>
+        </Text>
+        <Text dimColor>
+          {debug
+            ? '  Each batch\'s prompt and agent output are saved beside each run log, catalogue text included.'
+            : '  When on, each batch\'s prompt and agent output are saved beside the run log, to find out why a batch failed.'}
+        </Text>
+        {saveError && <Text color="red">Could not save that: {saveError}</Text>}
+      </Box>
       <Box marginTop={1}>
-        <Hint>r re-check · esc/q back to menu</Hint>
+        <Hint>r re-check · d debug mode · esc/q back to menu</Hint>
       </Box>
     </Box>
   )

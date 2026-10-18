@@ -5,6 +5,7 @@ import { normalizeLocale } from '../../tmx/parse.js'
 import { resolveLocale } from '../../wporg/locales.js'
 import type { ReviewEvent, ReviewSummary } from '../../types.js'
 import { agentBinOverride } from '../../agent/providers.js'
+import { debugEnabled } from '../../logs/debug.js'
 import { initialBatchSize, providerLabel, screenBatchAdvice } from '../local.js'
 import { headerLocaleOf } from '../../cli/locale.js'
 import { useCommands, useConfig } from '../commands.js'
@@ -109,6 +110,10 @@ export function Review({ cwd, onBack }: ReviewProps) {
   const [focus, setFocus] = useState(0)
   const field = fields[Math.min(focus, fields.length - 1)]!
   const [events, setEvents] = useState<ReviewEvent[]>([])
+  // What reviewFile says through onWarn: the debug notice, or that the run log
+  // could not be written. Kept on the screen, since a line on stderr would be
+  // drawn over by Ink's next frame and never read.
+  const [notices, setNotices] = useState<string[]>([])
   // Held in a ref so a keypress reaches the run in flight without re-rendering
   // the whole screen on every state change.
   const control = useRef<RunControl | undefined>(undefined)
@@ -130,6 +135,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
 
   const start = (chosenLocale: string) => {
     setEvents([])
+    setNotices([])
     setPhase('running')
     // The binary the Check AI agents screen and the menu gate reported on, so a
     // run spawns what discovery checked rather than whatever is first on PATH.
@@ -154,6 +160,8 @@ export function Review({ cwd, onBack }: ReviewProps) {
         fresh,
         batchSize,
         ...(bin === undefined ? {} : { bin }),
+        debug: debugEnabled({ config, env: process.env }),
+        onWarn: (line) => setNotices((prev) => [...prev, line]),
         // Bounded: a long run's per-entry events would otherwise all stay in memory.
         onProgress: (e) => setEvents((prev) => appendEvent(prev, e)),
       }).finally(unsubscribe),
@@ -350,6 +358,11 @@ export function Review({ cwd, onBack }: ReviewProps) {
 
       {(stage === 'running' || stage === 'done') && (
         <>
+          {notices.map((line, i) => (
+            <Text key={i} color="yellow">
+              {line}
+            </Text>
+          ))}
           <ReviewProgress
             events={events}
             wporgUsername={config.wporgUsername}
