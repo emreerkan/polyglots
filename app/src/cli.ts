@@ -54,10 +54,11 @@ import {
 import { createProgressReporter, createReviewProgressReporter } from './cli/progress.js'
 import { loadPo } from './po/po-file.js'
 import { headerLocaleNotice, localeDefaultHelp, requireLocale, resolveFileLocale } from './cli/locale.js'
-import { parseParallel, printBatchEnd, runBatchJobs, type BatchCli } from './cli/batch.js'
+import { parseParallel, printBatchEnd, runBatchJobs, startProviderCheck, type BatchCli } from './cli/batch.js'
 import { buildReport } from './review/message.js'
 import { agentBinOverride, batchAdvice, configuredModel } from './agent/providers.js'
-import { discoverAgents, type AgentStatus } from './agent/discover.js'
+import { defaultExec, discoverAgents, type AgentStatus } from './agent/discover.js'
+import { checkAgy, ProviderRefusal, type ProviderCheck } from './agent/agy-check.js'
 import {
   checkLocalModel,
   discoverModels,
@@ -143,6 +144,9 @@ export interface CliDeps {
   // Opens a URL in the desktop's browser, false when it did not (over SSH,
   // or with no display). Injected so no test, and no website demo, starts one.
   openBrowser?: (url: string) => Promise<boolean>
+  // Asks antigravity whether it is signed in and how much quota is left
+  // (src/agent/agy-check.ts). Injected so no test, and no website demo, runs agy.
+  checkProvider?: () => Promise<ProviderCheck>
 }
 
 interface Cli {
@@ -166,6 +170,7 @@ interface Cli {
   makePot: typeof makePot
   dataClient: DataClient
   openBrowser: (url: string) => Promise<boolean>
+  checkProvider: () => Promise<ProviderCheck>
   // Listens for SIGINT and SIGTERM until the returned function is called.
   stopRunsOnSignal: () => () => void
   config: () => PolyglotsConfig
@@ -215,6 +220,7 @@ function createCli(deps: CliDeps): Cli {
     makePot: deps.makePot ?? makePot,
     dataClient: deps.dataClient ?? dataClient,
     openBrowser: deps.openBrowser ?? openInBrowser,
+    checkProvider: deps.checkProvider ?? (() => checkAgy(defaultExec)),
     stopRunsOnSignal: () =>
       stopOnSignal({
         // Only installed around a run, so a run is what a signal interrupts.
@@ -333,11 +339,18 @@ async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags)
   loadLocaleRules(locale)
   warnUniversalOnly(cli, locale)
   const draftEngine = parseDraftEngine(flags.draftEngine ?? config.defaultDraftEngine)
+  // Parsed before the check starts, as on review: a refused --batch-size is
+  // a refusal the command line makes on its own, and the check would
+  // otherwise spawn agy for a run that never starts.
+  const batchSize = resolveBatchSize(config, flags.batchSize)
+  // Not with no engine, which drafts and so reviews nothing. A refusal
+  // further down (a missing key, a declined --all) leaves the check to finish
+  // on its own, a few seconds of a process nobody waits on.
+  const preflight = startProviderCheck(cli, draftEngine !== 'none')
   // With no engine nothing is drafted, so nothing is reviewed either: the
   // local reviewer is neither checked nor warned about for a run that will
   // never ask it anything.
   const localReview = config.reviewProvider === 'local' && draftEngine !== 'none'
-  const batchSize = resolveBatchSize(config, flags.batchSize)
   const dryRun = flags.dryRun === true
   const mustConfirm = flags.all === true && flags.yes !== true && !dryRun
   // The prompt is written to stderr, so a redirected stderr would leave the user staring at
@@ -404,10 +417,17 @@ async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags)
         bin: draftEngine === 'none' ? undefined : agentBinOverride(config.reviewProvider, process.env),
         debug,
         onWarn: (line) => cli.err(warnLine(cli.ui.err, line)),
+        ...(preflight === undefined ? {} : { preflight }),
         onProgress: report,
       })
     } catch (error) {
       report.finish()
+      // Signed out or out of quota is true of every file still to come, so
+      // the command ends here rather than refusing each one in turn.
+      if (error instanceof ProviderRefusal) {
+        cli.err(errorLine(cli.ui.err, error.message))
+        return EXIT_ERROR
+      }
       cli.err(errorLine(cli.ui.err, `${file}: ${errorMessage(error)}`))
       failed += 1
       continue
@@ -512,13 +532,16 @@ async function runReviewMany(cli: Cli, files: string[], flags: ReviewFlags): Pro
     reviewFile: cli.reviewFile,
     translate: cli.translate,
     stopRunsOnSignal: cli.stopRunsOnSignal,
+    checkProvider: cli.checkProvider,
     env: cli.env,
     ui: cli.ui,
     out: cli.out,
     err: cli.err,
   }
+  const preflight = startProviderCheck(cli, !rulesOnly)
   const ends = await runBatchJobs(batchCli, files.map((file) => ({ input: file, file })), {
     review: true,
+    ...(preflight === undefined ? {} : { preflight }),
     localeOf: (file) => localeOf.get(file)!,
     parallel,
     batchSize,
@@ -930,7 +953,10 @@ async function runDoctor(cli: Cli, flags: { json?: boolean; live?: boolean }): P
   }
   const live = flags.live === true
   if (live) cli.err(warnLine(cli.ui.err, LIVE_WARNING))
-  const agents = await cli.discoverAgents({ refresh: true, ...(live ? { live: true } : {}) })
+  // account: antigravity is asked itself, through agy models and /usage, the
+  // same two steps a run's check takes, so doctor cannot call ready an agy
+  // that every batch would find signed out. Launch keeps the token file.
+  const agents = await cli.discoverAgents({ refresh: true, account: true, ...(live ? { live: true } : {}) })
   // The experimental local reviewer is no agent, so its health is its model
   // check: the same question `models` answers, asked of the one target a
   // review would use. A live prompt is never sent to it; --live is for agents.
@@ -967,6 +993,10 @@ async function runDoctor(cli: Cli, flags: { json?: boolean; live?: boolean }): P
   const lines = table(rows)
   agents.forEach((a, i) => {
     cli.out(lines[i]!)
+    // Each group on its own line, not only the one a run would judge: doctor
+    // has no model to pick a group for, and the person reading it may be
+    // about to switch to one.
+    for (const q of a.quota?.lines ?? []) cli.out(hintLine(p, `quota: ${q.group} ${q.remaining}% left (${q.limit}, resets ${q.resetsAt})`))
     for (const note of a.notes) cli.out(hintLine(p, `note: ${note}`))
   })
   // The closing line is the answer the exit code gives, so it carries the
@@ -1314,6 +1344,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
             reviewFile: cli.reviewFile,
             translate: cli.translate,
             stopRunsOnSignal: cli.stopRunsOnSignal,
+            checkProvider: cli.checkProvider,
             env: cli.env,
             checkLocalModel: cli.checkLocalModel,
             out: cli.out,
@@ -1382,11 +1413,17 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
       // Settled before the run for the same reason: a --template that names
       // nothing is refused before any batch is paid for.
       const replyTemplate = resolveReplyTemplate(locale, flags.template)
+      const batchSize = resolveBatchSize(config, flags.batchSize)
+      // Started once the command line's own refusals are past, the locale,
+      // the rules file, the template and the batch size, so a run that never
+      // starts spawns no agy and is not kept alive by one. Every check above
+      // is synchronous, so it still runs beside the rest of the setup and the
+      // rules pass.
+      const preflight = startProviderCheck(cli, flags.ai !== false)
       if (replyTemplate === undefined && flags.requester !== undefined) {
         cli.err(hintLine(cli.ui.err, `No reply template for ${locale}, so --requester is not used. Create one with: polyglots template edit ${locale}`))
       }
       warnUniversalOnly(cli, locale)
-      const batchSize = resolveBatchSize(config, flags.batchSize)
       const advice = batchAdvice(config.reviewProvider, batchSize)
       if (advice) cli.err(warnLine(cli.ui.err, advice))
       if (config.reviewProvider === 'local' && flags.ai !== false) {
@@ -1430,6 +1467,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
         bin: agentBinOverride(config.reviewProvider, process.env),
         debug: debugEnabled({ ...(flags.debug === undefined ? {} : { flag: flags.debug }), config, env: cli.env }),
         onWarn: (line) => cli.err(warnLine(cli.ui.err, line)),
+        ...(preflight === undefined ? {} : { preflight }),
         onProgress: report,
       }).finally(() => {
         unwatchSignals()

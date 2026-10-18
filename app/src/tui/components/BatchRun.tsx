@@ -13,6 +13,7 @@ import { resolveLocale } from '../../wporg/locales.js'
 import { batchSizeChoices } from '../batch-size.js'
 import { copyToClipboard } from '../clipboard.js'
 import { useCommands, useConfig } from '../commands.js'
+import { useProviderCheck } from '../provider-check.js'
 import { useKeys } from '../hooks/useKeys.js'
 import { useTask } from '../hooks/useTask.js'
 import { TextInput } from '../input.js'
@@ -114,6 +115,7 @@ function next<T>(values: T[], current: T, step: number): T {
 export function BatchRun(props: BatchRunProps) {
   const { action, noun, inputs, onStage } = props
   const commands = useCommands()
+  const providerCheck = useProviderCheck()
   const { config } = useConfig()
   const review = action === 'review'
   const localeField = 'field' in props.locale
@@ -265,6 +267,12 @@ export function BatchRun(props: BatchRunProps) {
           wporgUsername: config.wporgUsername,
           debug: debugEnabled({ config, env: process.env }),
           onWarn: (line) => setNotices((prev) => [...prev, line].slice(-3)),
+          // One check for the whole batch, the app's own when it is fresh.
+          ...(() => {
+            const reaches = review ? !noAi : engine !== 'none'
+            const preflight = reaches && config.reviewProvider === 'antigravity' ? providerCheck?.get() : undefined
+            return preflight === undefined ? {} : { preflight }
+          })(),
           onProgress: (file) => (e) => {
             if (e.type === 'batch-start') mark(inputOf.get(file)!, { batch: `batch ${e.index}/${e.of}` })
           },

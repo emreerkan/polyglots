@@ -6,7 +6,9 @@ import { intlTag } from '../wporg/locales.js'
 import { chunk } from '../batch.js'
 import type { RunControl } from '../run-control.js'
 import { loadConfig, loadSecrets } from '../config.js'
-import { configuredModel } from '../agent/providers.js'
+import { configuredModel, type ProbeExec } from '../agent/providers.js'
+import { gateRun, ProviderRefusal, quotaRecheck, type ProviderCheck } from '../agent/agy-check.js'
+import { defaultExec } from '../agent/discover.js'
 import {
   draftEngineId,
   DraftQuotaError,
@@ -160,6 +162,12 @@ export interface TranslateOptions {
   // Where a warning about the run log itself goes; stderr unless a caller,
   // a test or a screen that owns the terminal, wants the line.
   onWarn?: (line: string) => void
+  // The antigravity check started beside the run, awaited for at most ten
+  // seconds before the first batch that would reach the reviewer. See
+  // ReviewOptions.preflight.
+  preflight?: Promise<ProviderCheck | undefined>
+  // Runs agy for the quota read after a failed batch; tests pass a fake.
+  providerExec?: ProbeExec
 }
 
 type Emit = (e: TranslateEvent) => void
@@ -380,6 +388,9 @@ async function reviewDrafts(
   cache?: ReviewCache,
   checks?: Map<string, string[]>,
   local?: LocalAsk,
+  // Awaited only when something misses the cache and is about to reach the
+  // reviewer, which is where the provider check gates a run.
+  beforeAsk?: () => Promise<void>,
 ): Promise<ReviewResult[]> {
   const byKey = new Map(units.map((u) => [u.key, u]))
   const inputs: ReviewInput[] = units.map((u) => {
@@ -422,6 +433,7 @@ async function reviewDrafts(
     else missing.push(input)
   }
 
+  if (missing.length > 0) await beforeAsk?.()
   const fresh =
     missing.length > 0
       ? await review(missing, {
@@ -512,6 +524,11 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
   // could not even produce a draft) must not leak the handle this call
   // opened, nor leave history claiming the run is still going.
   let runId: number | undefined
+  // Here rather than beside the gate that creates it, so the catch below can
+  // settle a quota read a failed batch started: a run that throws after one
+  // would otherwise write run-end with the read still out, and its quota line
+  // would land after the line that says how the run ended.
+  let recheck: ReturnType<typeof quotaRecheck> | undefined
   try {
     // The prompt is what this hash covers. The rules' findings on each draft
     // are part of that entry's own cache key instead (see reviewDrafts), so a
@@ -565,9 +582,8 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
     // verdicts as Pro's on every entry already seen. The same fallback review
     // uses, for the same reason. Only the key learns the model: the spawn
     // below still passes opts.model alone, and antigravity keeps choosing.
-    const reviewEngine = localReview
-      ? engineId(localModelId(localReview), 'local')
-      : engineId(opts.model ?? (provider === 'local' || provider === 'none' ? undefined : configuredModel(provider)), provider)
+    const reviewModel = opts.model ?? (provider === 'local' || provider === 'none' ? undefined : configuredModel(provider))
+    const reviewEngine = localReview ? engineId(localModelId(localReview), 'local') : engineId(reviewModel, provider)
     const { draftCache, reviewCache } = buildCaches(jobs, {
       nplurals: po.nplurals,
       ...(pluralForms === undefined ? {} : { pluralForms }),
@@ -696,6 +712,29 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
             }
           : undefined
 
+        // Only the review pass reaches an agent, so only a run that will
+        // review anything with antigravity is checked; drafts written
+        // unreviewed and the local reviewer ask it nothing.
+        //
+        // Awaited once, by the first batch with a draft to write or the first
+        // review that misses the cache, rather than before the loop: a resume
+        // whose every review is cached asks antigravity nothing and must not
+        // be refused by it. The quota read after a failed batch exists only
+        // once the check said signed in; see quotaRecheck for why.
+        const antigravity = provider === 'antigravity' && !unreviewed
+        const preflight = antigravity ? opts.preflight : undefined
+        let gate: Promise<void> | undefined
+        const beforeAsk = preflight
+          ? () =>
+              (gate ??= gateRun({ preflight, model: reviewModel, log: (kind, fields) => runLog?.write(kind, fields), warn }).then(
+                (check) => {
+                  if (check?.signIn.state === 'signed-in') {
+                    recheck = quotaRecheck(opts.providerExec ?? defaultExec, (kind, fields) => runLog?.write(kind, fields), opts.bin)
+                  }
+                },
+              ))
+          : undefined
+
         let consecutiveSkips = 0
 
         batchLoop: for (const [i, batch] of batches.entries()) {
@@ -706,6 +745,13 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
             break batchLoop
           }
           const index = i + 1
+          // A batch with a draft still to write is about to pay the engine,
+          // and a fresh draft always misses the review cache, so the gate is
+          // passed before the batch opens: a refused run then has spent no
+          // draft and shows no batch that started and never ended. A batch
+          // whose drafts are all cached waits at its review instead, which
+          // keeps a resume the review cache answers in full from being refused.
+          if (beforeAsk && batch.some((u) => !controlSpec(u) && !draftCache.get(u))) await beforeAsk()
           emit({ type: 'batch-start', index, of: batches.length, size: batch.length, at: Date.now() })
           emit({ type: 'batch-phase', index, phase: 'drafting', at: Date.now() })
 
@@ -743,7 +789,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
               emit({ type: 'batch-phase', index, phase: 'reviewing', at: Date.now() })
               phase = 'reviewing'
               results = (
-                await reviewDrafts(batch, fixedDrafts, review, { ...opts, provider }, locale, po.nplurals, pluralForms, mcpConfigPath, reviewCache, checks, localAsk)
+                await reviewDrafts(batch, fixedDrafts, review, { ...opts, provider }, locale, po.nplurals, pluralForms, mcpConfigPath, reviewCache, checks, localAsk, beforeAsk)
               ).map((r) => {
                 const unit = unitOf.get(r.key)
                 return unit ? checker.finalize(unit, r) : r
@@ -753,6 +799,9 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
                 summary.stopped = err.message
                 break batchLoop
               }
+              // The provider check's refusal is the run's, not this batch's:
+              // retried, it would be read as a failed batch and skipped.
+              if (err instanceof ProviderRefusal) throw err
               lastError = err
               attempts.push({ attempt: attempt + 1, phase, reason: errorMessage(err), ms: Date.now() - started })
             }
@@ -772,6 +821,10 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
           }
 
           if (results === undefined) {
+            // A failed draft is the engine's, not antigravity's, but which
+            // step failed is not worth telling apart here: one /usage read
+            // is cheap, and an empty quota is the likeliest reason for both.
+            recheck?.afterFailure()
             summary.skipped += batch.length
             emit({
               type: 'entries',
@@ -807,6 +860,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
           emit({ type: 'batch-done', index, translated: results.length, fuzzy, at: Date.now() })
           if (saved) emit({ type: 'saved' })
         }
+        await recheck?.settle()
       }
 
       // Written once, from the same numbers the caller is about to be handed, so
@@ -834,6 +888,14 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
       }
     })
   } catch (err) {
+    await recheck?.settle()
+    // Stopped by the provider check: the person's sign-in or quota, not a
+    // fault of the run, so it ends stopped as in review.
+    if (err instanceof ProviderRefusal) {
+      runLog?.write('run-end', { ended: 'stopped', reason: 'provider' })
+      if (runId !== undefined) endRun(jobs, runId, 'stopped')
+      throw err
+    }
     // A run in progress when this throws is neither done nor still running:
     // mark it stopped so history does not claim otherwise, before the handle
     // it needs to do that is closed underneath it.

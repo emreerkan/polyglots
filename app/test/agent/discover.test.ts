@@ -499,3 +499,44 @@ describe('usableProviders and shared binaries', () => {
     expect(statusOf(statuses, 'antigravity').notes.join(' ')).toMatch(/same binary as claude/)
   })
 })
+
+// doctor asks agy itself, in the same two steps a run's check takes; the
+// token file stays the quick answer for launch and the fallback when agy
+// models cannot say.
+describe('antigravity sign-in and quota, asked of agy', () => {
+  const USAGE = 'Gemini Models\tGemini Weekly Limit\t90%\t2026-10-24T17:13:13Z'
+  const agyCalls = (exec: ReturnType<typeof fakeExec>) => exec.calls.filter((c) => basename(c.cmd) === 'agy').map((c) => c.args)
+
+  it('reads signed in from agy models, then the quota from /usage', async () => {
+    const exec = fakeExec({ agy: (args) => (args[0] === '-p' ? { stdout: USAGE } : undefined) })
+    const agy = statusOf(await discover(exec, { account: true }), 'antigravity')
+    expect(agy.auth.state).toBe('signed-in')
+    expect(agy.quota?.lines).toEqual([{ group: 'Gemini Models', limit: 'Gemini Weekly Limit', remaining: 90, resetsAt: '2026-10-24T17:13:13Z' }])
+    expect(agyCalls(exec)).toContainEqual(['models'])
+    expect(agyCalls(exec)).toContainEqual(['-p', '/usage'])
+  })
+
+  it('reads signed out from agy models, says how to sign in, and never runs /usage', async () => {
+    const exec = fakeExec({
+      agy: (args) => (args[0] === 'models' ? { code: 1, stderr: 'Error: Please sign in to view available models.' } : undefined),
+    })
+    const agy = statusOf(await discover(exec, { account: true }), 'antigravity')
+    expect(agy.auth.state).toBe('signed-out')
+    expect(agy.usable).toBe(false)
+    expect(agy.reason).toContain('run agy once to sign in')
+    expect(agyCalls(exec)).not.toContainEqual(['-p', '/usage'])
+  })
+
+  it('falls back to the token file when agy models cannot say', async () => {
+    const exec = fakeExec({ agy: (args) => (args[0] === 'models' ? { code: 2, stderr: 'network down' } : undefined) })
+    const agy = statusOf(await discover(exec, { account: true }), 'antigravity')
+    expect(agy.auth.state).toBe('signed-in')
+    expect(agy.quota).toBeUndefined()
+  })
+
+  it('never runs agy models without being asked to', async () => {
+    const exec = fakeExec()
+    await discover(exec)
+    expect(agyCalls(exec)).not.toContainEqual(['models'])
+  })
+})

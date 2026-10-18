@@ -9,6 +9,7 @@ import { kindLabel, type ModelCheck } from '../../draft/discover.js'
 import { resolveLocalTarget, type LocalTarget } from '../../draft/local-chat.js'
 import { headerLocaleOf } from '../../cli/locale.js'
 import { useCommands, useConfig } from '../commands.js'
+import { useProviderCheck } from '../provider-check.js'
 import { poEntryCount } from '../../po/count.js'
 import { BatchRun, type BatchStage } from '../components/BatchRun.js'
 import { MarkedFiles, MarkingPicker, markedItems } from '../components/MarkingPicker.js'
@@ -58,6 +59,7 @@ const resolvedLocale = (typed: string): string => resolveLocale(typed)?.id ?? no
 
 export function Translate({ cwd, onBack }: TranslateProps) {
   const commands = useCommands()
+  const providerCheck = useProviderCheck()
   const { config, error: configError } = useConfig()
   const [phase, setPhase] = useState<Phase>('pick')
   const [file, setFile] = useState('')
@@ -174,6 +176,12 @@ export function Translate({ cwd, onBack }: TranslateProps) {
         ...(bin === undefined ? {} : { bin }),
         debug: debugEnabled({ config, env: process.env }),
         onWarn: (line) => setNotices((prev) => [...prev, line]),
+        // Only the review pass reaches antigravity, and with no engine there
+        // is nothing to review.
+        ...(() => {
+          const preflight = engine !== 'none' && config.reviewProvider === 'antigravity' ? providerCheck?.get() : undefined
+          return preflight === undefined ? {} : { preflight }
+        })(),
         // Bounded: a long run's per-entry events would otherwise all stay in memory.
         onProgress: (e) => setEvents((prev) => appendEvent(prev, e)),
       }).finally(unsubscribe),
@@ -391,7 +399,12 @@ export function Translate({ cwd, onBack }: TranslateProps) {
               <Hint>p pause · r resume · q stop and keep what is done</Hint>
             </ScrollTarget>
           )}
-          {task.state.status === 'error' && <Text color="red">Translation failed: {task.state.message}</Text>}
+          {task.state.status === 'error' &&
+            (task.state.refused ? (
+              <Text color="yellow">Stopped: {task.state.message}</Text>
+            ) : (
+              <Text color="red">Translation failed: {task.state.message}</Text>
+            ))}
           {stage === 'done' && <Hint>{RUN_DONE_HINT}</Hint>}
         </>
       )}

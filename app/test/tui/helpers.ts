@@ -427,6 +427,9 @@ export function fakeCommands(overrides: Partial<TuiCommands> = {}): TuiCommands 
     startStatsServer: vi.fn(async () => ({ url: 'http://127.0.0.1:4321/t0k3n/', port: 4321, close: vi.fn(async () => {}) })),
     stopOwnRuns: vi.fn(() => 0),
     openInBrowser: vi.fn(async () => true),
+    // Never the real agy: unknown, which changes nothing on screen and never
+    // stops a run, so a test that does not care sees the app as before.
+    checkProvider: vi.fn(async () => ({ signIn: { state: 'unknown' as const, ms: 0 }, at: Date.now() })),
     ...overrides,
   }
 }

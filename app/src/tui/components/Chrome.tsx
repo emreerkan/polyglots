@@ -16,6 +16,9 @@ export interface HeaderProps {
   wordmark: boolean
   provider: string
   model?: string
+  // What the provider check adds: the model's quota, or, signed out, what to
+  // do about it in place of the model.
+  providerNote?: { text: string; replacesModel?: true; warn?: true }
   status: SetupStatus
   // The step the setup status has focus on, when home has moved focus there.
   focusedStep?: SetupStep
@@ -38,11 +41,18 @@ function StepMark({ step, status, focused }: { step: SetupStep; status: SetupSta
   )
 }
 
-function ProviderLine({ provider, model }: { provider: string; model?: string | undefined }) {
+function ProviderLine({ provider, model, note }: { provider: string; model?: string | undefined; note?: HeaderProps['providerNote'] }) {
+  const shownModel = note?.replacesModel ? undefined : model
   return (
     <Text wrap="truncate-end">
       <Text {...TOKENS.muted.ink}>review</Text> {provider}
-      {model ? <Text {...TOKENS.muted.ink}> · {model}</Text> : null}
+      {shownModel ? <Text {...TOKENS.muted.ink}> · {shownModel}</Text> : null}
+      {note ? (
+        <Text {...TOKENS.muted.ink}>
+          {' · '}
+          <Text {...(note.warn ? TOKENS.warn.ink : TOKENS.muted.ink)}>{note.text}</Text>
+        </Text>
+      ) : null}
     </Text>
   )
 }
@@ -104,7 +114,7 @@ function Version({ update }: { update?: string | undefined }) {
   )
 }
 
-export function Header({ wordmark, provider, model, status, focusedStep, statsUrl, statsError, update }: HeaderProps) {
+export function Header({ wordmark, provider, model, providerNote, status, focusedStep, statsUrl, statsError, update }: HeaderProps) {
   const glyphs = useGlyphs()
   // Narrow terminals stack the status under the name: side by side, the
   // setup line alone is wider than the space beside the wordmark.
@@ -113,7 +123,7 @@ export function Header({ wordmark, provider, model, status, focusedStep, statsUr
       <Box flexDirection="column" width="100%" flexShrink={0}>
         <Box justifyContent="space-between">
           <Version update={update} />
-          <ProviderLine provider={provider} model={model} />
+          <ProviderLine provider={provider} model={model} note={providerNote} />
         </Box>
         <Box justifyContent="space-between">
           <SetupLine status={status} focusedStep={focusedStep} />
@@ -133,7 +143,7 @@ export function Header({ wordmark, provider, model, status, focusedStep, statsUr
       </Box>
       <Box flexDirection="column" alignItems="flex-end">
         <Version update={update} />
-        <ProviderLine provider={provider} model={model} />
+        <ProviderLine provider={provider} model={model} note={providerNote} />
         <SetupLine status={status} focusedStep={focusedStep} />
         <StatsLine url={statsUrl} error={statsError} />
       </Box>

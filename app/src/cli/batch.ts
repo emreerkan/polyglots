@@ -1,4 +1,5 @@
 import { agentBinOverride } from '../agent/providers.js'
+import type { ProviderCheck } from '../agent/agy-check.js'
 import { debugEnabled } from '../logs/debug.js'
 import { MAX_PARALLEL, runFileBatch, type BatchItem, type FileBatchOptions } from '../commands/batch.js'
 import { tallyOf, type ProjectEnd } from '../commands/fetch-report.js'
@@ -12,6 +13,7 @@ import { UsageError, parsePositiveInt } from './args.js'
 import { watchKeys, type KeyStream } from './keys.js'
 import { replyCaution } from '../reply/templates.js'
 import { fetchTally, tallyCell } from './summaries.js'
+import { errorLine } from '../ui/messages.js'
 
 /** What a batch on the command line needs from the CLI: fetch's and review's. */
 export interface BatchCli {
@@ -21,6 +23,8 @@ export interface BatchCli {
   translate: typeof translateFile
   // Records the batch's runs as stopped if a signal ends it; see stopOnSignal.
   stopRunsOnSignal: () => () => void
+  // The antigravity check; see startProviderCheck.
+  checkProvider: () => Promise<ProviderCheck>
   // Read for POLYGLOTS_DEBUG; process.env when not given.
   env?: NodeJS.ProcessEnv
   ui: { out: Painter; err: Painter }
@@ -37,6 +41,28 @@ export function parseParallel(raw: string | undefined): number {
     )
   }
   return parallel
+}
+
+/**
+ * The antigravity check, started the moment a run is settled enough to be
+ * worth one and handed to it unawaited. The run awaits it only just before
+ * its first call to the agent, so it runs beside everything that comes first:
+ * the file read, review's rules pass, translate's memory lookups and its
+ * first batch's drafts, and for fetch the project lookups and downloads as
+ * well. A run the cache answers in full never awaits it at all. Undefined for
+ * any other provider, which is never asked. Never rejects: a check that
+ * throws is a check with no answer, and no answer never blocks a run.
+ */
+export function startProviderCheck(
+  cli: Pick<BatchCli, 'config' | 'checkProvider'>,
+  reachesAgent: boolean,
+): Promise<ProviderCheck | undefined> | undefined {
+  if (!reachesAgent || cli.config().reviewProvider !== 'antigravity') return undefined
+  try {
+    return cli.checkProvider().catch(() => undefined)
+  } catch {
+    return undefined
+  }
 }
 
 const EXIT_OK = 0
@@ -77,6 +103,9 @@ export async function runBatchJobs(
   })
   const { kept, noun: _noun, debug: flag, ...batch } = opts
   let finished = 0
+  // Said once, on the first file it stopped. With several files running at
+  // once each meets the same refusal, and the table still names it per line.
+  let refusalSaid = false
   try {
     return await runFileBatch(
       items,
@@ -97,6 +126,10 @@ export async function runBatchJobs(
             cli.err(`Started ${e.item.input}${note}`)
           } else {
             finished += 1
+            if (e.outcome.state === 'stopped' && e.outcome.reason !== undefined && !refusalSaid) {
+              refusalSaid = true
+              cli.err(errorLine(cli.ui.err, e.outcome.reason))
+            }
             cli.err(`[${finished}/${items.length}] ${e.item.input}: ${tallyCell(cli.ui.err, e.outcome.state)}`)
           }
         },
@@ -147,6 +180,6 @@ export function printBatchEnd(
   const tally = tallyOf(rows.map((r) => r.end))
   cli.out('')
   for (const line of fetchTally(cli.ui.out, tally, verb)) cli.out(line)
-  if (tally.failed > 0) return EXIT_ERROR
+  if (tally.failed > 0 || rows.some((r) => r.end.refused)) return EXIT_ERROR
   return tally.stopped > 0 ? EXIT_STOPPED : EXIT_OK
 }

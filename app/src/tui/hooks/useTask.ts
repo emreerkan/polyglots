@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ProviderRefusal } from '../../agent/agy-check.js'
 import { errorMessage } from '../commands.js'
 import { useActivity } from './activity.js'
 
@@ -6,7 +7,10 @@ export type TaskState<T> =
   | { status: 'idle' }
   | { status: 'running' }
   | { status: 'done'; result: T }
-  | { status: 'error'; message: string }
+  // `refused` marks a run the provider check stopped before its first batch.
+  // The run ends stopped, not failed, and a screen that printed it as
+  // "Review failed" in red would blame polyglots for the person's sign-in.
+  | { status: 'error'; message: string; refused: boolean }
 
 export interface Task<T> {
   state: TaskState<T>
@@ -38,7 +42,7 @@ export function useTask<T>(): Task<T> {
         },
         (err: unknown) => {
           release()
-          if (mounted.current) setState({ status: 'error', message: errorMessage(err) })
+          if (mounted.current) setState({ status: 'error', message: errorMessage(err), refused: err instanceof ProviderRefusal })
         },
       )
     },

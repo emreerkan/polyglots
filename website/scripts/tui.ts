@@ -83,6 +83,7 @@ const COMMANDS = {
   startStatsServer: true,
   openInBrowser: true,
   stopOwnRuns: true,
+  checkProvider: true,
 } satisfies Record<keyof TuiCommands, true>
 
 function refuseUnfaked(name: string): TuiCommands {

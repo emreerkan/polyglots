@@ -1099,7 +1099,7 @@ describe('doctor', () => {
     expect(lines.find((l) => l.startsWith('claude'))).toMatch(/ready\s+\/opt\/bin\/claude\s+2\.1\.292\s+signed in \(claude\.ai\)/)
     expect(lines.find((l) => l.startsWith('antigravity'))).toMatch(/unavailable\s+agy not on PATH/)
     expect(h.stdout.text).toContain('Review provider: claude (ready)')
-    expect(discover.calls).toEqual([{ refresh: true }])
+    expect(discover.calls).toEqual([{ refresh: true, account: true }])
   })
 
   it('exits 1 when the configured provider is unusable', async () => {
@@ -1166,8 +1166,36 @@ describe('doctor', () => {
     const code = await h.run(['doctor', '--live'], { discoverAgents: discover.fn })
     expect(code).toBe(0)
     expect(h.stderr.text).toContain('Sends one prompt to each usable agent; this spends a request on metered plans.')
-    expect(discover.calls).toEqual([{ refresh: true, live: true }])
+    expect(discover.calls).toEqual([{ refresh: true, account: true, live: true }])
     expect(h.stdout.text).toMatch(/claude[^\n]*live ok 4\.2s/)
+  })
+
+  it('shows antigravity signed in, with each quota line beneath it', async () => {
+    const h = harness()
+    const quota = {
+      ms: 3000,
+      lines: [
+        { group: 'Gemini Models', limit: 'Gemini Weekly Limit', remaining: 90, resetsAt: '2026-10-24T17:13:13Z' },
+        { group: 'Claude and GPT models', limit: 'Claude Weekly Limit', remaining: 4, resetsAt: '2026-10-21T08:00:00Z' },
+      ],
+    }
+    await h.run(['doctor'], { discoverAgents: fakeDiscover([agent('claude'), agent('antigravity', { quota })]).fn })
+    expect(h.stdout.text).toMatch(/antigravity[^\n]*signed in/)
+    expect(h.stdout.text).toMatch(/antigravity[^\n]*\n\s+quota: Gemini Models 90% left \(Gemini Weekly Limit, resets 2026-10-24T17:13:13Z\)\n\s+quota: Claude and GPT models 4% left/)
+  })
+
+  it('says how to sign in when antigravity is signed out', async () => {
+    const h = harness()
+    expect(await h.run(['config', 'set', 'reviewProvider', 'antigravity'])).toBe(0)
+    const out = agent('antigravity', {
+      auth: { state: 'signed-out', detail: 'is signed out: run agy once to sign in' },
+      usable: false,
+      reason: 'antigravity is signed out: run agy once to sign in',
+    })
+    const d = harness()
+    const code = await d.run(['doctor'], { discoverAgents: fakeDiscover([agent('claude'), out]).fn })
+    expect(code).toBe(1)
+    expect(d.stdout.text).toContain('Review provider: antigravity (unavailable: antigravity is signed out: run agy once to sign in)')
   })
 
   it('exits 1 with --live when the configured provider fails its prompt', async () => {

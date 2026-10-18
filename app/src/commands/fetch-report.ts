@@ -18,6 +18,10 @@ export interface ProjectEnd {
   // templates fill it, and the counts its {zero|some} choice reads. Absent on
   // a stopped review, which gets no reply for the reason renderReply gives.
   review?: ReviewedEnd
+  // Set when a provider refusal stopped this line: stopped, because no run
+  // failed, but the command still did not do what was asked and needs the
+  // person to sign in or wait, so the batch exits as an error does.
+  refused?: true
 }
 
 export interface ReviewedEnd {
@@ -52,7 +56,9 @@ export function endOfResolution(r: Resolution, status: FetchStatus): ProjectEnd 
 
 export function endOfJob(outcome: ProjectOutcome<BatchSummary>, wporgUsername: string): ProjectEnd {
   if (outcome.state === 'failed') return { tally: 'failed', detail: outcome.reason }
-  if (outcome.state === 'stopped') return { tally: 'stopped', detail: 'not started' }
+  if (outcome.state === 'stopped') {
+    return outcome.reason === undefined ? { tally: 'stopped', detail: 'not started' } : { tally: 'stopped', detail: outcome.reason, refused: true }
+  }
   const s = outcome.summary
   if ('reviewed' in s) {
     const flagged = s.problems + s.needsReview

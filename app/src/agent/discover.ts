@@ -14,6 +14,7 @@ import {
   type SetupStatus,
 } from './providers.js'
 import { childEnv } from './run.js'
+import { agyQuota, agySignIn, type Quota } from './agy-check.js'
 
 export { findOnPath }
 
@@ -46,6 +47,9 @@ export interface AgentStatus {
   notes: string[]
   // Only with `live`.
   live?: { ok: boolean; ms: number; error?: string }
+  // Antigravity's remaining quota by group, only with `account` and only when
+  // agy said it is signed in.
+  quota?: Quota
 }
 
 export interface DiscoverDeps {
@@ -59,6 +63,10 @@ export interface DiscoverDeps {
 export interface DiscoverOptions extends DiscoverDeps {
   refresh?: boolean
   live?: boolean
+  // Ask antigravity itself whether it is signed in, and how much quota is
+  // left, instead of reading its token file. A few seconds of `agy models`
+  // and `/usage`, so doctor asks and launch does not.
+  account?: boolean
 }
 
 const PROBE_TIMEOUT_MS = 5_000
@@ -125,7 +133,10 @@ let cached: Promise<AgentStatus[]> | undefined
  * kept, so the next call tries again.
  */
 export function discoverAgents(opts: DiscoverOptions = {}): Promise<AgentStatus[]> {
-  if (opts.live) return probeAll(opts, true)
+  // Neither reads nor fills the cache, for the same reason as live: a later
+  // quick call must not be served an answer that cost seconds of agy, nor an
+  // account question answered from the token file.
+  if (opts.live || opts.account) return probeAll(opts, opts.live === true)
   if (opts.refresh || !cached) {
     const run = probeAll(opts, false)
     cached = run
@@ -140,7 +151,7 @@ export function usableProviders(statuses: AgentStatus[]): ReviewProvider[] {
   return PROVIDERS.filter((p) => statuses.some((s) => s.provider === p && s.usable))
 }
 
-async function probeAll(opts: DiscoverDeps, live: boolean): Promise<AgentStatus[]> {
+async function probeAll(opts: DiscoverDeps & { account?: boolean }, live: boolean): Promise<AgentStatus[]> {
   const env = childEnv(opts.env ?? process.env)
   const ctx = {
     rawEnv: opts.env ?? process.env,
@@ -149,6 +160,7 @@ async function probeAll(opts: DiscoverDeps, live: boolean): Promise<AgentStatus[
     platform: opts.platform ?? process.platform,
     exec: opts.exec ?? defaultExec,
     now: opts.now ?? Date.now,
+    account: opts.account === true,
   }
   const statuses = await Promise.all(PROVIDERS.map((p) => probeOne(p, ctx, live)))
   // POLYGLOTS_AGENT_BIN is one variable for every provider, so it can put a
@@ -169,6 +181,7 @@ interface ProbeCtx {
   platform: NodeJS.Platform
   exec: ProbeExec
   now: () => number
+  account: boolean
 }
 
 async function probeOne(provider: ReviewProvider, ctx: ProbeCtx, live: boolean): Promise<AgentStatus> {
@@ -204,7 +217,9 @@ async function probeOne(provider: ReviewProvider, ctx: ProbeCtx, live: boolean):
   if (versionFailure) return { ...base, path, auth: notChecked, usable: false, reason: versionFailure }
   const version = v.stdout.split(/\r?\n/).map((line) => line.trim()).find((line) => line.length > 0)
 
-  const auth = await spec.checkAuth({ bin: path, home: ctx.home, env: ctx.env, exec: ctx.exec, timeoutMs: PROBE_TIMEOUT_MS })
+  const account = provider === 'antigravity' && ctx.account ? await askAgy(path, ctx) : undefined
+  const auth =
+    account?.auth ?? (await spec.checkAuth({ bin: path, home: ctx.home, env: ctx.env, exec: ctx.exec, timeoutMs: PROBE_TIMEOUT_MS }))
   if (auth.state === 'unknown') notes.push(`sign-in unknown: ${auth.detail ?? 'no answer'}`)
   if (setup.state === 'unknown') notes.push(`setup unknown: ${setup.detail ?? 'no answer'}`)
 
@@ -221,9 +236,24 @@ async function probeOne(provider: ReviewProvider, ctx: ProbeCtx, live: boolean):
     auth,
     usable: reason === undefined,
     ...(reason === undefined ? {} : { reason }),
+    ...(account?.quota === undefined ? {} : { quota: account.quota }),
   }
   if (live && status.usable) status.live = await liveProbe(provider, path, ctx)
   return status
+}
+
+/**
+ * Antigravity's sign-in from `agy models`, and its quota from `/usage` once
+ * that said signed in: the two steps a run's check takes, so doctor and a run
+ * cannot disagree. An unknown answer falls back to the token file (no `auth`
+ * here), the check that needs no process and stays the quick one at launch.
+ */
+async function askAgy(path: string, ctx: ProbeCtx): Promise<{ auth?: AuthStatus; quota?: Quota }> {
+  const signIn = await agySignIn(ctx.exec, path)
+  if (signIn.state === 'signed-out') return { auth: { state: 'signed-out', detail: 'is signed out: run agy once to sign in' } }
+  if (signIn.state === 'unknown') return {}
+  const quota = await agyQuota(ctx.exec, path)
+  return { auth: { state: 'signed-in' }, ...(quota === undefined ? {} : { quota }) }
 }
 
 async function liveProbe(provider: ReviewProvider, path: string, ctx: ProbeCtx): Promise<NonNullable<AgentStatus['live']>> {

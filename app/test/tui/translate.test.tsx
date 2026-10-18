@@ -10,6 +10,7 @@ import { Translate } from '../../src/tui/screens/Translate.js'
 import { formatSummary } from '../../src/tui/components/Progress.js'
 import { ESC_DELAY, fakeCommands, flat, keys, makeHome, render, scriptedTranslate, tick, waitFor, waitForText, cleanup, type Home } from './helpers.js'
 import { DEFAULT_QWEN_MODEL } from '../../src/draft/qwen.js'
+import { ProviderRefusal } from '../../src/agent/agy-check.js'
 
 let home: Home
 let cwd: string
@@ -194,6 +195,25 @@ describe('Translate run', () => {
     }
     stdin.write(keys.enter)
     await waitForText(lastFrame, 'DEEPL_API_KEY is not set')
+  })
+
+  // A refusal is the provider check stopping the run before it spent
+  // anything: the run ends stopped, so the screen must not call it a failure.
+  it('says a provider refusal stopped the run, not that it failed', async () => {
+    const commands = fakeCommands({
+      translateFile: vi.fn(async () => {
+        throw new ProviderRefusal('antigravity is signed out. Run agy once to sign in, then start again.')
+      }),
+    })
+    const { lastFrame, stdin } = mount(commands)
+    await pickFile(stdin, lastFrame)
+    for (let i = 0; i < 5; i++) {
+      stdin.write(keys.down)
+      await tick()
+    }
+    stdin.write(keys.enter)
+    await waitForText(lastFrame, 'Stopped: antigravity is signed out.')
+    expect(flat(lastFrame())).not.toContain('Translation failed')
   })
 })
 

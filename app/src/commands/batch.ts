@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import { ProviderRefusal, type ProviderCheck } from '../agent/agy-check.js'
 import { openJobsDb } from '../jobs/db.js'
 import { createRunControl, type RunControl } from '../run-control.js'
 import { openDb } from '../storage/index.js'
@@ -20,7 +21,9 @@ export const MAX_PARALLEL = 8
 export type ProjectOutcome<T> =
   | { file: string; state: 'done'; summary: T }
   | { file: string; state: 'failed'; reason: string }
-  | { file: string; state: 'stopped' }
+  // reason is set only on the file a provider refusal stopped, so the one
+  // line that says why can be told from the files that simply never started.
+  | { file: string; state: 'stopped'; reason?: string }
 
 export type ProjectEvent<T> =
   | { type: 'project-start'; file: string }
@@ -41,6 +44,14 @@ export type ProjectEvent<T> =
  * fresh one behind them. Jobs that never started when a stop arrived are
  * reported as stopped, not failed, since stopping part way is ordinary use and
  * their work is still to do.
+ *
+ * The one exception to carrying on is a provider refusal. Signed out or out
+ * of quota is a fact about the account, not the file, so every file still
+ * queued would meet it in turn: N copies of one refusal and a tally of N
+ * failures for something that is not a fault of any run. The first refusal
+ * stops the shared control instead, and the refused file ends stopped with
+ * the refusal as its reason, as its run row already does. Files running beside
+ * it await the same check and stop the same way.
  *
  * Outcomes come back in input order rather than finish order, so the table the
  * person reads lines up with the list they pasted.
@@ -78,6 +89,13 @@ export async function runProjects<T>(
       try {
         end(i, { file, state: 'done', summary: await opts.run(file, control) })
       } catch (err) {
+        if (err instanceof ProviderRefusal) {
+          // Ended before the stop, so the refusal is reported ahead of the
+          // stopping notice that a stop prints.
+          end(i, { file, state: 'stopped', reason: err.message })
+          control.stop()
+          continue
+        }
         end(i, { file, state: 'failed', reason: err instanceof Error ? err.message : String(err) })
       }
     }
@@ -158,6 +176,10 @@ export interface FileBatchOptions {
   // config (debugEnabled), and where each run's notices and log warnings go.
   debug?: boolean
   onWarn?: (line: string) => void
+  // One antigravity check for the whole batch, handed to every file: the
+  // files share one provider and one account, and a check per file would
+  // spend seconds on the same answer. See ReviewOptions.preflight.
+  preflight?: Promise<ProviderCheck | undefined>
   onProgress?: (file: string) => (e: ReviewEvent | TranslateEvent) => void
   onEvent?: (e: BatchItemEvent) => void
 }
@@ -199,6 +221,7 @@ export async function runFileBatch(items: BatchItem[], jobs: FileBatchJobs, opts
                 ...(opts.fresh ? { fresh: true } : {}),
                 ...(opts.debug ? { debug: true } : {}),
                 ...(opts.onWarn === undefined ? {} : { onWarn: opts.onWarn }),
+                ...(opts.preflight === undefined ? {} : { preflight: opts.preflight }),
                 ...(onProgress === undefined ? {} : { onProgress }),
               })
             : jobs.translateFile({
@@ -215,6 +238,7 @@ export async function runFileBatch(items: BatchItem[], jobs: FileBatchJobs, opts
                 ...(opts.secrets === undefined ? {} : { secrets: opts.secrets }),
                 ...(opts.debug ? { debug: true } : {}),
                 ...(opts.onWarn === undefined ? {} : { onWarn: opts.onWarn }),
+                ...(opts.preflight === undefined ? {} : { preflight: opts.preflight }),
                 ...(onProgress === undefined ? {} : { onProgress }),
               })
         },

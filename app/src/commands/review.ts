@@ -3,6 +3,9 @@ import { basename, dirname, extname, join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { groupFor, OTHER_GROUP } from '../review/message.js'
 import { configuredModel, type AgentRunOptions } from '../agent/run.js'
+import { gateRun, ProviderRefusal, quotaRecheck, type ProviderCheck } from '../agent/agy-check.js'
+import { defaultExec } from '../agent/discover.js'
+import type { ProbeExec } from '../agent/providers.js'
 import { createLocalChat, localIdleTimeoutMs, localModelId, resolveLocalTarget, type LocalChat } from '../draft/local-chat.js'
 import { auditPromptVariant, createLocalAdjudicator } from '../review/local.js'
 import {
@@ -81,6 +84,13 @@ export interface ReviewOptions extends Partial<Omit<AgentRunOptions, 'provider'>
   // Where a warning about the run log itself goes; stderr unless a caller,
   // a test or a screen that owns the terminal, wants the line.
   onWarn?: (line: string) => void
+  // The antigravity sign-in and quota check, started by the caller beside the
+  // run rather than inside it, so it costs the run nothing until the first
+  // batch, where it is awaited for at most ten seconds. Ignored for any other
+  // provider and on a rules-only run.
+  preflight?: Promise<ProviderCheck | undefined>
+  // Runs agy for the quota read after a failed batch; tests pass a fake.
+  providerExec?: ProbeExec
 }
 
 // The name says whether a model was in the loop, because that decides whether
@@ -296,9 +306,8 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
   // served as Pro's. Undefined for claude, and for an antigravity whose
   // settings cannot be read, which records the bare provider name exactly as
   // every row written before this did.
-  const engine = local
-    ? engineId(localModelId(local), 'local')
-    : engineId(opts.model ?? (agent ? configuredModel(agent) : undefined), provider)
+  const agentModel = opts.model ?? (agent ? configuredModel(agent) : undefined)
+  const engine = local ? engineId(localModelId(local), 'local') : engineId(agentModel, provider)
   const adjudicate = local ? (opts.adjudicate ?? createLocalAdjudicator(opts.localChat ?? createLocalChat(local, { idleTimeoutMs: localIdleTimeoutMs(localSettings!) }), engine)) : opts.adjudicate
   const glossary = readGlossary(opts.locale, opts.db)
   if (glossary.length === 0) {
@@ -353,6 +362,11 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
   // this call opened, nor leave history claiming the run is still going.
   let runId: number | undefined
   let summary: ReviewSummary
+  // Here rather than beside the gate that creates it, so the catch below can
+  // settle a quota read a failed batch started: a run that throws after one
+  // would otherwise write run-end with the read still out, and its quota line
+  // would land after the line that says how the run ended.
+  let recheck: ReturnType<typeof quotaRecheck> | undefined
   try {
     const config = computeConfigHash({ locale: opts.locale, glossary, properNouns })
     // The cache holds verdicts for the current configuration and nothing else.
@@ -493,6 +507,27 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
         return annotations.size
       }
 
+      // Only antigravity is checked: a signed-out agy waits a minute on a
+      // sign-in nobody will complete, once per attempt, and an empty quota
+      // fails every batch without saying so. Claude answers its own sign-in
+      // without prompting, and a rules-only run reaches no agent at all.
+      //
+      // Awaited from auditEntries just before its first batch, not here: the
+      // rules pass runs beside the check, and a resume the cache answers in
+      // full never waits on it or is refused by it. The quota read after a
+      // failed batch exists only once the check said signed in; see
+      // quotaRecheck for why nothing short of that may run /usage.
+      const antigravity = agent === 'antigravity' && !noAi
+      const preflight = antigravity ? opts.preflight : undefined
+      const beforeBatches = preflight
+        ? async () => {
+            const check = await gateRun({ preflight, model: agentModel, log: (kind, fields) => runLog?.write(kind, fields), warn })
+            if (check?.signIn.state === 'signed-in') {
+              recheck = quotaRecheck(opts.providerExec ?? defaultExec, (kind, fields) => runLog?.write(kind, fields), opts.bin)
+            }
+          }
+        : undefined
+
       const remembered = readMemory(reviewable, opts.locale, opts.db)
       // A verdict carries the key, which glues the msgctxt on; the list shows the msgid.
       const msgidOf = new Map(reviewable.map((e) => [e.key, e.msgid]))
@@ -537,6 +572,7 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
             memoryApproved: r.memoryApproved,
             memoryRepaired: r.memoryRepaired,
           }),
+        ...(beforeBatches ? { beforeBatches } : {}),
         onBatchStart: (b) => emit({ type: 'batch-start', index: b.index, of: b.of, size: b.size, at: Date.now() }),
         // Entries an earlier run already judged. They belong in the output file
         // from the first write, not only in the last one, or a run interrupted
@@ -574,12 +610,18 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
           // Before the batch's terminal event, so a screen that redraws on that one
           // already has the entries it is about to list.
           emit({ type: 'entries', index: b.index, entries: b.verdicts.map((v) => landed(v, msgidOf.get(v.key) ?? v.key)) })
+          // A batch given up is the moment the quota is most worth reading
+          // again: three in a row trip the breaker, and the log should say
+          // whether an empty quota was why.
+          if (b.failed) recheck?.afterFailure()
           // One terminal event per batch: the reducer counts either as progress, so
           // emitting both would advance the bar twice.
           if (b.failed) emit({ type: 'batch-failed', index: b.index, size: b.size, reason: b.failed, at: Date.now() })
           else emit({ type: 'batch-done', index: b.index, problems: b.problems, at: Date.now() })
         },
       })
+
+      await recheck?.settle()
 
       const problems = verdicts.filter((v) => v.problem)
       // Set only when the run was stopped part way, by auditEntries, which is the
@@ -645,6 +687,15 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
       return result
     })
   } catch (err) {
+    await recheck?.settle()
+    // The provider check stopping the run is the person's sign-in or quota,
+    // not a fault of the run: it ends stopped, with the reason on record, and
+    // the caller is handed the refusal to say.
+    if (err instanceof ProviderRefusal) {
+      runLog?.write('run-end', { ended: 'stopped', reason: 'provider' })
+      if (runId !== undefined) endRun(jobs, runId, 'stopped')
+      throw err
+    }
     // A run in progress when this throws is neither done nor still running: mark
     // it stopped so history does not claim otherwise, before the handle it needs
     // to do that is closed underneath it.

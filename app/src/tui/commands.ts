@@ -1,5 +1,6 @@
 import { createContext, useContext, useState } from 'react'
-import { discoverAgents } from '../agent/discover.js'
+import { defaultExec, discoverAgents } from '../agent/discover.js'
+import { checkAgy, type ProviderCheck } from '../agent/agy-check.js'
 import { checkLocalModel, discoverModels } from '../draft/discover.js'
 import { fetchProjects, resolveProjects } from '../commands/fetch.js'
 import { syncGlossary } from '../commands/glossary-sync.js'
@@ -58,6 +59,9 @@ export interface TuiCommands {
   openInBrowser: typeof openInBrowser
   // Ends this process's in-flight runs as stopped; returns how many.
   stopOwnRuns: () => number
+  // Asks antigravity whether it is signed in and how much quota is left. The
+  // app calls it only while antigravity is the provider.
+  checkProvider: () => Promise<ProviderCheck>
 }
 
 export const defaultCommands: TuiCommands = {
@@ -98,6 +102,7 @@ export const defaultCommands: TuiCommands = {
       db.close()
     }
   },
+  checkProvider: () => checkAgy(defaultExec),
 }
 
 const CommandsContext = createContext<TuiCommands>(defaultCommands)

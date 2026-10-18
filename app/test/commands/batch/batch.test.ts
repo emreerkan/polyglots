@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_PARALLEL, runProjects, type ProjectEvent } from '../../../src/commands/batch.js'
 import { createRunControl, type RunControl } from '../../../src/run-control.js'
+import { ProviderRefusal } from '../../../src/agent/agy-check.js'
 
 // A job the test finishes by hand, so the order and overlap of jobs is the
 // test's to decide rather than the timer's.
@@ -111,6 +112,29 @@ describe('runProjects', () => {
     expect(started).toEqual(['a.po'])
     expect(outcomes).toEqual([
       { file: 'a.po', state: 'done', summary: 'a.po' },
+      { file: 'b.po', state: 'stopped' },
+      { file: 'c.po', state: 'stopped' },
+    ])
+  })
+
+  // A signed-out or exhausted provider is true of every file still queued,
+  // so the first refusal stops the batch: the refused file and the ones never
+  // started end stopped, not failed, since nothing went wrong in polyglots.
+  it('stops the batch on a provider refusal and records it as stopped, not failed', async () => {
+    const control = createRunControl()
+    const started: string[] = []
+    const outcomes = await runProjects(['a.po', 'b.po', 'c.po'], {
+      parallel: 1,
+      control,
+      run: async (file) => {
+        started.push(file)
+        throw new ProviderRefusal('antigravity is signed out.')
+      },
+    })
+    expect(started).toEqual(['a.po'])
+    expect(control.state).toBe('stopping')
+    expect(outcomes).toEqual([
+      { file: 'a.po', state: 'stopped', reason: 'antigravity is signed out.' },
       { file: 'b.po', state: 'stopped' },
       { file: 'c.po', state: 'stopped' },
     ])

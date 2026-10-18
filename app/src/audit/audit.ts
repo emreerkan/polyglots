@@ -100,6 +100,12 @@ export interface AuditOptions extends Partial<AgentRunOptions> {
   // model, so a run that sends fewer batches than its size suggests says why.
   onRules?: (summary: { flagged: number; suspects: number; memoryApproved: number; memoryRepaired: number }) => void
   onBatchStart?: (batch: BatchStart) => void
+  // Awaited once, just before the first batch reaches the adjudicator, and
+  // never when no batch is left after the rules and the cache. The provider
+  // check waits here rather than before the call, so the rules pass runs
+  // beside it, and a resume the cache answers in full is never held up or
+  // refused by a provider it will not ask. A throw ends the audit there.
+  beforeBatches?: () => Promise<void>
   // Awaited, so a caller writing to disk finishes before the next batch starts.
   onBatch?: (progress: BatchProgress) => void | Promise<void>
   // Called once if the run ended early. `lastGood` is the batch to resume after,
@@ -388,6 +394,9 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
     // whose msgctxt separator does not survive a JSON schema round-trip.
     const batch = rawBatch.map((c, n) => ({ ...c, id: n + 1 }))
     const position = { index: i + 1, of: batches.length, size: batch.length }
+    // After the control gate, so a run stopped before its first batch does not
+    // wait on a check it has no use for.
+    if (i === 0) await opts.beforeBatches?.()
     opts.onBatchStart?.(position)
 
     const outcome = await runBatch(adjudicate, batch, opts)

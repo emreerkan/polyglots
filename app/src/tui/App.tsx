@@ -16,6 +16,8 @@ import { InputGate, TypingProvider, useTyping, type Key } from './input.js'
 import { footerKeys } from './keys.js'
 import { CONFIGURATION, HOME, parentOf, TOOLS, type ScreenId } from './menu.js'
 import { providerLabel } from './local.js'
+import { createProviderCheckCache, providerNote, ProviderCheckProvider, withSignIn } from './provider-check.js'
+import type { ProviderCheck } from '../agent/agy-check.js'
 import { createServices, ServicesProvider, useServices, useStatsError, useStatsUrl, type Services } from './services.js'
 import { memoryState, setupStatus, tmListed, type SetupStatus } from './setup.js'
 import { frameLayout, frameSize, MIN_SIZE, SizeProvider, useSize } from './size.js'
@@ -162,7 +164,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   // Discovery is held here, not in home or the agents screen, so a re-check
   // on one is what the other shows. It never blocks: home renders at once
   // and treats "not known yet" as "every provider is a candidate".
-  const [agents, setAgents] = useState<AgentStatus[] | undefined>(undefined)
+  const [discovered, setAgents] = useState<AgentStatus[] | undefined>(undefined)
   const [checking, setChecking] = useState(true)
   const [agentsError, setAgentsError] = useState<string | undefined>(undefined)
   const check = (refresh: boolean) => {
@@ -198,6 +200,19 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
     }
     return check(false)
   }, [])
+
+  // The antigravity check: in the background, never holding home, and only
+  // while antigravity is the provider, at launch or when switched to. Held
+  // here so the header names the answer and the run screens reuse it, and
+  // so a check a run started shows on the header too.
+  const [providerCheck] = useState(() => createProviderCheckCache(() => commands.checkProvider()))
+  const [accountCheck, setAccountCheck] = useState<ProviderCheck | undefined>(() => providerCheck.latest())
+  useEffect(() => providerCheck.subscribe(setAccountCheck), [providerCheck])
+  useEffect(() => {
+    if (provider === 'antigravity') void providerCheck.get()
+  }, [provider])
+  // Discovery read the token file; the check asked agy, so its sign-in wins.
+  const agents = useMemo(() => withSignIn(discovered, accountCheck), [discovered, accountCheck])
 
   // Counted at launch and after the screens that can change it, not on
   // every navigation like the cheaper facts below: it opens polyglots.db.
@@ -264,6 +279,12 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
     if (screen !== 'setup' || !skippedDiscovery.current) return
     skippedDiscovery.current = false
     return check(false)
+  }, [screen])
+  // Again each time home is shown, so the header's quota note does not keep
+  // the launch answer for as long as the app stays open. get() hands back an
+  // answer under five minutes old, so going back and forth spawns nothing.
+  useEffect(() => {
+    if (screen === 'home' && provider === 'antigravity') void providerCheck.get()
   }, [screen])
   const [wizardStart, setWizardStart] = useState<SetupStep>(() => SETUP_STEPS.find((s) => status.steps[s] === 'missing') ?? 'locale')
   const [wizardReturn, setWizardReturn] = useState<ScreenId>('home')
@@ -371,6 +392,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   const headerRows = layout.wordmark ? 4 : 2
   const bodyRows = Math.max(1, size.rows - headerRows - 2)
   const model = agents?.find((a) => a.provider === provider)?.model
+  const note = provider === 'antigravity' ? providerNote(accountCheck, model) : undefined
 
   const menu = { layout: layout.menu, width: size.columns, onOpen: go }
   const view = (() => {
@@ -480,6 +502,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
           wordmark={layout.wordmark}
           provider={providerLabel(provider)}
           {...(model === undefined ? {} : { model })}
+          {...(note === undefined ? {} : { providerNote: note })}
           status={status}
           {...(statusFocus === undefined ? {} : { focusedStep: statusFocus })}
           {...(statsUrl === undefined ? {} : { statsUrl })}
@@ -492,9 +515,11 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
           <InputGate open={!hidden}>
             {/* Keyed by screen, so the next screen starts at its top. */}
             <FooterStageProvider value={setFooterStage}>
-              <Viewport key={screen} pageRef={pageBody}>
-                {view}
-              </Viewport>
+              <ProviderCheckProvider value={providerCheck}>
+                <Viewport key={screen} pageRef={pageBody}>
+                  {view}
+                </Viewport>
+              </ProviderCheckProvider>
             </FooterStageProvider>
           </InputGate>
         </Box>

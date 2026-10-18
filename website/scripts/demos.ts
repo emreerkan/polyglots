@@ -4,6 +4,7 @@ import type { TranslateEvent, TranslateSummary } from '../../app/src/commands/tr
 import type { StatsSummary } from '../../app/src/commands/stats.js'
 import type { ReviewEvent, ReviewSummary } from '../../app/src/types.js'
 import type { DataClient } from '../../app/src/data/download.js'
+import type { ProviderCheck } from '../../app/src/agent/agy-check.js'
 
 // The scenarios the site's terminal panels play. Each is a real command line,
 // run through the real cli.ts with only the slow, networked part swapped out:
@@ -61,6 +62,12 @@ const reviewSummary = (file: string, locale: string): ReviewSummary => ({
   problemsFile: file.replace(/\.po$/, '-repaired.po'),
 })
 
+// The antigravity check, answered as unknown: the panels run the default
+// provider, which is never asked, and a demo switched to antigravity must
+// still never run agy during a build. Unknown never stops a run, so it would
+// play exactly as it does now.
+const noProviderCheck = async (): Promise<ProviderCheck> => ({ signIn: { state: 'unknown', ms: 0 }, at: 0 })
+
 const FLAGGED_PER_BATCH = [3, 1, 4, 0, 2, 5, 1, 3, 2, 1]
 
 function playReview(clock: Clock, emit: (e: ReviewEvent) => void, file: string, locale: string): ReviewSummary {
@@ -90,6 +97,7 @@ export const review: Scenario = {
   // used.
   config: { defaultLocale: 'de', wporgUsername: 'your-wporg-name' },
   deps: (clock) => ({
+    checkProvider: noProviderCheck,
     reviewFile: async (opts) => playReview(clock, (e) => opts.onProgress?.(e), opts.file, opts.locale),
   }),
 }
@@ -100,6 +108,7 @@ export const translate: Scenario = {
   files: [THEME_FILE],
   config: { defaultLocale: 'pt-br' },
   deps: (clock) => ({
+    checkProvider: noProviderCheck,
     translate: async (opts) => {
       const emit = (e: TranslateEvent) => opts.onProgress?.(e)
       const sizes = [25, 25, 12]

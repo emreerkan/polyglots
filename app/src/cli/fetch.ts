@@ -7,7 +7,7 @@ import { loadSecrets } from '../config.js'
 import { loadLocaleRules } from '../rules/load.js'
 import { parseProjectLines, type FetchStatus } from '../wporg/projects.js'
 import { UsageError, parseDraftEngine, parsePositiveInt, secretForEngine } from './args.js'
-import { parseParallel, printBatchEnd, runBatchJobs, type BatchCli } from './batch.js'
+import { parseParallel, printBatchEnd, runBatchJobs, startProviderCheck, type BatchCli } from './batch.js'
 import { requireLocale } from './locale.js'
 import { warnLine } from '../ui/messages.js'
 import { table } from '../ui/layout.js'
@@ -108,6 +108,12 @@ export async function runFetch(cli: FetchCli, names: string[], flags: FetchFlags
     await warnAboutLocalReview(cli, reviewTarget, batchSize, locale, same ? 'skip-check' : 'check')
   }
 
+  // Started before the lookups and downloads, which take seconds of their
+  // own, so the answer is usually in by the first batch. A review reaches the
+  // agent unless it is rules only; a translate does whenever it drafts, since
+  // its review pass runs the configured provider, as on the translate command.
+  const preflight = startProviderCheck(cli, review ? flags.ai !== false : draftEngine !== 'none')
+
   cli.err(`Checking ${refs.length} ${refs.length === 1 ? 'project' : 'projects'} on translate.wordpress.org...`)
   const onWait = (ms: number) => cli.err(waitNotice(ms))
   const resolutions = await cli.resolveProjects(refs, { locale, status, onWait, readme: flags.readme !== false })
@@ -137,6 +143,7 @@ export async function runFetch(cli: FetchCli, names: string[], flags: FetchFlags
     if (toRun.length > 0) {
       const results = await runBatchJobs(cli, toRun, {
         review,
+        ...(preflight === undefined ? {} : { preflight }),
         localeOf: () => locale,
         batchSize,
         parallel,
