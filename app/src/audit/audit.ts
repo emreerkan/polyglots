@@ -112,8 +112,10 @@ export interface AuditOptions extends Partial<AgentRunOptions> {
   // and `pending` counts every entry from there on, including a failed streak
   // that must be re-attempted rather than trusted. Reported rather than derived,
   // because a caller must never present an entry it did not look at as
-  // approvable.
-  onStopped?: (info: { pending: number; lastGood: number }) => void
+  // approvable. `reason` says who stopped it: the person through the control,
+  // or the breaker after failures in a row. Both leave work pending, and only
+  // the second is a problem worth offering a report for.
+  onStopped?: (info: { pending: number; lastGood: number; reason: 'operator' | 'breaker' }) => void
   // When present, an entry whose verdict is already known is never sent to the
   // model, and every verdict the model reaches is written back. Absent, this
   // behaves exactly as it did before: every entry is asked about every time.
@@ -373,13 +375,14 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
   // Everything from there on is pending, so its verdicts are dropped rather than
   // returned: an entry counted both as a problem and as still-to-do is counted
   // twice, and the arithmetic that follows goes negative.
-  const stopAfter = (at: number): void => {
+  const stopAfter = (at: number, reason: 'operator' | 'breaker'): void => {
     for (const batch of batches.slice(at)) {
       for (const candidate of batch) verdicts.delete(candidate.key)
     }
     opts.onStopped?.({
       lastGood: at,
       pending: batches.slice(at).reduce((n, batch) => n + batch.length, 0),
+      reason,
     })
   }
 
@@ -387,7 +390,7 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
     // Before the batch, never inside it: whatever the previous batch decided has
     // already been persisted by its onBatch, so parking here loses nothing.
     if (opts.control && (await opts.control.gate()) === 'stop') {
-      stopAfter(i)
+      stopAfter(i, 'operator')
       break
     }
     // Ids are per batch and 1-based: the model never has to echo a gettext key,
@@ -435,7 +438,7 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
       if (consecutiveFailures === 0) streakStart = position.index
       consecutiveFailures += 1
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        stopAfter(streakStart - 1)
+        stopAfter(streakStart - 1, 'breaker')
         break
       }
     } else {

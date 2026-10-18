@@ -84,6 +84,7 @@ const COMMANDS = {
   openInBrowser: true,
   stopOwnRuns: true,
   checkProvider: true,
+  sendReport: true,
 } satisfies Record<keyof TuiCommands, true>
 
 function refuseUnfaked(name: string): TuiCommands {

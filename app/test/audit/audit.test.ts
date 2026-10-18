@@ -595,6 +595,25 @@ describe('auditEntries under a run control', () => {
     expect(stopped).toEqual([3])
   })
 
+  // The breaker stopping a run is a problem worth a report; the person
+  // stopping it is not, and only this says which happened.
+  it('says the person stopped it when the stop came from the control', async () => {
+    const control = createRunControl()
+    const reasons: string[] = []
+    const adjudicate = vi.fn().mockImplementation(async (batch: { id: number }[]) => {
+      control.stop()
+      return ok(batch)
+    })
+    await auditEntries({
+      entries: four(),
+      ...base({ batchSize: 1 }),
+      adjudicate,
+      control,
+      onStopped: (info: { reason: string }) => reasons.push(info.reason),
+    })
+    expect(reasons).toEqual(['operator'])
+  })
+
   it('says nothing about stopping on a run that finished', async () => {
     const stopped: number[] = []
     const adjudicate = vi.fn().mockImplementation(async (batch: { id: number }[]) => ok(batch))
@@ -702,7 +721,7 @@ describe('auditEntries when the model keeps failing', () => {
 
     // Resume after batch 5, and treat everything from 6 on as still to do,
     // including the three that failed.
-    expect(stopped).toEqual([{ lastGood: 5, pending: 5 }])
+    expect(stopped).toEqual([{ lastGood: 5, pending: 5, reason: 'breaker' }])
   })
 
   it('counts the whole failed streak as still to do, not as reviewed', async () => {
@@ -717,7 +736,7 @@ describe('auditEntries when the model keeps failing', () => {
       },
     })
 
-    expect(stopped).toEqual([{ lastGood: 0, pending: 10 }])
+    expect(stopped).toEqual([{ lastGood: 0, pending: 10, reason: 'breaker' }])
   })
 })
 

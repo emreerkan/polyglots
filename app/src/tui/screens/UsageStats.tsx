@@ -13,6 +13,12 @@ import { useGlyphs } from '../theme.js'
 // setting, why it is what it is, and the payload it would send, so the
 // decision is made looking at the data rather than at a description of it.
 //
+// The problem report offer's setting sits here too, as `config set
+// problemReports`: it is the other thing polyglots can send to the
+// maintainer, and the person deciding what leaves the machine should find
+// both in one place. A report is never sent without being asked for; the
+// setting only says whether to ask.
+//
 // Reads the usage module directly rather than through TuiCommands: it only
 // reads the job store read-only and writes usage.json, both under
 // POLYGLOTS_HOME, which every test already points at a temporary directory.
@@ -27,7 +33,7 @@ const SAY: Record<UsageStatus, string> = {
 export function UsageStats({ onBack }: { onBack: () => void }) {
   const commands = useCommands()
   const glyphs = useGlyphs()
-  const [config, setConfig] = useState<Pick<PolyglotsConfig, 'usageStats'>>(() => {
+  const [config, setConfig] = useState<Pick<PolyglotsConfig, 'usageStats' | 'problemReports'>>(() => {
     try {
       return commands.loadConfig()
     } catch {
@@ -38,12 +44,19 @@ export function UsageStats({ onBack }: { onBack: () => void }) {
   const [note, setNote] = useState<string>()
   // Bumped after a reset, so the preview is built again with the new id.
   const [epoch, setEpoch] = useState(0)
+  // 0 the usage statistics, 1 the problem report offer.
+  const [focus, setFocus] = useState(0)
   useBackKeys(onBack)
   useKeys({
     usageStats: {
+      move: (_input, key) => setFocus(key.upArrow ? 0 : 1),
       toggle: () => {
         try {
-          setConfig(commands.saveConfig({ usageStats: config.usageStats !== true }))
+          setConfig(
+            commands.saveConfig(
+              focus === 0 ? { usageStats: config.usageStats !== true } : { problemReports: config.problemReports === 'never' ? 'ask' : 'never' },
+            ),
+          )
           setError(undefined)
           setNote(undefined)
         } catch (err) {
@@ -70,11 +83,20 @@ export function UsageStats({ onBack }: { onBack: () => void }) {
       </Text>
       <Text> </Text>
       <Text>
-        <Text {...TOKENS.accent.ink}>{glyphs.next}</Text> [{config.usageStats === true ? 'x' : ' '}] Share anonymous totals with the website
+        <Text {...TOKENS.accent.ink}>{focus === 0 ? glyphs.next : ' '}</Text> [{config.usageStats === true ? 'x' : ' '}] Share anonymous totals with the website
       </Text>
       <Text {...(status === 'on' ? TOKENS.success.ink : TOKENS.muted.ink)} wrap="wrap">
         {'      '}
         {SAY[status]}
+      </Text>
+      <Text>
+        <Text {...TOKENS.accent.ink}>{focus === 1 ? glyphs.next : ' '}</Text> Offer problem reports: {config.problemReports === 'never' ? 'never' : 'ask'}
+      </Text>
+      <Text {...TOKENS.muted.ink} wrap="wrap">
+        {'      '}
+        {config.problemReports === 'never'
+          ? 'A run with a problem ends without the question.'
+          : 'After a run with a problem, asks whether to send its logs to the maintainer. Nothing is sent unless you say so.'}
       </Text>
       <Text> </Text>
       {preview.split('\n').map((line, i) => (

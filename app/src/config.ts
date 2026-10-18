@@ -120,6 +120,9 @@ const configSchema = z.object({
   // Optional and absent means off: a debug run keeps prompts and catalogue
   // text on disk, which nobody should get without asking (src/logs/debug.ts).
   debug: z.boolean().optional(),
+  // Optional and absent means ask: a report leaves the machine only when the
+  // person says so at the offer, and `never` stops the offer itself.
+  problemReports: z.enum(['ask', 'never']).optional(),
 })
 
 const SECRET_KEYS: ReadonlyArray<keyof Secrets> = ['DEEPL_API_KEY', 'OPENAI_API_KEY']

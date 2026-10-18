@@ -17,6 +17,8 @@ import { BACK_HINT, Hint, RUN_DONE_HINT } from '../components/Hint.js'
 import { Progress } from '../components/Progress.js'
 import { appendEvent } from '../components/RecentEntries.js'
 import { ScrollTarget } from '../components/Viewport.js'
+import { useProblemReport } from '../components/ProblemReport.js'
+import { reportModel } from '../../report/offer.js'
 import { useTask } from '../hooks/useTask.js'
 import { createRunControl, type RunControl } from '../../run-control.js'
 import { agentBinOverride } from '../../agent/providers.js'
@@ -24,7 +26,7 @@ import { debugEnabled } from '../../logs/debug.js'
 import { initialBatchSize, providerLabel, screenBatchAdvice } from '../local.js'
 import { batchSizeChoices } from '../batch-size.js'
 import { useKeys } from '../hooks/useKeys.js'
-import { TextInput } from '../input.js'
+import { InputGate, TextInput } from '../input.js'
 import { useFooterStage } from '../footer-stage.js'
 
 export interface TranslateProps {
@@ -143,12 +145,19 @@ export function Translate({ cwd, onBack }: TranslateProps) {
   const stage = finished ? 'done' : phase
   const typing = stage === 'options' && focus === FIELD_LOCALE
   useFooterStage(stage === 'batch' ? batchStage : stage)
+  const report = useProblemReport({
+    ended: finished,
+    facts: () => ({ provider: config.reviewProvider, ...reportModel(config, undefined), batchSize }),
+  })
+  // The finished screen's own keys, off while the contact line takes every key.
+  const done = stage === 'done' && !report.typing
 
   // Takes the locale rather than reading state, because the keypress that
   // starts a run normalises it in the same handler and would not see it yet.
   const start = (chosenLocale: string) => {
     setEvents([])
     setNotices([])
+    report.reset()
     setPhase('running')
     // The binary the Check AI agents screen and the menu gate reported on, so a
     // run spawns what discovery checked rather than whatever is first on PATH.
@@ -176,6 +185,7 @@ export function Translate({ cwd, onBack }: TranslateProps) {
         ...(bin === undefined ? {} : { bin }),
         debug: debugEnabled({ config, env: process.env }),
         onWarn: (line) => setNotices((prev) => [...prev, line]),
+        onRunStarted: report.noteRun,
         // Only the review pass reaches antigravity, and with no engine there
         // is nothing to review.
         ...(() => {
@@ -222,9 +232,12 @@ export function Translate({ cwd, onBack }: TranslateProps) {
       stop: running ? () => control.current?.stop() : undefined,
     },
     // The batch's stages bind their own keys, back included, in BatchRun.
-    back: { esc: running || stage === 'batch' ? undefined : onBack, q: running || typing || stage === 'batch' ? undefined : onBack },
-    finished: { close: stage === 'done' ? onBack : undefined },
-    another: { file: stage === 'done' ? anotherFile : undefined },
+    back: {
+      esc: running || stage === 'batch' || report.holdsEsc ? undefined : onBack,
+      q: running || typing || stage === 'batch' || report.typing ? undefined : onBack,
+    },
+    finished: { close: done ? onBack : undefined },
+    another: { file: done ? anotherFile : undefined },
     runForm: {
       move: options
         ? (_input, key) =>
@@ -391,7 +404,10 @@ export function Translate({ cwd, onBack }: TranslateProps) {
               {line}
             </Text>
           ))}
-          <Progress events={events} />
+          {/* Closed while the report's contact line is typed into: o opens the file. */}
+          <InputGate open={!report.typing}>
+            <Progress events={events} />
+          </InputGate>
           {/* Kept in view when failed batches make the screen taller than the
               body: these keys are how the run is stopped. */}
           {stage === 'running' && (
@@ -405,6 +421,7 @@ export function Translate({ cwd, onBack }: TranslateProps) {
             ) : (
               <Text color="red">Translation failed: {task.state.message}</Text>
             ))}
+          {stage === 'done' && report.element}
           {stage === 'done' && <Hint>{RUN_DONE_HINT}</Hint>}
         </>
       )}

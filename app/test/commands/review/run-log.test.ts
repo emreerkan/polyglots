@@ -7,6 +7,7 @@ import type Database from 'better-sqlite3'
 import { openDb, replaceGlossary } from '../../../src/storage/index.js'
 import { reviewFile, type ReviewOptions } from '../../../src/commands/review.js'
 import { openJobsDb } from '../../../src/jobs/db.js'
+import { createRunControl } from '../../../src/run-control.js'
 import type { ReviewEvent } from '../../../src/types.js'
 import { useLocaleFixture } from '../../locale-fixture.js'
 
@@ -104,6 +105,30 @@ describe('reviewFile: the run log', () => {
     const last = JSON.parse(runLogText().trim().split('\n').at(-1)!)
     expect(last).toMatchObject({ kind: 'run-end', ended: 'failed', error: 'caller' })
     jobsDb.close()
+  })
+
+  // A report is offered for a run the breaker stopped and never for one the
+  // person stopped, and both end stopped with work pending: the reason on
+  // run-end is the only record of which it was.
+  it('records a run the failure breaker stopped as reason: breaker', async () => {
+    const failing = vi.fn(async () => {
+      throw new Error('claude exited with exit code 1')
+    })
+    await run({ adjudicate: failing, batchSize: 1 })
+    const last = JSON.parse(runLogText().trim().split('\n').at(-1)!)
+    expect(last).toMatchObject({ kind: 'run-end', ended: 'stopped', reason: 'breaker' })
+  })
+
+  it('records a run the person stopped without a reason', async () => {
+    const control = createRunControl()
+    const stopping = vi.fn(async (batch: { id: number }[]) => {
+      control.stop()
+      return batch.map((c) => ({ id: c.id, problem: false, categories: [] as never[], reason: 'ok' }))
+    })
+    await run({ adjudicate: stopping, batchSize: 1, control })
+    const last = JSON.parse(runLogText().trim().split('\n').at(-1)!)
+    expect(last).toMatchObject({ kind: 'run-end', ended: 'stopped' })
+    expect(last.reason).toBeUndefined()
   })
 
   it('finishes with the same summary when the log folder cannot be written', async () => {

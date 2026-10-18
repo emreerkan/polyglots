@@ -33,6 +33,8 @@ export interface FetchCli extends BatchCli {
   resolveProjects: typeof resolveProjects
   fetchProjects: typeof fetchProjects
   checkLocalModel: typeof checkLocalModel
+  // Told the batch size and parallel once both are parsed, for a problem report.
+  onReportFacts?: (facts: { batchSize: number; parallel: number }) => void
 }
 
 function parseFetchStatus(raw: string | undefined): FetchStatus {
@@ -75,6 +77,7 @@ export async function runFetch(cli: FetchCli, names: string[], flags: FetchFlags
       : config.reviewProvider === 'local'
         ? localReviewBatchSize(config.batchSize)
         : config.batchSize
+  cli.onReportFacts?.({ batchSize, parallel })
   const outDir = flags.outDir ?? defaultOutDir()
   const review = status === 'waiting'
 

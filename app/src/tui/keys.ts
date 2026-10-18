@@ -100,6 +100,16 @@ export const KEYS = {
   another: {
     file: { keys: 'a', does: 'another file with the same settings', match: char('a') },
   },
+  // The problem report offered under a finished run that had a problem, on
+  // review, translate and a batch's summary. Bound only while the offer is on
+  // screen, so s and v mean nothing on a finished screen without one. esc is
+  // the offer's while it shows, and the screen's way back again once the offer
+  // is answered or dismissed.
+  problemReport: {
+    send: { keys: 's', does: 'after a run with a problem: send a problem report', match: char('s') },
+    see: { keys: 'v', does: 'see what a problem report sends', match: char('v') },
+    dismiss: { keys: 'esc', does: 'no problem report; from its list or contact line, back to the offer', match: esc },
+  },
   retry: {
     again: { keys: 'enter', does: 'try again after a failure', match: enter },
   },
@@ -160,7 +170,8 @@ export const KEYS = {
     no: { keys: 'n  esc', does: 'keep it', match: any(char('n'), esc) },
   },
   usageStats: {
-    toggle: { keys: 'space  enter', does: 'turn sharing on or off', match: any(enter, space) },
+    move: { keys: '↑↓', does: 'choose a setting', match: vertical },
+    toggle: { keys: 'space  enter', does: 'change the chosen setting', match: any(enter, space) },
     reset: { keys: 'r', does: 'forget the install id', match: char('r') },
   },
   agents: {
@@ -375,13 +386,14 @@ export interface ScreenKeys {
  */
 export type FooterStage = 'pick' | 'options' | 'running' | 'done' | 'summary'
 
-const { menu, runForm, run, finished, retry, picker, fields, marks, batchResult } = KEYS
+const { menu, runForm, run, finished, retry, picker, fields, marks, batchResult, problemReport } = KEYS
 // What a batch's summary binds, in footer order. Translate's batch never has a
 // reply to show, but it renders the same component, so its help lists them.
 const BATCH_DONE = [batchResult.move, batchResult.copy, finished.close, batchResult.template]
 const MENU = [menu.move, menu.open, menu.hotkey]
 const RUN = [run.pause, run.resume, run.stop]
 const FORM = [runForm.move, runForm.change, runForm.select]
+const REPORT = [problemReport.send, problemReport.see, problemReport.dismiss]
 
 export const SCREENS: Record<ScreenId, ScreenKeys> = {
   home: {
@@ -392,7 +404,7 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   config: { shown: MENU },
   translate: {
     shown: [...FORM, ...RUN, KEYS.translateResult.open],
-    more: [marks.toggle, marks.all, KEYS.another.file, picker.sort, finished.close, batchResult.move, batchResult.copy, batchResult.template],
+    more: [marks.toggle, marks.all, KEYS.another.file, picker.sort, finished.close, batchResult.move, batchResult.copy, batchResult.template, ...REPORT],
     stages: {
       pick: [marks.toggle, marks.all, picker.sort],
       options: FORM,
@@ -403,7 +415,18 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   },
   review: {
     shown: [...FORM, ...RUN, KEYS.reviewResult.open, KEYS.reviewResult.copy],
-    more: [marks.toggle, marks.all, KEYS.reviewResult.template, KEYS.another.file, picker.sort, finished.close, batchResult.move, batchResult.copy, batchResult.template],
+    more: [
+      marks.toggle,
+      marks.all,
+      KEYS.reviewResult.template,
+      KEYS.another.file,
+      picker.sort,
+      finished.close,
+      batchResult.move,
+      batchResult.copy,
+      batchResult.template,
+      ...REPORT,
+    ],
     stages: {
       pick: [marks.toggle, marks.all, picker.sort],
       options: FORM,
@@ -430,6 +453,7 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
       batchResult.move,
       batchResult.copy,
       batchResult.template,
+      ...REPORT,
     ],
     stages: { options: FORM, running: RUN, done: BATCH_DONE },
   },
@@ -499,7 +523,7 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   'configure-keys': { shown: [fields.saveKey], more: [finished.close] },
   setup: { shown: [KEYS.wizard.choose, KEYS.wizard.skip], more: [KEYS.wizard.move] },
   interface: { shown: [KEYS.interface.move, KEYS.interface.toggle] },
-  'usage-stats': { shown: [KEYS.usageStats.toggle, KEYS.usageStats.reset] },
+  'usage-stats': { shown: [KEYS.usageStats.toggle, KEYS.usageStats.move, KEYS.usageStats.reset] },
 }
 
 /** The full listing, for the `?` overlay and the help page. */

@@ -17,11 +17,13 @@ import { BACK_HINT, Hint, RUN_DONE_HINT } from '../components/Hint.js'
 import { ReviewProgress } from '../components/ReviewProgress.js'
 import { appendEvent } from '../components/RecentEntries.js'
 import { ScrollTarget } from '../components/Viewport.js'
+import { useProblemReport } from '../components/ProblemReport.js'
+import { reportModel } from '../../report/offer.js'
 import { useTask } from '../hooks/useTask.js'
 import { createRunControl, type RunControl } from '../../run-control.js'
 import { batchSizeChoices } from '../batch-size.js'
 import { useKeys } from '../hooks/useKeys.js'
-import { TextInput } from '../input.js'
+import { InputGate, TextInput } from '../input.js'
 import { useFooterStage } from '../footer-stage.js'
 import { listTemplates, loadTemplates, normaliseRequester, type Template } from '../../reply/templates.js'
 import type { Locale } from '../../types.js'
@@ -134,10 +136,18 @@ export function Review({ cwd, onBack }: ReviewProps) {
   const templates = useMemo(() => (finished ? loadTemplatesSafely(locale) : []), [finished, locale])
   const requesterName = normaliseRequester(requester)
   useFooterStage(stage === 'batch' ? batchStage : stage)
+  const report = useProblemReport({
+    ended: finished,
+    // No model took part in a No-AI review, so the report names none.
+    facts: () => ({ provider: noAi ? 'rules' : config.reviewProvider, ...(noAi ? {} : reportModel(config, undefined)), batchSize }),
+  })
+  // The finished screen's own keys, off while the contact line takes every key.
+  const done = stage === 'done' && !report.typing
 
   const start = (chosenLocale: string) => {
     setEvents([])
     setNotices([])
+    report.reset()
     setPhase('running')
     // The binary the Check AI agents screen and the menu gate reported on, so a
     // run spawns what discovery checked rather than whatever is first on PATH.
@@ -164,6 +174,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
         ...(bin === undefined ? {} : { bin }),
         debug: debugEnabled({ config, env: process.env }),
         onWarn: (line) => setNotices((prev) => [...prev, line]),
+        onRunStarted: report.noteRun,
         // The app's check from launch when it is fresh, a new one otherwise,
         // and nothing for a run that reaches no antigravity.
         ...(() => {
@@ -208,9 +219,12 @@ export function Review({ cwd, onBack }: ReviewProps) {
       stop: running ? () => control.current?.stop() : undefined,
     },
     // The batch's stages bind their own keys, back included, in BatchRun.
-    back: { esc: running || stage === 'batch' ? undefined : onBack, q: running || typing || stage === 'batch' ? undefined : onBack },
-    finished: { close: stage === 'done' ? onBack : undefined },
-    another: { file: stage === 'done' ? anotherFile : undefined },
+    back: {
+      esc: running || stage === 'batch' || report.holdsEsc ? undefined : onBack,
+      q: running || typing || stage === 'batch' || report.typing ? undefined : onBack,
+    },
+    finished: { close: done ? onBack : undefined },
+    another: { file: done ? anotherFile : undefined },
     runForm: {
       move: options
         ? (_input, key) =>
@@ -371,12 +385,16 @@ export function Review({ cwd, onBack }: ReviewProps) {
               {line}
             </Text>
           ))}
-          <ReviewProgress
-            events={events}
-            wporgUsername={config.wporgUsername}
-            templates={templates}
-            {...(requesterName === undefined ? {} : { requester: requesterName })}
-          />
+          {/* Closed while the report's contact line is typed into: c and t
+              copy the reply and change its template. */}
+          <InputGate open={!report.typing}>
+            <ReviewProgress
+              events={events}
+              wporgUsername={config.wporgUsername}
+              templates={templates}
+              {...(requesterName === undefined ? {} : { requester: requesterName })}
+            />
+          </InputGate>
           {/* Kept in view when failed batches make the screen taller than the
               body: these keys are how the run is stopped. */}
           {stage === 'running' && (
@@ -390,6 +408,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
             ) : (
               <Text color="red">Review failed: {task.state.message}</Text>
             ))}
+          {stage === 'done' && report.element}
           {stage === 'done' && <Hint>{RUN_DONE_HINT}</Hint>}
         </>
       )}

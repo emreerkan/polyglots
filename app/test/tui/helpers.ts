@@ -430,6 +430,9 @@ export function fakeCommands(overrides: Partial<TuiCommands> = {}): TuiCommands 
     // Never the real agy: unknown, which changes nothing on screen and never
     // stops a run, so a test that does not care sees the app as before.
     checkProvider: vi.fn(async () => ({ signIn: { state: 'unknown' as const, ms: 0 }, at: Date.now() })),
+    // Never the reports endpoint: a receipt, so a test that sends sees the
+    // line a sent report gets. A test of a failed send passes its own.
+    sendReport: vi.fn(async () => ({ ok: true as const, id: 'r1' })),
     ...overrides,
   }
 }

@@ -293,6 +293,9 @@ export interface PolyglotsConfig {
   // Absent means off. Keeps each batch's prompt and agent output beside the
   // run log (src/logs/debug.ts); --debug and POLYGLOTS_DEBUG=1 do the same.
   debug?: boolean
+  // Absent means ask. Whether a run with a problem offers to send a report to
+  // the maintainer (src/report/send.ts); `never` stops the offer, not the logs.
+  problemReports?: 'ask' | 'never'
 }
 
 export interface Secrets {

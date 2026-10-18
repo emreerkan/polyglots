@@ -15,6 +15,7 @@ import { writeStats } from '../commands/stats.js'
 import { translateFile } from '../commands/translate.js'
 import { openJobsDb } from '../jobs/db.js'
 import { stopOwnRuns } from '../jobs/runs.js'
+import { sendReport, type SendResult } from '../report/send.js'
 import { DEFAULT_CONFIG, loadConfig, saveConfig, loadSecrets, saveSecret } from '../config.js'
 import type { Locale, PolyglotsConfig, ReviewEvent, ReviewSummary } from '../types.js'
 import { glossaryCount, hasLocaleRules, localeConfigured, memoryCount } from './setup.js'
@@ -62,6 +63,9 @@ export interface TuiCommands {
   // Asks antigravity whether it is signed in and how much quota is left. The
   // app calls it only while antigravity is the provider.
   checkProvider: () => Promise<ProviderCheck>
+  // Posts an encoded problem report. Handed in so no test, and no website
+  // demo, reaches the reports endpoint.
+  sendReport: (body: Buffer) => Promise<SendResult>
 }
 
 export const defaultCommands: TuiCommands = {
@@ -103,6 +107,7 @@ export const defaultCommands: TuiCommands = {
     }
   },
   checkProvider: () => checkAgy(defaultExec),
+  sendReport: (body) => sendReport(fetch, body),
 }
 
 const CommandsContext = createContext<TuiCommands>(defaultCommands)

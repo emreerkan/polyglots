@@ -63,6 +63,26 @@ describe('Configuration › Usage statistics', () => {
     expect(config.saved.at(-1)).toEqual({ usageStats: false })
   })
 
+  // The other thing polyglots can send the maintainer, set beside it.
+  it('turns the problem report offer to never and back to ask, below the sharing setting', async () => {
+    const { lastFrame, stdin, config } = await open()
+    expect(flat(lastFrame())).toContain('Offer problem reports: ask')
+    stdin.write(keys.down)
+    await tick()
+    stdin.write(' ')
+    await waitForText(lastFrame, 'Offer problem reports: never')
+    expect(config.saved).toEqual([{ problemReports: 'never' }])
+    // The sharing setting was not the one changed.
+    expect(flat(lastFrame())).toContain('[ ] Share anonymous totals with the website')
+    stdin.write(keys.enter)
+    await waitForText(lastFrame, 'Offer problem reports: ask')
+    expect(config.saved.at(-1)).toEqual({ problemReports: 'ask' })
+    stdin.write(keys.up)
+    await tick()
+    stdin.write(' ')
+    await waitForText(lastFrame, '[x] Share anonymous totals with the website')
+  })
+
   it('says when DO_NOT_TRACK overrides the setting', async () => {
     process.env.DO_NOT_TRACK = '1'
     const { lastFrame } = await open({ usageStats: true })

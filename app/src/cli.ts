@@ -85,6 +85,9 @@ import { previewUsagePayload, resetUsageState, sendUsageInBackground, usageStatu
 import { checkForUpdate, updateCheckEnabled, updateNotice } from './update/index.js'
 import { debugEnabled } from './logs/debug.js'
 import { checkGlossaries, glossaryNotice, type StaleGlossary } from './glossary/freshness.js'
+import { offerProblemReport, type ReportContext, type SendResult } from './cli/problem-report.js'
+import { providerVersion, reportModel } from './report/offer.js'
+import { sendReport } from './report/send.js'
 
 const EXIT_OK = 0
 const EXIT_ERROR = 1
@@ -147,6 +150,12 @@ export interface CliDeps {
   // Asks antigravity whether it is signed in and how much quota is left
   // (src/agent/agy-check.ts). Injected so no test, and no website demo, runs agy.
   checkProvider?: () => Promise<ProviderCheck>
+  // Posts an encoded problem report (src/report/send.ts). Injected so no
+  // test, and no website demo, reaches the reports endpoint.
+  sendReport?: (body: Buffer) => Promise<SendResult>
+  // The provider's --version line for a problem report (src/report/offer.ts).
+  // Injected so no test, and no website demo, runs the agent's binary.
+  providerVersion?: (provider: string) => Promise<string | undefined>
 }
 
 interface Cli {
@@ -171,6 +180,14 @@ interface Cli {
   dataClient: DataClient
   openBrowser: (url: string) => Promise<boolean>
   checkProvider: () => Promise<ProviderCheck>
+  sendReport: (body: Buffer) => Promise<SendResult>
+  providerVersion: (provider: string) => Promise<string | undefined>
+  // The runs this command started, and what a problem report about them
+  // would say of the command, for the offer main makes once it has ended.
+  // Collected here rather than returned, because a run that throws returns
+  // nothing and is one of the runs a report is for.
+  report: { runIds: number[]; context?: Omit<ReportContext, 'interactive'> }
+  noteRun: (runId: number) => void
   // Listens for SIGINT and SIGTERM until the returned function is called.
   stopRunsOnSignal: () => () => void
   config: () => PolyglotsConfig
@@ -197,6 +214,7 @@ function createCli(deps: CliDeps): Cli {
   }
   let cached: PolyglotsConfig | undefined
   const env = deps.env ?? process.env
+  const report: Cli['report'] = { runIds: [] }
   return {
     streams,
     env,
@@ -221,6 +239,10 @@ function createCli(deps: CliDeps): Cli {
     dataClient: deps.dataClient ?? dataClient,
     openBrowser: deps.openBrowser ?? openInBrowser,
     checkProvider: deps.checkProvider ?? (() => checkAgy(defaultExec)),
+    sendReport: deps.sendReport ?? ((body) => sendReport(fetch, body, env)),
+    providerVersion: deps.providerVersion ?? ((provider) => providerVersion(provider, { env })),
+    report,
+    noteRun: (runId) => void report.runIds.push(runId),
     stopRunsOnSignal: () =>
       stopOnSignal({
         // Only installed around a run, so a run is what a signal interrupts.
@@ -315,6 +337,7 @@ interface TranslateFlags {
   localModel?: string
   yes?: boolean
   debug?: boolean
+  sendReport?: boolean
 }
 
 interface ReviewFlags {
@@ -327,6 +350,7 @@ interface ReviewFlags {
   template?: string
   parallel?: string
   debug?: boolean
+  sendReport?: boolean
 }
 
 async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags): Promise<number> {
@@ -390,6 +414,12 @@ async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags)
   }
 
   const debug = debugEnabled({ ...(flags.debug === undefined ? {} : { flag: flags.debug }), config, env: cli.env })
+  cli.report.context = {
+    provider: config.reviewProvider,
+    ...reportModel(config, flags.model),
+    batchSize,
+    sendWithoutAsking: flags.sendReport === true,
+  }
   // One unreadable file must not abort the rest of a multi-file run; report it and move on.
   let failed = 0
   for (const file of files) {
@@ -418,6 +448,7 @@ async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags)
         debug,
         onWarn: (line) => cli.err(warnLine(cli.ui.err, line)),
         ...(preflight === undefined ? {} : { preflight }),
+        onRunStarted: cli.noteRun,
         onProgress: report,
       })
     } catch (error) {
@@ -533,10 +564,19 @@ async function runReviewMany(cli: Cli, files: string[], flags: ReviewFlags): Pro
     translate: cli.translate,
     stopRunsOnSignal: cli.stopRunsOnSignal,
     checkProvider: cli.checkProvider,
+    onRunStarted: cli.noteRun,
     env: cli.env,
     ui: cli.ui,
     out: cli.out,
     err: cli.err,
+  }
+  cli.report.context = {
+    provider: rulesOnly ? 'rules' : config.reviewProvider,
+    // No model took part in a rules-only run, so the report names none.
+    ...(rulesOnly ? {} : reportModel(config, undefined)),
+    batchSize,
+    parallel,
+    sendWithoutAsking: flags.sendReport === true,
   }
   const preflight = startProviderCheck(cli, !rulesOnly)
   const ends = await runBatchJobs(batchCli, files.map((file) => ({ input: file, file })), {
@@ -608,8 +648,8 @@ function resolveBatchSize(config: PolyglotsConfig, flag: string | undefined): nu
 // of DEFAULT_CONFIG, and leaving it out would make it impossible to set.
 // usageStats likewise: absent means never asked, so it has no default either.
 // updateCheck too: absent means on, so it is not written into every config.
-// debug likewise, absent meaning off.
-const CONFIG_KEYS = ['defaultLocale', ...Object.keys(DEFAULT_CONFIG), 'usageStats', 'updateCheck', 'debug'] as Array<keyof PolyglotsConfig>
+// debug likewise, absent meaning off, and problemReports, absent meaning ask.
+const CONFIG_KEYS = ['defaultLocale', ...Object.keys(DEFAULT_CONFIG), 'usageStats', 'updateCheck', 'debug', 'problemReports'] as Array<keyof PolyglotsConfig>
 // The parts of the two local server settings, settable on their own. Dotted
 // rather than a nested `config set ollama '{...}'`, because nobody should have
 // to type JSON to change a model name.
@@ -696,6 +736,11 @@ function coerceConfigValue(key: keyof PolyglotsConfig, raw: string): PolyglotsCo
       if (value === 'off' || value === 'false') return false
       throw new UsageError(`${key} must be on or off, got "${raw}"`)
     }
+    case 'problemReports': {
+      const value = raw.trim().toLowerCase()
+      if (value === 'ask' || value === 'never') return value
+      throw new UsageError(`${key} must be ask or never, got "${raw}"`)
+    }
     case 'ollama':
       throw new UsageError(
         'ollama has a model, a baseUrl and a contextLength; set them with: polyglots config set ollama.model <name> (or ollama.baseUrl <url>, ollama.contextLength <tokens>)',
@@ -731,6 +776,7 @@ function formatConfigValue(key: keyof PolyglotsConfig, value: PolyglotsConfig[ke
   if (key === 'usageStats') return value === true ? 'on' : value === false ? 'off' : '(not asked; off)'
   if (key === 'updateCheck') return value === false ? 'off' : 'on'
   if (key === 'debug') return value === true ? 'on' : 'off'
+  if (key === 'problemReports') return value === 'never' ? 'never' : 'ask'
   return String(value)
 }
 
@@ -916,6 +962,8 @@ const ENVIRONMENT_HELP = [
 // Names what is kept, because that is the reason to think twice: the prompts
 // hold the catalogue, and the folder is the one a problem report sends.
 const DEBUG_HELP = "Save each batch's prompt and the agent's output beside the run log (also POLYGLOTS_DEBUG=1, or: config set debug on)"
+
+const SEND_REPORT_HELP = 'If the run has a problem, send a problem report to the maintainer without asking'
 
 const LIVE_WARNING = 'Sends one prompt to each usable agent; this spends a request on metered plans.'
 
@@ -1119,6 +1167,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .option('--model <model>', 'Model for the review pass (the agent\'s, or the local reviewer\'s)')
     .option('--yes', 'Skip the --all confirmation prompt (required with --all when stdin is not a terminal)')
     .option('--debug', DEBUG_HELP)
+    .option('--send-report', SEND_REPORT_HELP)
     .addHelpText('after', ENVIRONMENT_HELP)
     .action(async (files: string[], flags: TranslateFlags) => {
       setExitCode(await runTranslate(cli, files, flags))
@@ -1329,11 +1378,22 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .option('--fresh', 'Ignore cached verdicts or drafts and ask again')
     .option('--no-ai', 'Review only: run the deterministic checks, skipping AI adjudication')
     .option('--draft-engine <engine>', `Translate only: deepl, openai, local or none (default: ${shown.defaultDraftEngine})`)
+    .option('--send-report', SEND_REPORT_HELP)
     .addHelpText(
       'after',
       "\nNames are slugs, wp-plugins/<slug>[/<sub-project>] or wp-themes/<slug>, or translate.wordpress.org\nURLs, as arguments or one per line on stdin. A bare slug is tried as a theme first, then as a plugin. A plugin also brings its readme\nwhen it has strings to get; a URL that names one sub-project fetches only that one.",
     )
-    .action(async (names: string[], flags: FetchFlags) => {
+    .action(async (names: string[], flags: FetchFlags & { sendReport?: boolean }) => {
+      const config = cli.config()
+      // Set before the run and read only if one started, by which point
+      // runFetch has accepted these flags; a bad one never reaches the offer.
+      // A rules-only review names no model: no model took part.
+      const context: Omit<ReportContext, 'interactive'> = {
+        provider: flags.ai === false ? 'rules' : config.reviewProvider,
+        ...(flags.ai === false ? {} : reportModel(config, undefined)),
+        sendWithoutAsking: flags.sendReport === true,
+      }
+      cli.report.context = context
       setExitCode(
         await runFetch(
           {
@@ -1345,8 +1405,15 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
             translate: cli.translate,
             stopRunsOnSignal: cli.stopRunsOnSignal,
             checkProvider: cli.checkProvider,
+            onRunStarted: cli.noteRun,
             env: cli.env,
             checkLocalModel: cli.checkLocalModel,
+            // The batch size and parallel are runFetch's to resolve, since
+            // only it knows the local reviewer's own default; it hands them
+            // back once they are parsed, before any run can start.
+            onReportFacts: (facts) => {
+              cli.report.context = { ...context, ...facts }
+            },
             out: cli.out,
             err: cli.err,
             ui: cli.ui,
@@ -1369,6 +1436,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .option('--template <name>', `Reply template to fill after the review (default: ${DEFAULT_TEMPLATE})`)
     .option('--parallel <n>', 'With several files: files to review at once, 1 to 8 (default: 1)')
     .option('--debug', DEBUG_HELP)
+    .option('--send-report', SEND_REPORT_HELP)
     .addHelpText('after', ENVIRONMENT_HELP)
     .action(async (patterns: string[], flags: ReviewFlags) => {
       // expandFileArgs drops a file named twice, so two jobs never write one
@@ -1456,6 +1524,12 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
         if (state === 'stopping') report({ type: 'stopping', at: Date.now() })
       })
       const unwatchSignals = cli.stopRunsOnSignal()
+      cli.report.context = {
+        provider: rulesOnly ? 'rules' : config.reviewProvider,
+        ...(rulesOnly ? {} : reportModel(config, undefined)),
+        batchSize,
+        sendWithoutAsking: flags.sendReport === true,
+      }
       const summary = await cli.reviewFile({
         control,
         file: target!,
@@ -1468,6 +1542,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
         debug: debugEnabled({ ...(flags.debug === undefined ? {} : { flag: flags.debug }), config, env: cli.env }),
         onWarn: (line) => cli.err(warnLine(cli.ui.err, line)),
         ...(preflight === undefined ? {} : { preflight }),
+        onRunStarted: cli.noteRun,
         onProgress: report,
       }).finally(() => {
         unwatchSignals()
@@ -1811,6 +1886,34 @@ function sayUpdate(cli: Cli, check: UpdateCheck | undefined): void {
   cli.err(cli.ui.err.paint('warn', `${cli.ui.err.glyphs.warn} ${updateNotice(check.latest)}`))
 }
 
+/**
+ * The problem report offer, once the command has said everything else it had
+ * to say. Here rather than in each command so every way a command ends, a
+ * return, a stopped run or a throw, reaches it, and once per command, so a
+ * batch of files is one offer. It never changes the exit code: whatever
+ * happens here happens after the run, whose outcome the code already states.
+ */
+async function offerReport(cli: Cli): Promise<void> {
+  const { runIds, context } = cli.report
+  if (runIds.length === 0 || context === undefined) return
+  try {
+    await offerProblemReport(
+      {
+        config: cli.config,
+        sendReport: cli.sendReport,
+        providerVersion: cli.providerVersion,
+        ask: (question) => ask(cli.streams, question, false),
+        ui: cli.ui,
+        err: cli.err,
+      },
+      runIds,
+      { ...context, interactive: cli.streams.stdin.isTTY === true && cli.streams.stderr.isTTY === true },
+    )
+  } catch (error) {
+    cli.err(warnLine(cli.ui.err, `No problem report was offered: ${errorMessage(error)}`))
+  }
+}
+
 export async function main(argv: string[], deps: CliDeps = {}): Promise<number> {
   const cli = createCli(deps)
   let exitCode = EXIT_OK
@@ -1834,11 +1937,15 @@ export async function main(argv: string[], deps: CliDeps = {}): Promise<number> 
       return EXIT_OK
     }
     await buildProgram(cli, (code) => (exitCode = code)).parseAsync(argv, { from: 'user' })
+    await offerReport(cli)
     sayUpdate(cli, update)
     sayGlossary(cli, glossary)
     return exitCode
   } catch (error) {
     const code = exitCodeFor(cli, error)
+    // After the error line, so the run that threw is offered the way one
+    // that gave a batch up is, below what went wrong.
+    await offerReport(cli)
     sayUpdate(cli, update)
     sayGlossary(cli, glossary)
     return code

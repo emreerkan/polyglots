@@ -91,6 +91,10 @@ export interface ReviewOptions extends Partial<Omit<AgentRunOptions, 'provider'>
   preflight?: Promise<ProviderCheck | undefined>
   // Runs agy for the quota read after a failed batch; tests pass a fake.
   providerExec?: ProbeExec
+  // Told the run's id the moment its row exists, so a caller can ask after
+  // the run whether it had a problem worth a report. A run that throws has no
+  // summary to carry the id, and that is one of the runs a report is for.
+  onRunStarted?: (runId: number) => void
 }
 
 // The name says whether a model was in the loop, because that decides whether
@@ -362,6 +366,10 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
   // this call opened, nor leave history claiming the run is still going.
   let runId: number | undefined
   let summary: ReviewSummary
+  // Who stopped a run that ended with work pending, for run-end: a problem
+  // report is offered for a breaker stop and never for one the person asked
+  // for, and the run row says only stopped for both.
+  let stoppedBy: 'operator' | 'breaker' | undefined
   // Here rather than beside the gate that creates it, so the catch below can
   // settle a quota read a failed batch started: a run that throws after one
   // would otherwise write run-end with the read still out, and its quota line
@@ -413,6 +421,7 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
       engine: noAi ? 'rules' : engine,
     })
     const id = runId
+    opts.onRunStarted?.(id)
 
     pruneLogs()
     const warn = opts.onWarn ?? ((line: string) => process.stderr.write(line + '\n'))
@@ -551,6 +560,7 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
         ...(opts.control ? { control: opts.control } : {}),
         onStopped: (info) => {
           pending = info.pending
+          stoppedBy = info.reason
           // Rewind past a failed streak, so the marker written into the file does
           // not claim batches whose verdicts were dropped. Nothing reads `done`
           // back: this is about what a person opening the file is told, not about
@@ -723,7 +733,7 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
     runLog?.write(
       'run-end',
       summary.pending > 0
-        ? { ended: 'stopped' }
+        ? { ended: 'stopped', ...(stoppedBy === 'breaker' ? { reason: 'breaker' } : {}) }
         : { ended: 'done', reviewed: summary.reviewed, problems: summary.problems, unreviewed: summary.unreviewed },
     )
   }

@@ -25,6 +25,9 @@ export interface BatchCli {
   stopRunsOnSignal: () => () => void
   // The antigravity check; see startProviderCheck.
   checkProvider: () => Promise<ProviderCheck>
+  // Told each file's run id as it starts, for the problem report offered
+  // after the batch (src/cli/problem-report.ts).
+  onRunStarted?: (runId: number) => void
   // Read for POLYGLOTS_DEBUG; process.env when not given.
   env?: NodeJS.ProcessEnv
   ui: { out: Painter; err: Painter }
@@ -82,7 +85,7 @@ export async function runBatchJobs(
   items: BatchItem[],
   // debug here is the --debug flag alone; config and POLYGLOTS_DEBUG are
   // added below, so fetch, which has no flag, still honours both.
-  opts: Omit<FileBatchOptions, 'control' | 'onEvent' | 'onProgress' | 'onWarn' | 'wporgUsername' | 'bin'> & {
+  opts: Omit<FileBatchOptions, 'control' | 'onEvent' | 'onProgress' | 'onWarn' | 'wporgUsername' | 'bin' | 'onRunStarted'> & {
     // Files that were already there and kept, which fetch notes as they start.
     kept?: ReadonlySet<string>
     noun: string
@@ -120,6 +123,7 @@ export async function runBatchJobs(
         wporgUsername: cli.config().wporgUsername,
         debug: debugEnabled({ ...(flag === undefined ? {} : { flag }), config: cli.config(), env: cli.env ?? process.env }),
         onWarn: (line) => cli.err(line),
+        ...(cli.onRunStarted === undefined ? {} : { onRunStarted: cli.onRunStarted }),
         onEvent: (e) => {
           if (e.type === 'start') {
             const note = kept?.has(e.item.file) ? ' (existing file kept)' : ''

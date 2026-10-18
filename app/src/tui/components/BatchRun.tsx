@@ -18,7 +18,9 @@ import { useKeys } from '../hooks/useKeys.js'
 import { useTask } from '../hooks/useTask.js'
 import { TextInput } from '../input.js'
 import { initialBatchSize, screenBatchAdvice } from '../local.js'
+import { reportModel } from '../../report/offer.js'
 import { DONE_HINT, Hint } from './Hint.js'
+import { useProblemReport } from './ProblemReport.js'
 
 const ENGINES: DraftEngineChoice[] = ['deepl', 'openai', 'local']
 
@@ -164,6 +166,20 @@ export function BatchRun(props: BatchRunProps) {
   useEffect(() => {
     onStage?.(shown === 'done' ? 'summary' : shown)
   }, [onStage, shown])
+  // One offer for the whole batch, over every file's run, once all have ended.
+  const report = useProblemReport({
+    ended: shown === 'done',
+    batch: true,
+    facts: () => ({
+      provider: review && noAi ? 'rules' : config.reviewProvider,
+      // No model took part in a No-AI review, so the report names none.
+      ...(review && noAi ? {} : reportModel(config, undefined)),
+      batchSize,
+      parallel,
+    }),
+  })
+  // The summary's own keys, off while the contact line takes every key.
+  const done = shown === 'done' && !report.typing
 
   const field = fields[focus]!
   const typing = shown === 'options' && (field === 'locale' || field === 'requester')
@@ -234,6 +250,7 @@ export function BatchRun(props: BatchRunProps) {
     setStage('running')
     setPhase('preparing')
     setNotices([])
+    report.reset()
     const run = createRunControl()
     control.current = run
     run.subscribe(setPaused)
@@ -267,6 +284,7 @@ export function BatchRun(props: BatchRunProps) {
           wporgUsername: config.wporgUsername,
           debug: debugEnabled({ config, env: process.env }),
           onWarn: (line) => setNotices((prev) => [...prev, line].slice(-3)),
+          onRunStarted: report.noteRun,
           // One check for the whole batch, the app's own when it is fresh.
           ...(() => {
             const reaches = review ? !noAi : engine !== 'none'
@@ -295,18 +313,18 @@ export function BatchRun(props: BatchRunProps) {
       stop: shown === 'running' ? () => control.current?.stop() : undefined,
     },
     back: {
-      esc: options ? props.onLeave : shown === 'done' ? props.onBack : undefined,
-      q: options && !typing ? props.onLeave : shown === 'done' ? props.onBack : undefined,
+      esc: options ? props.onLeave : shown === 'done' && !report.holdsEsc ? props.onBack : undefined,
+      q: options && !typing ? props.onLeave : done ? props.onBack : undefined,
     },
-    finished: { close: shown === 'done' ? props.onBack : undefined },
+    finished: { close: done ? props.onBack : undefined },
     batchResult: {
       move:
-        shown === 'done' && responses.length > 1
+        done && responses.length > 1
           ? (_input, key) => pick(key.upArrow ? Math.max(0, selected - 1) : Math.min(responses.length - 1, selected + 1))
           : undefined,
-      copy: shown === 'done' && currentText !== undefined ? () => setCopied(copyToClipboard(currentText) ? 'yes' : 'no') : undefined,
+      copy: done && currentText !== undefined ? () => setCopied(copyToClipboard(currentText) ? 'yes' : 'no') : undefined,
       template:
-        shown === 'done' && current !== undefined && current.templates.length > 1
+        done && current !== undefined && current.templates.length > 1
           ? () => {
               setTemplateOf((prev) => new Map(prev).set(current.input, (prev.get(current.input) ?? 0) + 1))
               setCopied(undefined)
@@ -473,6 +491,7 @@ export function BatchRun(props: BatchRunProps) {
           )}
         </>
       )}
+      {report.element}
       <Hint>{DONE_HINT}</Hint>
     </Box>
   )

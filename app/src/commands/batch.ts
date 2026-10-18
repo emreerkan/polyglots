@@ -182,6 +182,8 @@ export interface FileBatchOptions {
   preflight?: Promise<ProviderCheck | undefined>
   onProgress?: (file: string) => (e: ReviewEvent | TranslateEvent) => void
   onEvent?: (e: BatchItemEvent) => void
+  // Told each file's run id as its run starts; see ReviewOptions.onRunStarted.
+  onRunStarted?: (runId: number) => void
 }
 
 /**
@@ -222,6 +224,7 @@ export async function runFileBatch(items: BatchItem[], jobs: FileBatchJobs, opts
                 ...(opts.debug ? { debug: true } : {}),
                 ...(opts.onWarn === undefined ? {} : { onWarn: opts.onWarn }),
                 ...(opts.preflight === undefined ? {} : { preflight: opts.preflight }),
+                ...(opts.onRunStarted === undefined ? {} : { onRunStarted: opts.onRunStarted }),
                 ...(onProgress === undefined ? {} : { onProgress }),
               })
             : jobs.translateFile({
@@ -239,6 +242,7 @@ export async function runFileBatch(items: BatchItem[], jobs: FileBatchJobs, opts
                 ...(opts.debug ? { debug: true } : {}),
                 ...(opts.onWarn === undefined ? {} : { onWarn: opts.onWarn }),
                 ...(opts.preflight === undefined ? {} : { preflight: opts.preflight }),
+                ...(opts.onRunStarted === undefined ? {} : { onRunStarted: opts.onRunStarted }),
                 ...(onProgress === undefined ? {} : { onProgress }),
               })
         },

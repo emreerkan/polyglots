@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { chmodSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { translateFile, type TranslateEvent, type TranslateOptions } from '../../../src/commands/translate.js'
+import { createRunControl } from '../../../src/run-control.js'
 import { fakeEngine, fakeReview, makeWorkspace, type Workspace } from './helpers.js'
 
 let ws: Workspace
@@ -78,6 +79,29 @@ describe('translateFile: the run log', () => {
     await expect(translateFile(base({ onProgress }))).rejects.toThrow('caller')
     const last = JSON.parse(runLogText().trim().split('\n').at(-1)!)
     expect(last).toMatchObject({ kind: 'run-end', ended: 'failed', error: 'caller' })
+  })
+
+  it('records a run the failure breaker stopped as reason: breaker', async () => {
+    const engine = fakeEngine()
+    engine.failWith = () => new Error('deepl exploded')
+    const summary = await translateFile(base({ engine, batchSize: 1 }))
+    expect(summary.stopped).toMatch(/batches failed in a row/)
+    const last = JSON.parse(runLogText().trim().split('\n').at(-1)!)
+    expect(last).toMatchObject({ kind: 'run-end', ended: 'stopped', reason: 'breaker' })
+  })
+
+  it('records a run the person stopped without a reason', async () => {
+    const control = createRunControl()
+    const review = fakeReview()
+    review.failWith = () => {
+      control.stop()
+      return undefined
+    }
+    const summary = await translateFile(base({ review, batchSize: 1, control }))
+    expect(summary.stopped).toMatch(/^stopped before batch/)
+    const last = JSON.parse(runLogText().trim().split('\n').at(-1)!)
+    expect(last).toMatchObject({ kind: 'run-end', ended: 'stopped' })
+    expect(last.reason).toBeUndefined()
   })
 
   it('finishes with the same summary when the log folder cannot be written', async () => {

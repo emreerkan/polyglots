@@ -68,6 +68,15 @@ const reviewSummary = (file: string, locale: string): ReviewSummary => ({
 // play exactly as it does now.
 const noProviderCheck = async (): Promise<ProviderCheck> => ({ signIn: { state: 'unknown', ms: 0 }, at: 0 })
 
+// The problem report send, answered as sent: the demo runs never start a run
+// row, so no offer is made, but a panel that one day shows a failed batch
+// must still never post to the reports endpoint during a build.
+const noReportSend = async () => ({ ok: true as const, id: 'demo' })
+
+// The provider version a report names, answered as unknown for the same
+// reason: no build ever runs an agent binary to ask it.
+const noProviderVersion = async () => undefined
+
 const FLAGGED_PER_BATCH = [3, 1, 4, 0, 2, 5, 1, 3, 2, 1]
 
 function playReview(clock: Clock, emit: (e: ReviewEvent) => void, file: string, locale: string): ReviewSummary {
@@ -98,6 +107,8 @@ export const review: Scenario = {
   config: { defaultLocale: 'de', wporgUsername: 'your-wporg-name' },
   deps: (clock) => ({
     checkProvider: noProviderCheck,
+    sendReport: noReportSend,
+    providerVersion: noProviderVersion,
     reviewFile: async (opts) => playReview(clock, (e) => opts.onProgress?.(e), opts.file, opts.locale),
   }),
 }
@@ -109,6 +120,8 @@ export const translate: Scenario = {
   config: { defaultLocale: 'pt-br' },
   deps: (clock) => ({
     checkProvider: noProviderCheck,
+    sendReport: noReportSend,
+    providerVersion: noProviderVersion,
     translate: async (opts) => {
       const emit = (e: TranslateEvent) => opts.onProgress?.(e)
       const sizes = [25, 25, 12]
@@ -141,6 +154,8 @@ export const fetch: Scenario = {
   argv: ['fetch', '--get', 'waiting', '--out-dir', '~/Downloads/polyglots', 'lunar-forms', 'harbor', 'quiet-gallery'],
   config: { defaultLocale: FETCH_LOCALE, wporgUsername: 'your-wporg-name' },
   deps: (clock) => ({
+    sendReport: noReportSend,
+    providerVersion: noProviderVersion,
     resolveProjects: async (refs) => {
       clock.advance(4_500, 900)
       return refs.map((ref): Resolution => {

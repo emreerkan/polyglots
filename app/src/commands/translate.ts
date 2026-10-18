@@ -168,6 +168,8 @@ export interface TranslateOptions {
   preflight?: Promise<ProviderCheck | undefined>
   // Runs agy for the quota read after a failed batch; tests pass a fake.
   providerExec?: ProbeExec
+  // Told the run's id once its row exists. See ReviewOptions.onRunStarted.
+  onRunStarted?: (runId: number) => void
 }
 
 type Emit = (e: TranslateEvent) => void
@@ -524,6 +526,10 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
   // could not even produce a draft) must not leak the handle this call
   // opened, nor leave history claiming the run is still going.
   let runId: number | undefined
+  // A flag rather than a match on summary.stopped's wording, which is for the
+  // person to read and free to change: run-end records the breaker so a
+  // problem report is offered for it and not for a stop the person asked for.
+  let stoppedByBreaker = false
   // Here rather than beside the gate that creates it, so the catch below can
   // settle a quota read a failed batch started: a run that throws after one
   // would otherwise write run-end with the read still out, and its quota line
@@ -605,6 +611,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
       engine: engineName,
     })
     const id = runId
+    opts.onRunStarted?.(id)
     pruneLogs()
     const warn = opts.onWarn ?? ((line: string) => process.stderr.write(line + '\n'))
     runLog = openRunLog({
@@ -834,6 +841,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
             emit({ type: 'batch-skipped', index, size: batch.length, reason: errorMessage(lastError), at: Date.now() })
             if (++consecutiveSkips >= MAX_CONSECUTIVE_SKIPS) {
               summary.stopped = `${consecutiveSkips} batches failed in a row: ${errorMessage(lastError)}`
+              stoppedByBreaker = true
               break batchLoop
             }
             continue
@@ -923,7 +931,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
     runLog?.write(
       'run-end',
       summary.stopped !== undefined
-        ? { ended: 'stopped' }
+        ? { ended: 'stopped', ...(stoppedByBreaker ? { reason: 'breaker' } : {}) }
         : { ended: 'done', translated: summary.translated, fuzzy: summary.fuzzy, skipped: summary.skipped },
     )
   }
