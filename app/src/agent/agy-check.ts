@@ -325,19 +325,20 @@ export async function checkCodex(
 
 /**
  * The check for a provider, with what a run of it would use. codex is asked
- * about the model and effort polyglots resolved from its own config and
- * codex's, without a --model flag: the callers that start a check beside a
- * run do not know the flag, and judge reads the model verdict only when the
- * model it asked about is the run's.
+ * about the model and effort the run resolves: its --model when it has one,
+ * then polyglots config, then codex's own. A check that skipped the flag
+ * spent its request on a model the run never asks for, and a flag model the
+ * plan lacks went on to fail every batch. judge still reads the model verdict
+ * only when the model it asked about is the run's, as a guard.
  */
 export function checkFor(
   provider: CheckedProvider,
   exec: ProbeExec,
-  opts: { config?: PolyglotsConfig; env?: NodeJS.ProcessEnv; home?: string } = {},
+  opts: { config?: PolyglotsConfig; model?: string; env?: NodeJS.ProcessEnv; home?: string } = {},
 ): Promise<ProviderCheck> {
   if (provider === 'antigravity') return checkAgy(exec)
   const env = opts.env ?? process.env
-  const resolved = agentModel('codex', opts.config ?? loadConfig(), undefined, env, ...(opts.home === undefined ? [] : [opts.home]))
+  const resolved = agentModel('codex', opts.config ?? loadConfig(), opts.model, env, ...(opts.home === undefined ? [] : [opts.home]))
   return checkCodex(exec, {
     bin: resolveAgentBin('codex', env).bin,
     ...(resolved.model === undefined ? {} : { model: resolved.model }),
@@ -348,13 +349,17 @@ export function checkFor(
 
 /**
  * The check for whatever the config reviews with: what the command line and
- * the app ask by default. Rejects for a provider with no check, which the
+ * the app ask by default. `model` is the run's --model, when it has one. Rejects for a provider with no check, which the
  * callers never ask, and which a caller that did reads as no answer.
  */
-export function checkConfigured(exec: ProbeExec, config: PolyglotsConfig = loadConfig()): Promise<ProviderCheck> {
+export function checkConfigured(
+  exec: ProbeExec,
+  config: PolyglotsConfig = loadConfig(),
+  opts: { model?: string } = {},
+): Promise<ProviderCheck> {
   const provider = config.reviewProvider
   if (!hasProviderCheck(provider)) return Promise.reject(new Error(`${provider} has no provider check`))
-  return checkFor(provider, exec, { config })
+  return checkFor(provider, exec, { config, ...(opts.model === undefined ? {} : { model: opts.model }) })
 }
 
 /**

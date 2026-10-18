@@ -26,7 +26,7 @@ export interface BatchCli {
   // Records the batch's runs as stopped if a signal ends it; see stopOnSignal.
   stopRunsOnSignal: () => () => void
   // The provider check, antigravity's or codex's; see startProviderCheck.
-  checkProvider: () => Promise<ProviderCheck>
+  checkProvider: (opts?: { model?: string }) => Promise<ProviderCheck>
   // Told each file's run id as it starts, for the problem report offered
   // after the batch (src/cli/problem-report.ts).
   onRunStarted?: (runId: number) => void
@@ -55,16 +55,20 @@ export function parseParallel(raw: string | undefined): number {
  * the file read, review's rules pass, translate's memory lookups and its
  * first batch's drafts, and for fetch the project lookups and downloads as
  * well. A run the cache answers in full never awaits it at all. Undefined for
- * a provider with no check (hasProviderCheck), which is never asked. Never rejects: a check that
- * throws is a check with no answer, and no answer never blocks a run.
+ * a provider with no check (hasProviderCheck), which is never asked. Never
+ * rejects: a check that throws is a check with no answer, and no answer never
+ * blocks a run.
  */
 export function startProviderCheck(
   cli: Pick<BatchCli, 'config' | 'checkProvider'>,
   reachesAgent: boolean,
+  // The run's --model. Passed only when given, so a check of a run without
+  // one is asked exactly as before.
+  model?: string,
 ): Promise<ProviderCheck | undefined> | undefined {
   if (!reachesAgent || !hasProviderCheck(cli.config().reviewProvider)) return undefined
   try {
-    return cli.checkProvider().catch(() => undefined)
+    return (model === undefined ? cli.checkProvider() : cli.checkProvider({ model })).catch(() => undefined)
   } catch {
     return undefined
   }

@@ -149,8 +149,9 @@ export interface CliDeps {
   openBrowser?: (url: string) => Promise<boolean>
   // Asks the configured provider whether it can take a batch: antigravity's
   // sign-in and quota, codex's sign-in and model (src/agent/agy-check.ts).
-  // Injected so no test, and no website demo, runs agy or codex.
-  checkProvider?: () => Promise<ProviderCheck>
+  // Injected so no test, and no website demo, runs agy or codex. Given the
+  // run's --model when it has one, since that is the model codex will use.
+  checkProvider?: (opts?: { model?: string }) => Promise<ProviderCheck>
   // Posts an encoded problem report (src/report/send.ts). Injected so no
   // test, and no website demo, reaches the reports endpoint.
   sendReport?: (body: Buffer) => Promise<SendResult>
@@ -180,7 +181,7 @@ interface Cli {
   makePot: typeof makePot
   dataClient: DataClient
   openBrowser: (url: string) => Promise<boolean>
-  checkProvider: () => Promise<ProviderCheck>
+  checkProvider: (opts?: { model?: string }) => Promise<ProviderCheck>
   sendReport: (body: Buffer) => Promise<SendResult>
   providerVersion: (provider: string) => Promise<string | undefined>
   // The runs this command started, and what a problem report about them
@@ -242,7 +243,7 @@ function createCli(deps: CliDeps): Cli {
     // The config read when the check starts, not when the CLI was made: the
     // same cached config the run reads, so the two cannot name different
     // providers.
-    checkProvider: deps.checkProvider ?? (() => checkConfigured(defaultExec, (cached ??= loadConfig()))),
+    checkProvider: deps.checkProvider ?? ((opts) => checkConfigured(defaultExec, (cached ??= loadConfig()), opts)),
     sendReport: deps.sendReport ?? ((body) => sendReport(fetch, body, env)),
     providerVersion: deps.providerVersion ?? ((provider) => providerVersion(provider, { env })),
     report,
@@ -374,7 +375,8 @@ async function runTranslate(cli: Cli, patterns: string[], flags: TranslateFlags)
   // Not with no engine, which drafts and so reviews nothing. A refusal
   // further down (a missing key, a declined --all) leaves the check to finish
   // on its own, a few seconds of a process nobody waits on.
-  const preflight = startProviderCheck(cli, draftEngine !== 'none')
+  // With the run's --model, the model its review pass will use.
+  const preflight = startProviderCheck(cli, draftEngine !== 'none', flags.model)
   // With no engine nothing is drafted, so nothing is reviewed either: the
   // local reviewer is neither checked nor warned about for a run that will
   // never ask it anything.

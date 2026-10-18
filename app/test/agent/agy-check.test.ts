@@ -3,6 +3,7 @@ import { agyQuota, agySignIn, checkAgy, judge, parseUsage, quotaFor, quotaRechec
 import type { ProbeExec, ProbeResult } from '../../src/agent/discover.js'
 import { checkCodex, checkFor, gateRun, hasProviderCheck, CODEX_PREFLIGHT_WAIT_MS, PREFLIGHT_WAIT_MS, ProviderRefusal, type ProviderCheck } from '../../src/agent/agy-check.js'
 import { CODEX_DISABLED_FEATURES } from '../../src/agent/codex.js'
+import { DEFAULT_CONFIG } from '../../src/config.js'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -324,6 +325,17 @@ describe('hasProviderCheck and checkFor', () => {
     const exec = fakeCodex({ login: LOGGED_IN, exec: ANSWERED })
     const check = await checkFor('codex', exec, { env: { CODEX_HOME: codexHome } })
     expect(check).toMatchObject({ provider: 'codex', asked: { model: 'toml-model', effort: 'high' }, model: { state: 'ok' } })
+  })
+
+  // A run's --model is the model it will use, so it is the one checked, over
+  // whatever the config names.
+  it('checks the run\'s --model for codex over the configured one', async () => {
+    const exec = fakeCodex({ login: LOGGED_IN, exec: ANSWERED })
+    const config = { ...DEFAULT_CONFIG, reviewProvider: 'codex' as const, codex: { model: 'model-a' } }
+    const check = await checkFor('codex', exec, { config, model: 'model-b', env: { CODEX_HOME: mkdtempSync(join(tmpdir(), 'polyglots-checkfor-flag-')) } })
+    const step = exec.calls[1]!.args
+    expect(step[step.indexOf('-m') + 1]).toBe('model-b')
+    expect(check.asked?.model).toBe('model-b')
   })
 })
 

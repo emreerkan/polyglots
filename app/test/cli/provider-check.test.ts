@@ -8,7 +8,8 @@ import { main, type CliDeps } from '../../src/cli.js'
 import { reviewFile, type ReviewOptions } from '../../src/commands/review.js'
 import { translateFile } from '../../src/commands/translate.js'
 import { openDb, replaceGlossary } from '../../src/storage/index.js'
-import type { ProviderCheck } from '../../src/agent/agy-check.js'
+import { checkConfigured, type ProviderCheck } from '../../src/agent/agy-check.js'
+import type { ProbeExec } from '../../src/agent/providers.js'
 import type { Fetched, Ready, Resolution } from '../../src/commands/fetch.js'
 import { fakeEngine, fakeReview } from '../commands/translate/helpers.js'
 import { useLocaleFixture } from '../locale-fixture.js'
@@ -351,6 +352,37 @@ describe('the codex check on the command line', () => {
     const out = r.stdout.replace(/\s+/g, ' ')
     expect(out).toContain(`koji stopped ${CODEX_STOP}`)
     expect(out).toContain('sydney stopped not started')
+  })
+})
+
+// translate's --model is the model its review pass will use, so it is the
+// model codex's check asks about, not the one config names.
+describe('the codex check and --model', () => {
+  it('checks the --model a translate will use, and stops on it before batch 1', async () => {
+    await config({ defaultLocale: 'tr', reviewProvider: 'codex', codex: { model: 'model-a' } })
+    const calls: string[][] = []
+    const exec: ProbeExec = async (_cmd, args) => {
+      calls.push(args)
+      if (args[0] === 'login') return { code: 0, stdout: 'Logged in using ChatGPT\n', stderr: '', timedOut: false }
+      const failed = JSON.stringify({ type: 'turn.failed', error: { message: "The 'model-b' model is not supported when using Codex with a ChatGPT account." } })
+      return { code: 1, stdout: `${failed}\n`, stderr: '', timedOut: false }
+    }
+    const checkProvider = vi.fn((opts?: { model?: string }) => checkConfigured(exec, undefined, opts))
+    const review = fakeReview()
+    const pending = join(home, 'pending.po')
+    await copyFile(samplePo, pending)
+    const r = await run(['translate', pending, '--draft-engine', 'deepl', '--model', 'model-b'], {
+      checkProvider,
+      translate: (opts) => translateFile({ ...opts, engine: fakeEngine(), review, mcpConfigPath: join(home, 'mcp.json') }),
+    })
+    expect(checkProvider).toHaveBeenCalledWith({ model: 'model-b' })
+    const step = calls.find((a) => a[0] === 'exec')!
+    expect(step[step.indexOf('-m') + 1]).toBe('model-b')
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain(
+      "codex cannot use the model model-b: The 'model-b' model is not supported when using Codex with a ChatGPT account. Choose one your plan has: polyglots config set codex.model <name>",
+    )
+    expect(review.calls).toHaveLength(0)
   })
 })
 
