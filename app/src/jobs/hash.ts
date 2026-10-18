@@ -167,9 +167,11 @@ export function configHash(input: ConfigHashInput): string {
   return hash(fingerprint.glossary, fingerprint.rules)
 }
 
-// Translate's equivalent, and deliberately narrower: it runs no rules, and its
-// prompt does not inline glossary terms, so the only thing that can invalidate
-// a draft review is the prompt itself. Kept as its own function rather than a
+// Translate's equivalent, and deliberately narrower: it runs no rules, and the
+// glossary terms its prompt inlines are per entry, so they key each entry's
+// draft review (see reviewDrafts in commands/translate.ts) rather than this.
+// The only thing left to invalidate every draft review at once is the prompt
+// template itself, the agents' tool rules included. Kept as its own function rather than a
 // flag on configHash, because the two produce different values and the tables
 // they key are pruned separately.
 export function translateConfigHash(locale: Locale): string {

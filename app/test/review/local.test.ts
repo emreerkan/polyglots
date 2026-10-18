@@ -78,9 +78,11 @@ describe('the draft review prompt without tools', () => {
     expect(prompt).toContain('"glossary":{"sidebar":["kenar çubuğu"]}')
   })
 
-  it('leaves the agents\' prompt exactly as it was, glossary field and all', () => {
-    const { glossary: _unused, ...plain } = input
-    expect(buildReviewPrompt([input], 'tr', 2)).toBe(buildReviewPrompt([plain], 'tr', 2))
+  it('renders the entry exactly as the agents\' prompt does, glossary field and all', () => {
+    const entryLine = (prompt: string) => prompt.split('\n').find((l) => l.startsWith('1. {'))
+    expect(entryLine(buildReviewPrompt([input], 'tr', 2, undefined, { tools: false }))).toBe(
+      entryLine(buildReviewPrompt([input], 'tr', 2)),
+    )
   })
 })
 

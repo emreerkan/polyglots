@@ -3,9 +3,9 @@ Target locale: sv
 nplurals: 2
 
 Rules:
-- Follow the official WordPress Swedish (sv) glossary. Call the glossary_lookup tool for any term that might be in it (WordPress UI vocabulary, post/page/plugin/theme/block/widget terminology, etc.) before deciding on wording.
-- Call consistency_lookup only when the glossary has no answer for the wording in question. It reports how WordPress core already translates that exact string, which is authoritative; do not call it just to confirm a term the glossary already settled.
-- Call tm_lookup to find near-matches in the translation memory and stay consistent with them.
+- The official WordPress Swedish (sv) glossary is binding. Every glossary term an entry's source contains is listed on that entry under "glossary", with its approved translation, so do not look those up. Call glossary_lookup only for a term you need that is not listed there.
+- Call tm_lookup only when you are unsure of a wording and want to see how the locale worded similar strings; not for every entry.
+- Call consistency_lookup only when neither the entry's glossary nor the translation memory settles the wording of a UI string WordPress core is likely to have. It reports how WordPress core already translates that exact string, which is authoritative; never call it to confirm a term the glossary already settled.
 - Preserve placeholders exactly as in the source: %s, %d, %1$s, %2$d, {x}, {{x}}, and similar. Do not add, drop, reorder or reformat them.
 - Preserve HTML tags and their attributes exactly.
 - Preserve leading/trailing whitespace and newlines exactly as in the source.

@@ -49,14 +49,19 @@ const hashTr = () => configHash({ locale: 'tr', glossary: [], properNouns: [] })
 // they are now universal-only locales like German, and a team keeps its
 // Turkish or Swedish rules by having the rules file, whose fingerprint is in
 // the hash anyway.
+//
+// The three translate hashes moved once more, on purpose, when the draft
+// review stopped sending agents to glossary_lookup for every term and handed
+// them each entry's glossary terms instead: every agent draft review is asked
+// again once.
 const BEFORE = {
   trEmpty: '2469b167cd1da5ec',
   trGloss: '804c433f876e3ffc',
   de: '10f66eb75c48e8a4',
-  deTranslate: 'f5efbff9e931f553',
-  trTranslate: '3a0e3f62659696ca',
+  deTranslate: 'd8f22a79e6376085',
+  trTranslate: '0024447086e462a4',
   sv: 'ecc27fd9393c755c',
-  svTranslate: 'c7007a99ba3dadc2',
+  svTranslate: '769201ccf76bc57b',
 }
 
 describe('without a rules file', () => {

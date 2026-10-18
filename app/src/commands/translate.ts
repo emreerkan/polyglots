@@ -409,12 +409,14 @@ function buildCaches(
 }
 
 // What a reviewer without tools is told beyond the agents' prompt: which
-// prompt variant it was asked, and each entry's glossary terms. Absent for an
-// agent, whose keys stay exactly as they were.
+// prompt variant it was asked. Absent for an agent, whose prompt template is
+// the configuration hash itself.
 interface LocalAsk {
   variant: string
-  terms: (unit: TranslationUnit) => Array<{ term: string; translations: string[] }>
 }
+
+// Each entry's glossary terms, which every reviewer is handed on the entry.
+type EntryTerms = (unit: TranslationUnit) => Array<{ term: string; translations: string[] }>
 
 async function reviewDrafts(
   units: TranslationUnit[],
@@ -436,6 +438,7 @@ async function reviewDrafts(
   cache?: ReviewCache,
   checks?: Map<string, string[]>,
   local?: LocalAsk,
+  terms?: EntryTerms,
   // Awaited only when something misses the cache and is about to reach the
   // reviewer, which is where the provider check gates a run.
   beforeAsk?: () => Promise<void>,
@@ -443,7 +446,7 @@ async function reviewDrafts(
   const byKey = new Map(units.map((u) => [u.key, u]))
   const inputs: ReviewInput[] = units.map((u) => {
     const failed = checks?.get(u.key) ?? []
-    const terms = local?.terms(u) ?? []
+    const entryTerms = terms?.(u) ?? []
     return {
       key: u.key,
       msgid: u.msgid,
@@ -453,18 +456,22 @@ async function reviewDrafts(
       drafts: drafts.get(u.key) ?? [],
       ...(failed.length > 0 ? { automatedChecks: failed } : {}),
       ...(controlSpec(u) ? { control: true } : {}),
-      ...(terms.length > 0 ? { glossary: terms } : {}),
+      ...(entryTerms.length > 0 ? { glossary: entryTerms } : {}),
     }
   })
   // The checks are part of what the AI was asked, so they key its answer: a
   // glossary or rule edit that changes one entry's checks re-asks for that
   // entry alone. A clean draft keys exactly as it did before checks existed.
   //
+  // Each entry's glossary terms go in the same way, for every reviewer, so a
+  // glossary edit re-asks only the entries whose terms it changed. They were
+  // once a local reviewer's alone, while the agents looked each term up
+  // through glossary_lookup; an agent's verdict cached from then has no terms
+  // in its key, and the prompt it was formed under has a different
+  // configuration hash, so it is asked again once rather than served.
+  //
   // A local reviewer is also told which prompt it was asked, which is not in
-  // the configuration hash (see AuditContext.promptVariant), and each entry's
-  // glossary terms, which the agents look up themselves. Both go in the same
-  // way, so a glossary edit re-asks a local review only for the entries whose
-  // terms it changed.
+  // the configuration hash (see AuditContext.promptVariant).
   const asked = (input: ReviewInput) => [
     ...input.drafts,
     ...(input.automatedChecks ?? []).map((c) => `\u0000check ${c}`),
@@ -779,12 +786,12 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
         const localAsk: LocalAsk | undefined = localReview
           ? {
               variant: draftReviewPromptVariant(locale),
-              // A setting the code reads takes no glossary term, as in review:
-              // its translator comment decides the value, and "kapalı" for
-              // "off" is exactly the mistake a glossary match would invite.
-              terms: (u) => (controlSpec(u) ? [] : checker.terms(u)),
             }
           : undefined
+        // A setting the code reads takes no glossary term, as in review: its
+        // translator comment decides the value, and "kapalı" for "off" is
+        // exactly the mistake a glossary match would invite.
+        const entryTerms: EntryTerms = (u) => (controlSpec(u) ? [] : checker.terms(u))
 
         // Only the review pass reaches an agent, so only a run that will
         // review anything with antigravity or codex is checked; drafts
@@ -872,7 +879,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
               emit({ type: 'batch-phase', index, phase: 'reviewing', at: Date.now() })
               phase = 'reviewing'
               results = (
-                await reviewDrafts(batch, fixedDrafts, review, { ...(opts.bin === undefined ? {} : { bin: opts.bin }), provider, spawn: reviewSpawn }, locale, po.nplurals, pluralForms, mcpConfigPath, reviewCache, checks, localAsk, beforeAsk)
+                await reviewDrafts(batch, fixedDrafts, review, { ...(opts.bin === undefined ? {} : { bin: opts.bin }), provider, spawn: reviewSpawn }, locale, po.nplurals, pluralForms, mcpConfigPath, reviewCache, checks, localAsk, entryTerms, beforeAsk)
               ).map((r) => {
                 const unit = unitOf.get(r.key)
                 return unit ? checker.finalize(unit, r) : r

@@ -5,9 +5,16 @@ import { loadLocaleRules } from '../rules/load.js'
 import { localeDisplayName, splitLocale } from '../wporg/locales.js'
 import type { Locale, ReviewInput } from '../types.js'
 
-const TOOL_RULES = (language: string) => `- Follow the official WordPress ${language} glossary. Call the glossary_lookup tool for any term that might be in it (WordPress UI vocabulary, post/page/plugin/theme/block/widget terminology, etc.) before deciding on wording.
-- Call consistency_lookup only when the glossary has no answer for the wording in question. It reports how WordPress core already translates that exact string, which is authoritative; do not call it just to confirm a term the glossary already settled.
-- Call tm_lookup to find near-matches in the translation memory and stay consistent with them.
+// Worded as the audit prompt's tool rules are, and for the same reason: the
+// glossary terms are on the entry now, so an agent that still looked each one
+// up spent a round trip per term to learn what it had already been told. Run
+// 313 made 50 to 86 tool calls a batch this way, against 3 to 8 for a review
+// batch that carries the same terms inline. consistency_lookup is the one
+// that reaches translate.wordpress.org, which answered that run with a 429,
+// so it is kept for the case nothing on the entry settles.
+const TOOL_RULES = (language: string) => `- The official WordPress ${language} glossary is binding. Every glossary term an entry's source contains is listed on that entry under "glossary", with its approved translation, so do not look those up. Call glossary_lookup only for a term you need that is not listed there.
+- Call tm_lookup only when you are unsure of a wording and want to see how the locale worded similar strings; not for every entry.
+- Call consistency_lookup only when neither the entry's glossary nor the translation memory settles the wording of a UI string WordPress core is likely to have. It reports how WordPress core already translates that exact string, which is authoritative; never call it to confirm a term the glossary already settled.
 `
 
 const NO_TOOL_RULES = (language: string) => `- Follow the official WordPress ${language} glossary. An entry's "glossary" lists the approved translation of every glossary term its source contains; use it. A term that is not listed there is not in the glossary. There are no tools: this prompt is everything you have.
@@ -25,10 +32,12 @@ export function buildReviewPrompt(
   pluralForms?: string,
   options: PromptOptions = {},
 ): string {
-  // See PromptOptions: false for a local model, which has no MCP tools and so
-  // is handed each entry's glossary terms instead. The agents' prompt is
-  // unchanged byte for byte, glossary field included, because its
-  // configuration hash keys every cached draft review.
+  // See PromptOptions: false for a local model, which has no MCP tools. Both
+  // are handed each entry's glossary terms, rendered the same way; only the
+  // rules about the tools differ. The agents' rules text is hashed into the
+  // configuration that keys every cached draft review (translateConfigHash),
+  // so an edit to it re-asks those reviews rather than serving answers formed
+  // under the old instructions.
   const tools = options.tools !== false
   const language = localeLabel(locale)
   // The file's line replaces the default rather than adding to it: WordPress
@@ -49,7 +58,7 @@ export function buildReviewPrompt(
         drafts: input.drafts,
         ...(input.automatedChecks?.length ? { automatedChecks: input.automatedChecks } : {}),
         ...(input.control ? { control: true } : {}),
-        ...(!tools && input.glossary?.length
+        ...(input.glossary?.length
           ? { glossary: Object.fromEntries(input.glossary.map((g) => [g.term, g.translations])) }
           : {}),
       }
