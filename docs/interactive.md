@@ -33,10 +33,10 @@ has six steps:
 5. **Translation memory**: your locale's published memory from
    polyglots-data, when it has one: a summary of what would be imported,
    then `y` downloads and imports it. Shown only for a locale polyglots-data
-   has; offline, it is skipped with a note. The skip is kept for that locale, so the
-   step is not offered again for it; fetch the memory later from **Tools** (`o`) > **Import
-   Translation Memory**, or with `polyglots tm fetch`. Optional, like every
-   import. See
+   has; offline, it is skipped with a note. The skip is kept for that
+   locale, so the step is not offered again for it; fetch the memory later
+   from **Tools** (`o`) > **Import Translation Memory**, or with
+   `polyglots tm fetch`. Optional, like every import. See
    [Fetching a locale's memory](translate.md#fetching-a-locales-memory).
 6. **Locale rules**: the checks for your language's conventions. polyglots
    ships none; fetch your locale team's file (**Fetch from polyglots-data**
@@ -110,19 +110,22 @@ open the result. When you type into a field, letters go into the field;
 
 Press `l`, or choose **Change locale** in the go-to list (`ctrl+k`), and a
 picker opens. Type a few letters to search. With nothing typed, it lists your
-current locale first, marked `current`, and then up to five locales you used
-before. `enter` saves the choice as your default locale, the same setting the
-setup wizard writes, and the screen you are on loads again in the new locale.
+current locale first, marked `current`, and then the locales you used before,
+five in all. `enter` saves the choice as your default locale, the same setting
+the setup wizard writes, and the screen you are on loads again in the new
+locale.
 
-The picker refuses in two cases. While a review or a translation runs, it says
-"The locale changes after the run ends." In **Locale rules** or in the reply
-templates editor with unsaved changes, it says "Save or discard the changes
-first."
+The picker refuses in two cases. While a job runs (a review, a translation, a
+fetch, a glossary sync or a memory import), it says "The locale changes after
+the current job ends." In **Locale rules** or in the reply templates editor
+with unsaved changes, it says "Save or discard the changes first."
 
-The first time you change to a locale that has no glossary and no locale
-rules, or that polyglots-data has memory for, the app asks once whether to set
-it up. `y` walks the setup steps for that locale (glossary, memory, rules) and
-returns you to the screen you were on. It does not ask again for that locale.
+The first time you change to a locale that has no glossary or no locale rules
+yet, the app asks once whether to set it up. `y` opens the setup wizard at the
+first missing step and goes on through that locale's steps (glossary, memory,
+rules), then returns you to the screen you were on. Offline, the memory step is
+passed without a lasting skip, so it is offered again later. The app does not
+ask again for that locale, whatever you answer.
 
 ## Running a review or a translation
 
