@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import { controlSpec } from '../audit/control.js'
-import { createDraftChecker } from '../translate/checks.js'
+import { createDraftChecker, type DraftChecker } from '../translate/checks.js'
 import { configuredProperNouns, shortMsgid } from './review.js'
 import { intlTag } from '../wporg/locales.js'
 import { chunk } from '../batch.js'
@@ -55,6 +55,7 @@ import type {
   ReviewInput,
   ReviewResult,
   Secrets,
+  TmEntry,
   TranslationUnit,
 } from '../types.js'
 
@@ -206,23 +207,51 @@ function ambiguous(alternatives: readonly { target: string }[], locale: Locale):
 
 // A TM row per msgid/msgidPlural only maps onto exactly two plural forms; other counts go through the engine.
 //
-// The memory can hold several approved wordings. The most recently updated is
-// written, and the entry is marked fuzzy when there was more than one to choose
-// between: the locale approved each of them, but nobody approved this one for
-// this string, and a fuzzy entry is exactly the flag for a human to confirm.
-function tmLookup(db: Database.Database, unit: TranslationUnit, locale: Locale, nplurals: number): ApplyResult | undefined {
+// The memory can hold several approved wordings. The entry is marked fuzzy
+// when there was more than one to choose between: the locale approved each of
+// them, but nobody approved this one for this string, and a fuzzy entry is
+// exactly the flag for a human to confirm.
+//
+// Which one is written is decided by the glossary first and recency second.
+// An exact match never reaches a model or the rules, so before this the newest
+// wording went in whatever it said: on the nl run "Social icons" became
+// "Sociale pictogrammen" from a theme, while "iconen", the glossary's word,
+// sat in an older row. The first candidate in findMemory's order that the
+// glossary rule passes is written. When none does, the newest still is, since
+// an approved wording beats a blank, but fuzzy and with the rule's own message
+// as its translator comment, so the reviewer sees why without re-running the
+// check. A source with no glossary term passes every candidate, so the first
+// is written exactly as before.
+//
+// A plural entry is checked as the entry it becomes, both forms together, so
+// the rule reads it as it would read the file. Only the singular's candidates
+// are walked: the plural's newest goes beside each, because the rule reads the
+// first form and walking pairs would multiply the work for nothing it checks.
+function tmLookup(
+  db: Database.Database,
+  unit: TranslationUnit,
+  locale: Locale,
+  nplurals: number,
+  check: Pick<DraftChecker, 'glossary'>,
+): ApplyResult | undefined {
   const singular = findMemory(db, unit.msgid, locale, unit.msgctxt)
   if (singular.length === 0) return undefined
-  const fuzzy = ambiguous(singular, locale)
-  if (unit.msgidPlural === undefined) return { key: unit.key, text: [singular[0]!.target], fuzzy }
-  if (nplurals !== 2) return undefined
-  const plural = findMemory(db, unit.msgidPlural, locale, unit.msgctxt)
-  if (plural.length === 0) return undefined
-  return {
-    key: unit.key,
-    text: [singular[0]!.target, plural[0]!.target],
-    fuzzy: fuzzy || ambiguous(plural, locale),
+  let plural: TmEntry[] | undefined
+  if (unit.msgidPlural !== undefined) {
+    if (nplurals !== 2) return undefined
+    plural = findMemory(db, unit.msgidPlural, locale, unit.msgctxt)
+    if (plural.length === 0) return undefined
   }
+  const formsOf = (candidate: TmEntry): string[] => (plural ? [candidate.target, plural[0]!.target] : [candidate.target])
+  const fuzzy = ambiguous(singular, locale) || (plural !== undefined && ambiguous(plural, locale))
+
+  for (const candidate of singular) {
+    const text = formsOf(candidate)
+    if (check.glossary(unit, text).length === 0) return { key: unit.key, text, fuzzy }
+  }
+  const text = formsOf(singular[0]!)
+  const missed = check.glossary(unit, text)
+  return { key: unit.key, text, fuzzy: true, reason: missed.map((f) => f.message).join('; ') }
 }
 
 async function persist(po: PoFile, results: ApplyResult[], dryRun: boolean | undefined): Promise<boolean> {
@@ -661,8 +690,22 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
     await withRunLog(runLog, async () => {
       const hits: ApplyResult[] = []
       const rest: TranslationUnit[] = []
+      const glossaryRows = allGlossary(db, locale)
+      // Its own checker, built over every unit, rather than the drafting one
+      // below, which is built over what the memory leaves: that one's context
+      // learns proper nouns from its units, and its findings key the draft
+      // review, so building it over a different set would change what an
+      // in-flight run's cached reviews are keyed on. Only the glossary rule is
+      // asked of this one, and it reads nothing the units teach.
+      const memoryCheck = createDraftChecker({
+        locale,
+        nplurals: po.nplurals,
+        glossary: glossaryRows,
+        properNouns: configuredProperNouns(locale),
+        units,
+      })
       for (const unit of units) {
-        const hit = tmLookup(db, unit, locale, po.nplurals)
+        const hit = tmLookup(db, unit, locale, po.nplurals, memoryCheck)
         if (hit) hits.push(hit)
         else rest.push(unit)
       }
@@ -713,7 +756,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
         const checker = createDraftChecker({
           locale,
           nplurals: po.nplurals,
-          glossary: allGlossary(db, locale),
+          glossary: glossaryRows,
           properNouns: configuredProperNouns(locale),
           units: rest,
         })

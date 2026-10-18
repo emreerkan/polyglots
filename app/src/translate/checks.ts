@@ -42,6 +42,14 @@ export interface DraftChecker {
    * up, so it and the rule never disagree about which terms apply.
    */
   terms(unit: TranslationUnit): GlossaryMatch[]
+  /**
+   * The glossary rule's findings on text this tool did not draft: a memory
+   * match, written without a model. Only that rule, because the memory's
+   * wording was approved by the locale and the rest of the checks would be
+   * second-guessing a human; the glossary is the one thing a wording approved
+   * for another project can still be wrong about here.
+   */
+  glossary(unit: TranslationUnit, forms: string[]): Finding[]
 }
 
 export interface DraftCheckerOptions {
@@ -96,6 +104,13 @@ export function createDraftChecker(opts: DraftCheckerOptions): DraftChecker {
   // plumbing of drafts and checks through the review, stay as they were.
   const prepared = new Map<string, string[]>()
   const findings = (unit: TranslationUnit, forms: string[]): Finding[] => runRules(asEntry(unit, forms), ctx)
+  // Narrowed through the profile rather than by calling the rule directly, so
+  // a locale that turns the glossary rule off, and a control string, which
+  // answers to its own rule alone, are honoured here exactly as in review.
+  const glossaryCtx: RuleContext = {
+    ...ctx,
+    profile: { ...ctx.profile, rules: new Set([...ctx.profile.rules].filter((r) => r === 'glossary')) },
+  }
 
   return {
     prepare(unit, drafts) {
@@ -111,6 +126,9 @@ export function createDraftChecker(opts: DraftCheckerOptions): DraftChecker {
     },
     terms(unit) {
       return glossaryMatches(unit.msgid, ctx)
+    },
+    glossary(unit, forms) {
+      return runRules(asEntry(unit, forms), glossaryCtx)
     },
     finalize(unit, result) {
       const { forms: text, notes: late } = fix(unit, result.text)
