@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AuditEntry, GlossaryEntry } from '../../src/types.js'
-import { buildRuleContext, runRules, tmKey } from '../../src/audit/rules/index.js'
+import { buildRuleContext, glossaryAlternatives, runRules, tmKey } from '../../src/audit/rules/index.js'
 import { profileFor } from '../../src/audit/rules/profiles.js'
 import { useLocaleFixture } from '../locale-fixture.js'
 
@@ -295,6 +295,65 @@ describe('glossary rule', () => {
 
   it('matches the term on a word boundary, not inside another word', () => {
     expect(rules(entry('Bookmark this', 'Bunu işaretle'))).not.toContain('glossary')
+  })
+})
+
+/**
+ * A glossary row's translation is one string, and translators put several
+ * wordings in it because GlotPress does not search strictly: nl stores
+ * "waarschuwing/waarschuwingen", tr and es list synonyms with commas, es writes
+ * a plural with a suffix ("dependiente/s"). Each part is an approved wording.
+ */
+describe('glossary alternatives', () => {
+  const glossaryFor = (locale: string, sourceTerm: string, translation: string): GlossaryEntry[] => [
+    { locale, sourceTerm, translation },
+  ]
+  const glossaryRule = (locale: string, glossary: GlossaryEntry[], msgid: string, msgstr: string) => {
+    const e = entry(msgid, msgstr)
+    return runRules(e, buildRuleContext({ locale, glossary, nplurals: 2, entries: [e] })).filter((f) => f.rule === 'glossary')
+  }
+
+  it('splits a row on slashes and commas, trimmed, short parts dropped', () => {
+    expect(glossaryAlternatives('waarschuwing/waarschuwingen')).toEqual(['waarschuwing', 'waarschuwingen'])
+    expect(glossaryAlternatives('ilke, politika')).toEqual(['ilke', 'politika'])
+    expect(glossaryAlternatives('recorrido, gira, viaje')).toEqual(['recorrido', 'gira', 'viaje'])
+    expect(glossaryAlternatives('dependiente/s')).toEqual(['dependiente'])
+    expect(glossaryAlternatives('kenar çubuğu')).toEqual(['kenar çubuğu'])
+  })
+
+  it('lists a part stored in both encodings once', () => {
+    expect(glossaryAlternatives('ma\u0301s/m\u00E1s')).toEqual(['m\u00E1s'])
+  })
+
+  it('keeps the row whole when every part is too short to stand alone', () => {
+    expect(glossaryAlternatives('a/b')).toEqual(['a/b'])
+  })
+
+  it('accepts either form of an nl slash row', () => {
+    const glossary = glossaryFor('nl', 'alert', 'waarschuwing/waarschuwingen')
+    expect(glossaryRule('nl', glossary, 'Emergency Alert', 'Noodwaarschuwing')).toEqual([])
+    expect(glossaryRule('nl', glossary, 'Alerts', 'Waarschuwingen')).toEqual([])
+  })
+
+  it('still flags a translation that uses none of the alternatives, naming the row as stored', () => {
+    const glossary = glossaryFor('nl', 'alert', 'waarschuwing/waarschuwingen')
+    expect(glossaryRule('nl', glossary, 'Emergency Alert', 'Noodmelding').map((f) => f.message)).toEqual([
+      'glossary term not used: "alert" -> "waarschuwing/waarschuwingen"',
+    ])
+  })
+
+  it('accepts any synonym of a comma list', () => {
+    expect(glossaryRule('tr', glossaryFor('tr', 'policy', 'ilke, politika'), 'Privacy policy', 'Gizlilik politikası')).toEqual([])
+  })
+
+  it('accepts the plural an es suffix row abbreviates', () => {
+    expect(glossaryRule('es', glossaryFor('es', 'dependency', 'dependiente/s'), 'Dependency', 'Dependientes')).toEqual([])
+  })
+
+  it('treats a row with no separators as before', () => {
+    const glossary = glossaryFor('tr', 'sidebar', 'kenar çubuğu')
+    expect(glossaryRule('tr', glossary, 'Open the sidebar', 'Kenar çubuğunu aç')).toEqual([])
+    expect(glossaryRule('tr', glossary, 'Sidebar', 'Yan menü')).toHaveLength(1)
   })
 })
 

@@ -648,6 +648,38 @@ export function glossaryMatches(msgid: string, ctx: RuleContext): GlossaryMatch[
   return [...byTerm.values()]
 }
 
+/**
+ * The wordings one glossary row approves, as separate strings.
+ *
+ * A row's translation is a single field, and translators fill it with more
+ * than one wording because GlotPress does not search it strictly: nl stores
+ * "waarschuwing/waarschuwingen", tr and es list synonyms with commas, es
+ * abbreviates a plural as "dependiente/s". Matched whole, such a row is found
+ * in no translation at all, so the rule flagged "Noodwaarschuwing" exactly as
+ * it flagged "Noodmelding", and a check that fires on the right answer teaches
+ * everyone to ignore it.
+ *
+ * Parts under three characters are dropped, the same floor glossaryMatches
+ * puts on a source term: the "s" of a suffix row is not a word to look for, and
+ * a two-letter fragment would be found inside almost anything. A row with
+ * nothing left keeps its whole string, so it behaves as it did before. Prose
+ * ("guardar o ahorrar, según contexto") splits into pieces no translation
+ * contains, which leaves it flagged, as it was; a human reads the row there.
+ *
+ * Every comparison of a translation against a glossary row goes through this,
+ * so the rule, and anything that asks it, cannot disagree about what a row
+ * allows.
+ */
+export function glossaryAlternatives(translation: string): string[] {
+  const parts: string[] = []
+  for (const raw of translation.split(/[/,]/)) {
+    const part = raw.trim().normalize('NFC')
+    if ([...part].length < 3 || parts.includes(part)) continue
+    parts.push(part)
+  }
+  return parts.length > 0 ? parts : [translation]
+}
+
 const glossary: Rule = (entry, ctx) => {
   const text = entry.msgstr.find(Boolean)
   if (!text) return []
@@ -655,8 +687,11 @@ const glossary: Rule = (entry, ctx) => {
 
   const missed: string[] = []
   for (const match of glossaryMatches(entry.msgid, ctx)) {
+    // Shown as stored, matched by alternative: the message is what a reviewer
+    // and the model read, and the GTE's own wording is the clearer of the two.
     const approved = match.translations.map((t) => comparable(t, ctx.locale))
-    if (approved.some((t) => containsTerm(target, t, ctx.profile.glossaryStemRatio))) continue
+    const accepted = match.translations.flatMap((t) => glossaryAlternatives(t).map((a) => comparable(a, ctx.locale)))
+    if (accepted.some((t) => containsTerm(target, t, ctx.profile.glossaryStemRatio))) continue
     missed.push(`"${lower(match.term, ctx.locale)}" -> ${approved.map((t) => `"${t}"`).join(' / ')}`)
   }
   if (missed.length === 0) return []
