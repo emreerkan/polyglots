@@ -410,7 +410,10 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
       // nothing else moves, since a run reads the saved config.
       return setLocaleNote({ error: errorMessage(err) })
     }
-    record((s) => ({ ...s, recentLocales: pushRecent(s.recentLocales, id) }))
+    // The locale left goes in too, under the new one: an install that has never
+    // picked one has an empty list, and the way back would otherwise have to be
+    // typed out after the first switch.
+    record((s) => ({ ...s, recentLocales: pushRecent(locale === undefined ? s.recentLocales : pushRecent(s.recentLocales, locale), id) }))
     setLocale(id)
     setSetupEpoch((e) => e + 1)
     refreshGlossary()

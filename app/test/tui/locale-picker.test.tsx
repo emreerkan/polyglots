@@ -58,7 +58,7 @@ describe('the locale picker', () => {
     expect(save).toHaveBeenCalledWith({ defaultLocale: 'nl' })
     expect(loadConfig().defaultLocale).toBe('nl')
     expect(flat(view.lastFrame())).not.toContain('Change locale')
-    expect(tui.loadTuiState().recentLocales).toEqual(['nl'])
+    expect(tui.loadTuiState().recentLocales).toEqual(['nl', 'tr'])
   })
 
   it('l is ignored while a text field has focus', async () => {
@@ -75,6 +75,22 @@ describe('the locale picker', () => {
     await openPicker(view)
     const frame = flat(view.lastFrame())
     expect(frame).toMatch(/de de_DE .*tr tr_TR current/)
+  })
+
+  it('lists the current locale, marked, on a fresh install with no recent locales', async () => {
+    const view = render(<App commands={fakeCommands()} cwd={cwd} />)
+    await openPicker(view)
+    expect(flat(view.lastFrame())).toMatch(/tr tr_TR current/)
+  })
+
+  it('offers the locale left behind after a switch', async () => {
+    const view = render(<App commands={fakeCommands()} cwd={cwd} />)
+    await openPicker(view)
+    await type(view.stdin, 'nl')
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, 'locale nl')
+    await openPicker(view)
+    expect(flat(view.lastFrame())).toMatch(/nl nl_NL current .*tr tr_TR/)
   })
 
   it('picking the current locale changes nothing', async () => {

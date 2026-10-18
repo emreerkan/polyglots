@@ -42,7 +42,10 @@ export function LocaleSearch({ initial, recent = [], current, onPick, error }: L
   // list would put a cursor on whichever locale sorts first, and enter would
   // quietly choose it.
   const empty = query.trim() === ''
-  const matches = empty ? recent.map((id) => ({ id, wp: wpOf(id) })) : matchLocales(query)
+  // The current locale leads when the list lacks it: one set before the list
+  // existed, or with polyglots config set, is still there to see and keep.
+  const listed = current === undefined || recent.includes(current) ? recent : [current, ...recent]
+  const matches = empty ? listed.map((id) => ({ id, wp: wpOf(id) })) : matchLocales(query)
   const chosen = Math.min(at, Math.max(0, matches.length - 1))
   useKeys({
     localeSearch: {
