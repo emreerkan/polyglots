@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import DatabaseCtor from 'better-sqlite3'
 import type Database from 'better-sqlite3'
 import { openDb } from '../../src/storage/db.js'
-import { findExactTm, findMemory, insertTmIfAbsent, searchTm, upsertTm } from '../../src/storage/tm.js'
+import { findExactTm, findMemory, findMemoryIgnoringCase, insertTmIfAbsent, searchTm, upsertTm } from '../../src/storage/tm.js'
 
 describe('tm', () => {
   let home: string
@@ -320,6 +320,52 @@ describe('tm', () => {
         { source: 'Theme', target: 'Tema', locale: 'tr', weight: 'low' },
       ])
       expect([weightOf('Eklenti'), weightOf('Tema')]).toEqual([1, 0])
+    })
+  })
+
+  /**
+   * The fallback translate reaches for when no exact candidate uses the
+   * glossary term: the same source in other capitals ("Social Icons" for
+   * "Social icons"), which the exact lookup never sees. Same locale and the
+   * same context rule as findMemory, and never the exact rows again.
+   */
+  describe('findMemoryIgnoringCase', () => {
+    it('finds the rows whose source differs only in capitals, exact rows left out', () => {
+      upsertTm(db, [
+        { source: 'Social icons', target: 'Sociale pictogrammen', locale: 'nl' },
+        { source: 'Social Icons', target: 'Sociale iconen', locale: 'nl' },
+        { source: 'SOCIAL ICONS', target: 'SOCIALE ICONEN', locale: 'nl' },
+        { source: 'Social Icons', target: 'Iconos sociales', locale: 'es' },
+        { source: 'Social icons widget', target: 'Widget', locale: 'nl' },
+      ])
+      expect(findMemoryIgnoringCase(db, 'Social icons', 'nl').map((e) => [e.source, e.target]).sort()).toEqual([
+        ['SOCIAL ICONS', 'SOCIALE ICONEN'],
+        ['Social Icons', 'Sociale iconen'],
+      ])
+    })
+
+    it('keeps to the context, falling back to the context-less rows as findMemory does', () => {
+      upsertTm(db, [
+        { source: 'Post', target: 'Gönder', locale: 'tr', context: 'verb' },
+        { source: 'POST', target: 'GÖNDER', locale: 'tr', context: 'verb' },
+        { source: 'POST', target: 'YAZI', locale: 'tr' },
+      ])
+      expect(findMemoryIgnoringCase(db, 'Post', 'tr', 'verb').map((e) => e.target)).toEqual(['GÖNDER'])
+      expect(findMemoryIgnoringCase(db, 'Post', 'tr', 'noun').map((e) => e.target)).toEqual(['YAZI'])
+    })
+
+    // No index serves a case-blind match, and none is added: polyglots.db
+    // cannot be regenerated, so its schema is not changed for a fallback.
+    // This records what the scan costs on a memory the size of a real one.
+    it('scans a 150,000-row memory quickly enough for a rare fallback', () => {
+      const rows = Array.from({ length: 150_000 }, (_, i) => ({ source: `Source string ${i}`, target: `Doel ${i}`, locale: i % 3 === 0 ? 'tr' : 'nl' }))
+      insertTmIfAbsent(db, rows, '2026-01-01T00:00:00Z')
+      upsertTm(db, [{ source: 'SOURCE STRING 77', target: 'DOEL', locale: 'nl' }])
+      const started = performance.now()
+      const hits = findMemoryIgnoringCase(db, 'Source string 77', 'nl')
+      const took = performance.now() - started
+      expect(hits.map((h) => h.target)).toEqual(['DOEL'])
+      expect(took).toBeLessThan(250)
     })
   })
 })

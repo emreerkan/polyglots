@@ -135,6 +135,35 @@ export function findMemory(db: Database.Database, source: string, locale: Locale
 }
 
 /**
+ * The rows whose source is this one in other capitals ("Social Icons" for
+ * "Social icons"), in findMemory's order and under its context rule. The
+ * exact rows are left out: findMemory has already answered for them.
+ *
+ * Only a fallback, asked when none of the exact wordings uses the glossary
+ * term, and that rarity is what makes its cost acceptable. No index serves a
+ * case-blind match on `source`, so this scans the locale's rows, and one is
+ * deliberately not added: the database holding the memory cannot be
+ * regenerated, and its schema is not changed to speed up a fallback. A test
+ * measures the scan on a memory of 150,000 rows.
+ *
+ * NOCASE folds ASCII letters only, so "Ä" and "ä" still differ. The sources
+ * are English, where that covers what matters, and a fold that also matched
+ * what it should not would put a stranger's wording in the file.
+ */
+export function findMemoryIgnoringCase(db: Database.Database, source: string, locale: Locale, context?: string): TmEntry[] {
+  const stmt = db.prepare<[string, string, string, string], TmRow>(
+    `SELECT source, target, locale, context, project, weight FROM tm
+     WHERE source = ? COLLATE NOCASE AND source <> ? AND locale = ? AND context = ?
+     ORDER BY weight DESC, updated_at DESC, id DESC`,
+  )
+  if (context) {
+    const scoped = stmt.all(source, source, locale, context)
+    if (scoped.length > 0) return scoped.map(toEntry)
+  }
+  return stmt.all(source, source, locale, '').map(toEntry)
+}
+
+/**
  * The one alternative to use where only one will do, such as filling an
  * untranslated entry on a translate run. A row of normal weight beats a
  * long-text one, then the most recently updated wins, which is a choice rather

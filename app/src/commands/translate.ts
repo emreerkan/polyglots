@@ -45,7 +45,7 @@ import { logRunEvent, openRunLog, withRunLog, type RunLog } from '../logs/run-lo
 import { VERSION } from '../version.js'
 import { loadPo, type ApplyResult, type PoFile } from '../po/po-file.js'
 import { reviewBatch } from '../review/draft-review.js'
-import { allGlossary, findMemory, openDb } from '../storage/index.js'
+import { allGlossary, findMemory, findMemoryIgnoringCase, openDb } from '../storage/index.js'
 import { normalizeLocale } from '../tmx/parse.js'
 import { takeSkipped } from '../rules/sandbox.js'
 import type {
@@ -227,12 +227,21 @@ function ambiguous(alternatives: readonly { target: string }[], locale: Locale):
 // the rule reads it as it would read the file. Only the singular's candidates
 // are walked: the plural's newest goes beside each, because the rule reads the
 // first form and walking pairs would multiply the work for nothing it checks.
+//
+// When no exact candidate passes, the same source in other capitals is tried:
+// on the nl run "Sociale iconen" was in the memory only under "Social Icons".
+// That lookup scans the memory (see findMemoryIgnoringCase), which is why it
+// waits for this point rather than running for every entry, and why an entry
+// with no exact row at all is left to the engine as before. A case variant
+// that passes is written fuzzy whatever else holds, with a comment naming the
+// source it was taken from: nobody approved it for this string, and a
+// heading's capitals can mean a different place in the interface.
 function tmLookup(
   db: Database.Database,
   unit: TranslationUnit,
   locale: Locale,
   nplurals: number,
-  check: Pick<DraftChecker, 'glossary'>,
+  check: Pick<DraftChecker, 'glossary' | 'terms'>,
 ): ApplyResult | undefined {
   const singular = findMemory(db, unit.msgid, locale, unit.msgctxt)
   if (singular.length === 0) return undefined
@@ -248,6 +257,12 @@ function tmLookup(
   for (const candidate of singular) {
     const text = formsOf(candidate)
     if (check.glossary(unit, text).length === 0) return { key: unit.key, text, fuzzy }
+  }
+  for (const variant of findMemoryIgnoringCase(db, unit.msgid, locale, unit.msgctxt)) {
+    const text = formsOf(variant)
+    if (check.glossary(unit, text).length > 0) continue
+    const terms = check.terms(unit).map((m) => `${m.term} → ${m.translations.join(' / ')}`)
+    return { key: unit.key, text, fuzzy: true, reason: `from the memory of "${variant.source}"; glossary: ${terms.join('; ')}` }
   }
   const text = formsOf(singular[0]!)
   const missed = check.glossary(unit, text)

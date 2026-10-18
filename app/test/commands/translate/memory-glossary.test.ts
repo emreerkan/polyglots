@@ -127,3 +127,59 @@ describe('translate: memory matches checked against the glossary', () => {
     expect(entry.note).not.toContain('glossary')
   })
 })
+
+/**
+ * The glossary-conforming wording may sit under the same source in other
+ * capitals: "Sociale iconen" was in the memory only under "Social Icons",
+ * which the exact lookup never sees. Asked only when no exact candidate
+ * passes, and always written fuzzy: it is a guess about a string nobody
+ * translated in this form.
+ */
+describe('translate: case variants as a fallback', () => {
+  it('writes a case variant that uses the glossary term, fuzzy, saying where it came from', async () => {
+    remember(
+      { source: 'Social Icons', target: 'Sociale iconen' },
+      { source: 'Social icons', target: 'Social pictogrammen' },
+      { source: 'Social icons', target: 'Sociale pictogrammen' },
+    )
+    await translateFile(base())
+    const entry = await written('Social icons')
+    expect(entry.msgstr).toEqual(['Sociale iconen'])
+    expect(entry.fuzzy).toBe(true)
+    expect(entry.note).toBe('polyglots: from the memory of "Social Icons"; glossary: icons → iconen')
+  })
+
+  it('marks a case variant fuzzy even when it is the only wording', async () => {
+    remember({ source: 'Social Icons', target: 'Sociale iconen' }, { source: 'Social icons', target: 'Sociale pictogrammen' })
+    await translateFile(base())
+    const entry = await written('Social icons')
+    expect(entry.msgstr).toEqual(['Sociale iconen'])
+    expect(entry.fuzzy).toBe(true)
+  })
+
+  it('ignores case variants when an exact candidate already passes', async () => {
+    remember(
+      { source: 'Social Icons', target: 'Iconen voor sociale media' },
+      { source: 'Social icons', target: 'Sociale iconen' },
+    )
+    await translateFile(base())
+    expect(await written('Social icons')).toEqual({ msgstr: ['Sociale iconen'], fuzzy: false, note: '' })
+  })
+
+  it('falls back to the exact result when no case variant passes either', async () => {
+    remember({ source: 'Social Icons', target: 'Social pictogrammen' }, { source: 'Social icons', target: 'Sociale pictogrammen' })
+    await translateFile(base())
+    const entry = await written('Social icons')
+    expect(entry.msgstr).toEqual(['Sociale pictogrammen'])
+    expect(entry.note).toBe('polyglots: glossary term not used: "icons" -> "iconen"')
+  })
+
+  // Only a source the memory already knows exactly is helped: an entry with no
+  // exact row goes to the engine as before, so the scan runs on the rare
+  // fallback and not for every untranslated entry with a glossary term.
+  it('does not fill an entry that has no exact candidate at all', async () => {
+    remember({ source: 'Social Icons', target: 'Sociale iconen' })
+    await translateFile(base())
+    expect((await written('Social icons')).msgstr).toEqual([''])
+  })
+})
