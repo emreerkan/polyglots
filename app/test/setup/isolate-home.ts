@@ -1,5 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach } from 'vitest'
 
@@ -16,8 +16,17 @@ import { afterEach, beforeEach } from 'vitest'
 //
 // A test that wants a specific home still sets it in its own hook, which runs
 // after this one.
+//
+// HOME goes to the same folder, and USERPROFILE with it, which is what
+// os.homedir() reads on Windows. Not everything goes through POLYGLOTS_HOME:
+// the antigravity provider reads its model from agy's own settings under the
+// home folder, so a test that runs as antigravity was handed whatever model
+// the developer had configured, and passed or failed on that machine's setup
+// rather than on its own fixtures.
 let home: string | undefined
 let previous: string | undefined
+const HOME_VARS = ['HOME', 'USERPROFILE'] as const
+let previousHome: Partial<Record<(typeof HOME_VARS)[number], string>> = {}
 
 // Where an opted-in usage send goes. Port 9 on loopback is the discard port,
 // which nothing listens on, so a test that turns usage statistics on by
@@ -32,6 +41,21 @@ beforeEach(() => {
   previous = process.env.POLYGLOTS_HOME
   home = mkdtempSync(join(tmpdir(), 'polyglots-test-'))
   process.env.POLYGLOTS_HOME = home
+  previousHome = {}
+  for (const name of HOME_VARS) {
+    const value = process.env[name]
+    if (value !== undefined) previousHome[name] = value
+    process.env[name] = home
+  }
+  // A swap that stopped working, on a platform whose homedir() reads
+  // something else or after a refactor of the list above, would let every
+  // antigravity test write the developer's own ~/.gemini settings;
+  // isolate-home.test.ts would say so, but only after the suite had run.
+  // This stops the first test that would. It compares with the folder just
+  // made, not with userInfo(): a developer whose HOME is not the account
+  // database's home would pass that check with the swap broken, and in a
+  // container whose uid has no passwd entry userInfo() throws.
+  if (homedir() !== home) throw new Error('HOME is not isolated')
 })
 
 afterEach(() => {
@@ -47,4 +71,9 @@ afterEach(() => {
   home = undefined
   if (previous === undefined) delete process.env.POLYGLOTS_HOME
   else process.env.POLYGLOTS_HOME = previous
+  for (const name of HOME_VARS) {
+    const value = previousHome[name]
+    if (value === undefined) delete process.env[name]
+    else process.env[name] = value
+  }
 })

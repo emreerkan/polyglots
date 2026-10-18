@@ -1,6 +1,6 @@
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { gunzipSync } from 'node:zlib'
@@ -316,37 +316,30 @@ describe('the problem report offer on the command line', () => {
   })
 
   it('names the model, batch size and parallel in a report from fetch', async () => {
-    // configuredModel reads agy's own settings under the OS home, so the home
-    // is a temporary one here, never the developer's.
-    const savedHome = process.env.HOME
-    process.env.HOME = home
-    await mkdir(join(home, '.gemini', 'antigravity-cli'), { recursive: true })
-    await writeFile(join(home, '.gemini', 'antigravity-cli', 'settings.json'), JSON.stringify({ model: 'gemini-flash' }))
+    // configuredModel reads agy's own settings under the OS home, which the
+    // test setup points at a temporary folder for each test.
+    await mkdir(join(homedir(), '.gemini', 'antigravity-cli'), { recursive: true })
+    await writeFile(join(homedir(), '.gemini', 'antigravity-cli', 'settings.json'), JSON.stringify({ model: 'gemini-flash' }))
     await config({ reviewProvider: 'antigravity' })
     const { sendReport, sent } = recorder()
     const outDir = join(home, 'out')
-    try {
-      await run(['fetch', 'koji', '--get', 'waiting', '--out-dir', outDir, '--batch-size', '40', '--parallel', '2', '--send-report'], terminal(false, []), {
-        resolveProjects: async (refs) => refs.map((r) => ({ input: r.slug, state: 'ready' as const, type: 'wp-themes' as const, slug: r.slug, count: 1 })),
-        fetchProjects: async (ready, opts) => {
-          await mkdir(opts.outDir, { recursive: true })
-          return Promise.all(
-            ready.map(async (p) => {
-              const target = join(opts.outDir, `wp-themes-${p.slug}-tr.po`)
-              await writeFile(target, PO)
-              return { input: p.input, state: 'fetched' as const, file: target }
-            }),
-          )
-        },
-        reviewFile: failingReview,
-        sendReport,
-        providerVersion: async () => undefined,
-        checkProvider: async () => ({ signIn: { state: 'unknown', ms: 0 }, at: 0 }),
-      })
-    } finally {
-      if (savedHome === undefined) delete process.env.HOME
-      else process.env.HOME = savedHome
-    }
+    await run(['fetch', 'koji', '--get', 'waiting', '--out-dir', outDir, '--batch-size', '40', '--parallel', '2', '--send-report'], terminal(false, []), {
+      resolveProjects: async (refs) => refs.map((r) => ({ input: r.slug, state: 'ready' as const, type: 'wp-themes' as const, slug: r.slug, count: 1 })),
+      fetchProjects: async (ready, opts) => {
+        await mkdir(opts.outDir, { recursive: true })
+        return Promise.all(
+          ready.map(async (p) => {
+            const target = join(opts.outDir, `wp-themes-${p.slug}-tr.po`)
+            await writeFile(target, PO)
+            return { input: p.input, state: 'fetched' as const, file: target }
+          }),
+        )
+      },
+      reviewFile: failingReview,
+      sendReport,
+      providerVersion: async () => undefined,
+      checkProvider: async () => ({ signIn: { state: 'unknown', ms: 0 }, at: 0 }),
+    })
     expect(sendReport).toHaveBeenCalledTimes(1)
     expect(sent()[0]).toMatchObject({ provider: { name: 'antigravity', model: 'gemini-flash' }, batchSize: 40, parallel: 2 })
   })
@@ -355,10 +348,8 @@ describe('the problem report offer on the command line', () => {
   // and "provider rules, model gemini-flash" would send the maintainer after
   // one that did not run.
   it('names no model for a rules-only review, of one file or several', async () => {
-    const savedHome = process.env.HOME
-    process.env.HOME = home
-    await mkdir(join(home, '.gemini', 'antigravity-cli'), { recursive: true })
-    await writeFile(join(home, '.gemini', 'antigravity-cli', 'settings.json'), JSON.stringify({ model: 'gemini-flash' }))
+    await mkdir(join(homedir(), '.gemini', 'antigravity-cli'), { recursive: true })
+    await writeFile(join(homedir(), '.gemini', 'antigravity-cli', 'settings.json'), JSON.stringify({ model: 'gemini-flash' }))
     await config({ reviewProvider: 'antigravity' })
     const second = join(home, 'second-tr.po')
     await writeFile(second, PO)
@@ -371,13 +362,8 @@ describe('the problem report offer on the command line', () => {
         },
       })
     const { sendReport, sent } = recorder()
-    try {
-      await run(['review', file, '--no-ai', '--send-report'], terminal(false, []), { reviewFile: throwing, sendReport, providerVersion: async () => undefined })
-      await run(['review', file, second, '--no-ai', '--fresh', '--send-report'], terminal(false, []), { reviewFile: throwing, sendReport, providerVersion: async () => undefined })
-    } finally {
-      if (savedHome === undefined) delete process.env.HOME
-      else process.env.HOME = savedHome
-    }
+    await run(['review', file, '--no-ai', '--send-report'], terminal(false, []), { reviewFile: throwing, sendReport, providerVersion: async () => undefined })
+    await run(['review', file, second, '--no-ai', '--fresh', '--send-report'], terminal(false, []), { reviewFile: throwing, sendReport, providerVersion: async () => undefined })
     expect(sendReport).toHaveBeenCalledTimes(2)
     for (const report of sent() as unknown as Array<{ provider: { name: string; model?: string } }>) expect(report.provider).toEqual({ name: 'rules' })
   })

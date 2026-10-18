@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { homedir } from 'node:os'
 import { readdirSync } from 'node:fs'
 import { mkdir, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -339,18 +340,12 @@ describe('the problem report offer in the app', () => {
   // part. The run is made to fail by a throw from inside it, after its row
   // exists, since a rules-only run gives up no batch.
   describe('a No-AI review', () => {
-    let savedHome: string | undefined
     beforeEach(async () => {
-      // configuredModel reads agy's settings under the OS home: a temporary one.
-      savedHome = process.env.HOME
-      process.env.HOME = home.path
-      await mkdir(join(home.path, '.gemini', 'antigravity-cli'), { recursive: true })
-      await writeFile(join(home.path, '.gemini', 'antigravity-cli', 'settings.json'), JSON.stringify({ model: 'gemini-flash' }))
+      // configuredModel reads agy's settings under the OS home, which the
+      // test setup points at a temporary folder for each test.
+      await mkdir(join(homedir(), '.gemini', 'antigravity-cli'), { recursive: true })
+      await writeFile(join(homedir(), '.gemini', 'antigravity-cli', 'settings.json'), JSON.stringify({ model: 'gemini-flash' }))
       saveConfig({ defaultLocale: 'tr', reviewProvider: 'antigravity' })
-    })
-    afterEach(() => {
-      if (savedHome === undefined) delete process.env.HOME
-      else process.env.HOME = savedHome
     })
 
     const throwing: ReviewFile = (opts) =>

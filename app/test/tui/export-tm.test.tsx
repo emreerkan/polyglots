@@ -30,7 +30,9 @@ function mount(commands = fakeCommands(), onBack: () => void = () => undefined) 
   )
 }
 
-const downloads = join(homedir(), 'Downloads')
+// Read per test, not at import: the setup points the home folder at each
+// test's own temporary home, which does not exist yet when this file loads.
+const downloads = () => join(homedir(), 'Downloads')
 
 describe('defaultTmName', () => {
   it('dates the file and names it for the format', () => {
@@ -52,7 +54,7 @@ describe('ExportTm', () => {
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, /Exported 120 entries/)
     const opts = vi.mocked(commands.exportTm).mock.calls[0]![0] as ExportTmOptions
-    expect(opts).toEqual({ locale: 'de', file: join(downloads, defaultTmName('tmx')), format: 'tmx' })
+    expect(opts).toEqual({ locale: 'de', file: join(downloads(), defaultTmName('tmx')), format: 'tmx' })
   })
 
   // config set stores the slug, but a config.json edited by hand or written
@@ -97,7 +99,7 @@ describe('ExportTm', () => {
     await waitForText(view.lastFrame, /Exported/)
     expect(flat(view.lastFrame())).toMatch(/7 alternative wordings .* not carried/)
     const opts = vi.mocked(commands.exportTm).mock.calls[0]![0] as ExportTmOptions
-    expect(opts).toMatchObject({ file: join(downloads, defaultTmName('po')), format: 'po' })
+    expect(opts).toMatchObject({ file: join(downloads(), defaultTmName('po')), format: 'po' })
   })
 
   it('shows why an export failed', async () => {

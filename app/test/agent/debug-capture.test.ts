@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { flushDebugCaptures, runAgent } from '../../src/agent/run.js'
 import { stopOnSignal } from '../../src/jobs/stop-on-signal.js'
@@ -12,21 +12,11 @@ const ENVELOPE = JSON.stringify({ conversation_id: 'c1', status: 'SUCCESS', resp
 const CLAUDE_ENVELOPE = JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: 's1', result: '', structured_output: ANSWER })
 
 let dir: string
-let fakeHome: string
-let savedHome: string | undefined
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'polyglots-debug-capture-'))
-  fakeHome = mkdtempSync(join(tmpdir(), 'polyglots-debug-capture-home-'))
-  // agy's own logs are looked for under the home folder; a fake one keeps the
-  // developer's real ~/.gemini out of the test.
-  savedHome = process.env.HOME
-  process.env.HOME = fakeHome
 })
 afterEach(() => {
-  if (savedHome === undefined) delete process.env.HOME
-  else process.env.HOME = savedHome
   rmSync(dir, { recursive: true, force: true })
-  rmSync(fakeHome, { recursive: true, force: true })
 })
 
 // A stand-in agent: reads the prompt, prints to stderr and stdout, then exits
@@ -76,7 +66,7 @@ describe('debug capture in spawnAgent', () => {
   }, 20_000)
 
   it('copies the agy log that started during an antigravity call', async () => {
-    const agyDir = join(fakeHome, '.gemini', 'antigravity-cli', 'log')
+    const agyDir = join(homedir(), '.gemini', 'antigravity-cli', 'log')
     mkdirSync(agyDir, { recursive: true })
     const name = agyLogName(Date.now())
     writeFileSync(join(agyDir, name), 'agy said this')

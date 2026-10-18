@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { homedir } from 'node:os'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { openDb, upsertTm } from '../../../src/storage/index.js'
@@ -450,20 +451,13 @@ describe('translateFile: resources', () => {
 
 describe('translateFile: review engine id', () => {
   // configuredModel reads antigravity's settings from under the home
-  // directory, so the test points HOME at its own workspace. Left alone it
-  // would read whatever model the person running the suite has configured.
+  // directory, which the test setup points at a temporary folder for each
+  // test, so the model written here is the only one it can find.
   async function withAntigravityModel<T>(model: string, run: () => Promise<T>): Promise<T> {
-    const dir = join(ws.home, '.gemini', 'antigravity-cli')
+    const dir = join(homedir(), '.gemini', 'antigravity-cli')
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, 'settings.json'), JSON.stringify({ model }))
-    const before = process.env.HOME
-    process.env.HOME = ws.home
-    try {
-      return await run()
-    } finally {
-      if (before === undefined) delete process.env.HOME
-      else process.env.HOME = before
-    }
+    return run()
   }
 
   async function runWith(model: string): Promise<ReturnType<typeof fakeReview>> {
