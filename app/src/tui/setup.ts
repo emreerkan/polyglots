@@ -191,6 +191,21 @@ export function tmListed(manifest: Manifest, locale: Locale): boolean {
   return manifest.tm.some((row) => typeof row === 'object' && row !== null && (row as { slug?: unknown }).slug === locale)
 }
 
+/**
+ * Whether polyglots-data publishes maintained rules for the locale, read as
+ * loosely as tmListed for the same reason: a malformed row elsewhere in the
+ * list must not hide this locale's good one. A draft entry does not count,
+ * since its rules are not what a person with no file of their own should
+ * start from.
+ */
+export function rulesMaintained(manifest: Manifest, locale: Locale): boolean {
+  return manifest.rules.some((row) => {
+    if (typeof row !== 'object' || row === null) return false
+    const { slug, status } = row as { slug?: unknown; status?: unknown }
+    return slug === locale && status === 'maintained'
+  })
+}
+
 /** Whether the locale has a rules file. An invalid one still counts: it exists, and its screen says what is wrong. */
 export function hasLocaleRules(locale: Locale): boolean {
   try {

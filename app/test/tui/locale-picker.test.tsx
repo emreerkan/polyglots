@@ -135,8 +135,6 @@ describe('the locale picker', () => {
     const save = vi.fn(saveConfig)
     const view = render(<App commands={fakeCommands({ saveConfig: save })} cwd={cwd} />)
     await openFromHome(view.stdin, 'locale-rules')
-    await waitForText(view.lastFrame, 'Locale')
-    view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, 'Built-in rules')
     for (let i = 0; i < 20 && !/❯ Glossary match/.test(view.lastFrame() ?? ''); i++) {
       view.stdin.write(keys.down)

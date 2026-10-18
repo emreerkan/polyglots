@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Box, Text } from 'ink'
 import { UNIVERSAL_RULES } from '../../audit/rules/profiles.js'
 import { openRulesDraft, saveRulesDraft, type RulesDraft, type RulesValue } from '../../rules/edit.js'
@@ -16,7 +16,8 @@ import { Form } from '../components/Form.js'
 import { MultilineInput } from '../components/MultilineInput.js'
 import { copyRules } from '../../cli/rules.js'
 import { tryRules, type TryResult } from '../../rules/try.js'
-import { glossaryRows } from '../setup.js'
+import { glossaryRows, rulesMaintained } from '../setup.js'
+import { configuredLocale } from '../../config.js'
 import type { GlossaryEntry } from '../../types.js'
 import { useKeys } from '../hooks/useKeys.js'
 import { useTask, type TaskState } from '../hooks/useTask.js'
@@ -242,7 +243,12 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   const [value, setValue] = useState<RulesValue>({ mistakes: [], patterns: [] })
   const [error, setError] = useState<string>()
   const [notice, setNotice] = useState<string>()
-  const [cursor, setCursor] = useState(0)
+  // The highlighted section, not its index: the fetch row can move to the
+  // front after the screen is drawn, and an index would then slide the
+  // highlight onto a neighbour the person never chose. Undefined until they
+  // move, which keeps it on whatever row is first.
+  const [section, setSection] = useState<Stage>()
+  const [maintained, setMaintained] = useState(false)
   const [ruleCursor, setRuleCursor] = useState(0)
   const [nounCursor, setNounCursor] = useState(0)
   const [registerCursor, setRegisterCursor] = useState(0)
@@ -265,7 +271,14 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   const savable = dirty || (draft !== undefined && !draft.exists)
   const id = draft?.locale ?? broken?.locale ?? ''
   const rulesPath = draft?.path ?? broken?.path
-  const rows = broken ? REPAIR_STAGE : SECTION_STAGE
+  // Fetching leads when polyglots-data holds maintained rules for the locale:
+  // for someone whose file is missing or stale it is the step they want, and
+  // buried among a dozen editors it was easy to miss. The other rows keep
+  // their order so a person who knows the screen finds them where they were.
+  const rows = broken ? REPAIR_STAGE : maintained ? ['fetch' as Stage, ...SECTION_STAGE.filter((s) => s !== 'fetch')] : SECTION_STAGE
+  const current = section !== undefined && rows.includes(section) ? section : rows[0]!
+  const cursor = rows.indexOf(current)
+  const setCursor = (index: number) => setSection(rows[Math.min(Math.max(0, index), rows.length - 1)])
 
   const activeRules = (): Set<string> =>
     value.rules
@@ -295,11 +308,30 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
       // the CLI alone. Anything else (an unreadable file) stays here.
       if (err instanceof RulesFileError) {
         setBroken({ locale: resolved.id, path: err.path })
-        setCursor(0)
+        setSection(undefined)
         setStage('overview')
       }
     }
   }
+
+  // A configured locale opens at once: asking for the locale the header
+  // already shows was a step with one answer. The manifest is read once for
+  // that locale, in the background, so the overview is drawn first and
+  // reorders if the answer is yes. A failed read leaves the order alone.
+  const startLocale = configuredLocale(config)
+  useEffect(() => {
+    if (startLocale === undefined) return
+    open(startLocale)
+    let wanted = true
+    commands.dataClient.manifest().then(
+      (manifest) => wanted && setMaintained(rulesMaintained(manifest, startLocale)),
+      () => undefined,
+    )
+    return () => {
+      wanted = false
+    }
+    // Once per mounted locale: App remounts the screen when the locale changes.
+  }, [])
 
   const save = async () => {
     if (!draft) return
@@ -413,7 +445,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
       setBroken(undefined)
       // From the repairs the cursor was on their first row; in the full
       // overview it stays on the fetch it came from.
-      setCursor(SECTION_STAGE.indexOf('fetch'))
+      setSection('fetch')
       setError(undefined)
       setNotice(`Wrote ${basename(plan.path)}.`)
       setStage('overview')
@@ -464,7 +496,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
     },
     localeRules: {
       move: on('overview')
-        ? (_ch, key) => (key.upArrow ? setCursor((c) => Math.max(0, c - 1)) : setCursor((c) => Math.min(rows.length - 1, c + 1)))
+        ? (_ch, key) => setCursor(key.upArrow ? cursor - 1 : cursor + 1)
         : undefined,
       open: on('overview') ? openSection : undefined,
       save: on('overview') && savable ? () => void save() : undefined,
@@ -605,8 +637,8 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
 
       {draft && (stage === 'overview' || stage === 'leave') && (
         <>
-          {SECTION_STAGE.map((section, i) => (
-            <Text key={section}>{`${marker(cursor === i)}${sectionLabel(section)}`}</Text>
+          {rows.map((row, i) => (
+            <Text key={row}>{`${marker(cursor === i)}${sectionLabel(row)}`}</Text>
           ))}
           {dirty && (
             <Text color="yellow">

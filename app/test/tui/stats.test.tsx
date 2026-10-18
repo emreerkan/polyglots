@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { saveConfig } from '../../src/config.js'
+import { saveConfig, unsetConfig } from '../../src/config.js'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import React from 'react'
@@ -149,12 +149,15 @@ describe('the live statistics page', () => {
     view.stdin.write(keys.esc)
     await tick(ESC_DELAY)
     await waitForText(view.lastFrame, 'About')
+    // With a locale configured the screen opens on it and has no field; the
+    // prompt appears only when none is set.
+    unsetConfig('defaultLocale')
     await openFromHome(view.stdin, 'locale-rules')
     await waitForText(view.lastFrame, 'Locale:')
     view.stdin.write('x')
     await tick()
     expect(close).not.toHaveBeenCalled()
-    expect(flat(view.lastFrame())).toContain('Locale: trx')
+    expect(flat(view.lastFrame())).toContain('Locale: x')
   })
 
   it('says when the page is served by another polyglots, which keeps it running', async () => {

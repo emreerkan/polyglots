@@ -49,8 +49,6 @@ function mount(overrides: Partial<TuiCommands> = {}, onBack: () => void = () => 
 type View = ReturnType<typeof mount>
 
 async function openFetch(view: View) {
-  await waitForText(view.lastFrame, /Locale/)
-  view.stdin.write(keys.enter)
   await waitForText(view.lastFrame, /Built-in rules/)
   await selectFetch(view)
 }
@@ -164,8 +162,6 @@ describe('LocaleRules: fetch from polyglots-data', () => {
   // made against that file: fetching would drop them without a word.
   it('refuses while there are unsaved edits', async () => {
     const view = mount({ planRulesFetch: vi.fn(async () => plan()) })
-    await waitForText(view.lastFrame, /Locale/)
-    view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, /Built-in rules/)
     // Formality, then ↓ to choose formal: an unsaved edit.
     view.stdin.write(keys.down)

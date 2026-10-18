@@ -29,8 +29,6 @@ afterEach(async () => {
 async function openRuleList(size = { columns: 80, rows: 24 }) {
   const view = render(<App commands={fakeCommands()} cwd={cwd} />, size)
   await openFromHome(view.stdin, 'locale-rules')
-  await waitForText(view.lastFrame, 'Locale: tr')
-  view.stdin.write(keys.enter)
   await waitForText(view.lastFrame, 'Built-in rules')
   view.stdin.write(keys.enter)
   await waitForText(view.lastFrame, 'placeholder')

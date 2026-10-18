@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { saveConfig } from '../../src/config.js'
+import { saveConfig, unsetConfig } from '../../src/config.js'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import React from 'react'
@@ -10,7 +10,7 @@ import { App } from '../../src/tui/App.js'
 import { CommandsProvider, type TuiCommands } from '../../src/tui/commands.js'
 import { LocaleRules } from '../../src/tui/screens/LocaleRules.js'
 import { installLocaleFixture } from '../locale-fixture.js'
-import { ESC_DELAY, fakeCommands, flat, openFromHome, keys, makeHome, render, rulesEntry, tick, waitFor, waitForText, cleanup, type Home } from './helpers.js'
+import { ESC_DELAY, fakeCommands, flat, openFromHome, keys, makeHome, render, manifestWith, rulesEntry, tick, waitFor, waitForText, cleanup, type Home } from './helpers.js'
 
 let home: Home
 
@@ -25,9 +25,9 @@ afterEach(async () => {
   await home.cleanup()
 })
 
-function mount(onBack: () => void = () => undefined) {
+function mount(onBack: () => void = () => undefined, overrides: Partial<TuiCommands> = {}) {
   return render(
-    <CommandsProvider value={fakeCommands()}>
+    <CommandsProvider value={fakeCommands(overrides)}>
       <LocaleRules onBack={onBack} />
     </CommandsProvider>,
   )
@@ -36,8 +36,6 @@ function mount(onBack: () => void = () => undefined) {
 type View = ReturnType<typeof mount>
 
 async function openLocale(view: View) {
-  await waitForText(view.lastFrame, /Locale/)
-  view.stdin.write(keys.enter)
   await waitForText(view.lastFrame, /Built-in rules/)
 }
 
@@ -60,6 +58,63 @@ describe('LocaleRules: no pack', () => {
   })
 })
 
+describe('LocaleRules: opening on the current locale', () => {
+  const overviewRows = (frame: string | undefined) =>
+    (frame ?? '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => /^(❯ )?(Fetch from polyglots-data|Built-in rules|Common mistakes)/.test(l))
+
+  it('opens on the configured locale without asking', async () => {
+    const view = mount()
+    await waitForText(view.lastFrame, /Built-in rules/)
+    expect(flat(view.lastFrame())).toMatch(/tr_TR \(tr\)/)
+    expect(view.lastFrame()).not.toContain('Locale:')
+  })
+
+  it('still asks when no locale is configured', async () => {
+    unsetConfig('defaultLocale')
+    const view = mount()
+    await waitForText(view.lastFrame, 'Locale:')
+  })
+
+  it('puts Fetch from polyglots-data first for maintained rules', async () => {
+    const dataClient = { ...fakeCommands().dataClient, manifest: vi.fn(async () => manifestWith({ rules: [rulesEntry()] })) }
+    const view = mount(undefined, { dataClient })
+    await waitFor(() => overviewRows(view.lastFrame())[0]?.includes('Fetch from polyglots-data') === true)
+  })
+
+  it('leaves the fetch row in place for draft rules or an offline manifest', async () => {
+    const draft = { ...fakeCommands().dataClient, manifest: vi.fn(async () => manifestWith({ rules: [rulesEntry({ status: 'draft' })] })) }
+    const one = mount(undefined, { dataClient: draft })
+    await waitForText(one.lastFrame, /Built-in rules/)
+    await waitFor(() => (draft.manifest as ReturnType<typeof vi.fn>).mock.calls.length > 0)
+    await tick()
+    expect(overviewRows(one.lastFrame())[0]).toContain('Built-in rules')
+    const offline = { ...fakeCommands().dataClient, manifest: vi.fn(async () => Promise.reject(new Error('offline'))) }
+    const two = mount(undefined, { dataClient: offline })
+    await waitForText(two.lastFrame, /Built-in rules/)
+    await tick()
+    expect(overviewRows(two.lastFrame())[0]).toContain('Built-in rules')
+    expect(flat(two.lastFrame())).not.toContain('offline')
+  })
+
+  it('keeps the cursor on its section when the fetch row moves', async () => {
+    let resolve!: (m: ReturnType<typeof manifestWith>) => void
+    const dataClient = { ...fakeCommands().dataClient, manifest: vi.fn(() => new Promise<ReturnType<typeof manifestWith>>((r) => (resolve = r))) }
+    const view = mount(undefined, { dataClient })
+    await waitForText(view.lastFrame, /Built-in rules/)
+    for (let i = 0; i < 20 && !/❯ Common mistakes/.test(view.lastFrame() ?? ''); i++) {
+      view.stdin.write(keys.down)
+      await tick()
+    }
+    expect(view.lastFrame()).toMatch(/❯ Common mistakes/)
+    resolve(manifestWith({ rules: [rulesEntry()] }))
+    await waitFor(() => overviewRows(view.lastFrame())[0]?.includes('Fetch from polyglots-data') === true)
+    expect(view.lastFrame()).toMatch(/❯ Common mistakes/)
+  })
+})
+
 describe('LocaleRules: picking a locale', () => {
   it('opens the configured locale and names its file', async () => {
     const view = mount()
@@ -72,12 +127,9 @@ describe('LocaleRules: picking a locale', () => {
   })
 
   it('accepts any spelling of a locale', async () => {
+    unsetConfig('defaultLocale')
     const view = mount()
-    await waitForText(view.lastFrame, /Locale/)
-    view.stdin.write(keys.backspace)
-    await tick()
-    view.stdin.write(keys.backspace)
-    await tick()
+    await waitForText(view.lastFrame, 'Locale:')
     view.stdin.write('nl_NL_formal')
     await tick()
     view.stdin.write(keys.enter)
@@ -85,12 +137,9 @@ describe('LocaleRules: picking a locale', () => {
   })
 
   it('refuses a locale wp.org does not list, and stays on the field', async () => {
+    unsetConfig('defaultLocale')
     const view = mount()
-    await waitForText(view.lastFrame, /Locale/)
-    view.stdin.write(keys.backspace)
-    await tick()
-    view.stdin.write(keys.backspace)
-    await tick()
+    await waitForText(view.lastFrame, 'Locale:')
     view.stdin.write('zz')
     await tick()
     view.stdin.write(keys.enter)
@@ -102,8 +151,6 @@ describe('LocaleRules: picking a locale', () => {
     await mkdir(dirname(file), { recursive: true })
     await writeFile(file, 'rules:\n  enable: [nope]\n', 'utf8')
     const view = mount()
-    await waitForText(view.lastFrame, /Locale/)
-    view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, /nope/)
   })
 })
@@ -733,8 +780,6 @@ describe('LocaleRules: an invalid rules file', () => {
   it('shows the error with the fetch and builder rows, and nothing to edit', async () => {
     const path = await writeBroken()
     const view = mountWith({})
-    await waitForText(view.lastFrame, /Locale/)
-    view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, 'Fetch from polyglots-data')
     const frame = flat(view.lastFrame())
     expect(frame).toContain(path)
@@ -761,8 +806,6 @@ describe('LocaleRules: an invalid rules file', () => {
       await writeFile(p.path, p.text)
     })
     const view = mountWith({ planRulesFetch, writeRulesFetch })
-    await waitForText(view.lastFrame, /Locale/)
-    view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, '❯ Fetch from polyglots-data')
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, 'guidance changed:')
@@ -777,8 +820,6 @@ describe('LocaleRules: an invalid rules file', () => {
   it('esc from the fetch returns to the reduced overview', async () => {
     await writeBroken()
     const view = mountWith({})
-    await waitForText(view.lastFrame, /Locale/)
-    view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, '❯ Fetch from polyglots-data')
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, 'No polyglots-data entry for tr')

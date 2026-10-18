@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '../../src/config.js'
-import { glossaryCount, localeConfigured, memoryCount, memoryState, missingLocaleSteps, setupStatus, tmListed, type SetupFacts } from '../../src/tui/setup.js'
+import { glossaryCount, localeConfigured, memoryCount, memoryState, missingLocaleSteps, rulesMaintained, setupStatus, tmListed, type SetupFacts } from '../../src/tui/setup.js'
 import { DEFAULT_TUI_STATE, loadTuiState, parseTuiState, saveTuiState, tuiStateFile } from '../../src/tui/state.js'
 import { VERSION } from '../../src/version.js'
 import { agentStatus, makeHome, unusableAgent, type Home } from './helpers.js'
@@ -183,6 +183,16 @@ describe('tmListed', () => {
     const manifest = { schema: 1, generated: '', tm: [{ slug: 'tr', locale: 'tr_TR' }, 'garbage', null], rules: [] }
     expect(tmListed(manifest, 'tr')).toBe(true)
     expect(tmListed(manifest, 'de')).toBe(false)
+  })
+})
+
+describe('rulesMaintained', () => {
+  it('is true only for a maintained entry of the slug', () => {
+    const row = (slug: string, status: string) => ({ slug, locale: slug, status })
+    const manifest = { schema: 1, generated: '', tm: [], rules: [row('nl', 'maintained'), row('tr', 'maintained'), 'garbage', null] }
+    expect(rulesMaintained(manifest, 'nl')).toBe(true)
+    expect(rulesMaintained({ ...manifest, rules: [row('nl', 'draft')] }, 'nl')).toBe(false)
+    expect(rulesMaintained({ ...manifest, rules: [row('tr', 'maintained')] }, 'nl')).toBe(false)
   })
 })
 
