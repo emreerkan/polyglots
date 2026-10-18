@@ -17,7 +17,9 @@ polyglots config set batchSize 50
 |---|---|---|
 | `defaultLocale` | not set | The locale a command uses when `--locale` is not given. `review` and `translate` then fall back to the file's `Language` header; every other command that needs a locale stops and asks for one. `config set defaultLocale ""` unsets it. |
 | `defaultDraftEngine` | `deepl` | The draft engine for `translate`: `deepl`, `openai` or `local`, or `none` for translation memory only; see [without AI](getting-started.md#using-polyglots-without-ai). |
-| `reviewProvider` | `claude` | Which agent reviews: `claude` or `antigravity`. `local` is the experimental local reviewer; see [local models](local-models.md). `none` reviews with the rules alone; see [without AI](getting-started.md#using-polyglots-without-ai). |
+| `reviewProvider` | `claude` | Which agent reviews: `claude`, `antigravity` or `codex`; see [codex](codex.md). `local` is the experimental local reviewer; see [local models](local-models.md). `none` reviews with the rules alone; see [without AI](getting-started.md#using-polyglots-without-ai). |
+| `codex.model` | not set | The model codex reviews with. When unset, the `model` in your `~/.codex/config.toml` applies, then codex's own default. `config set codex.model ""` removes it. See [codex](codex.md#model-and-effort). |
+| `codex.effort` | not set | Codex's reasoning effort: `minimal`, `low`, `medium`, `high` or `xhigh`. When unset, your codex config's `model_reasoning_effort` applies, then codex's own default. An empty value removes it. |
 | `wporgUsername` | empty | Your translate.wordpress.org login. Used only to link the requester message to the contributor's strings. |
 | `batchSize` | `25` | Entries per batch sent to the reviewer or draft engine. `--batch-size` overrides it for one run. |
 | `consistencyTtlDays` | `30` | How long a translate.wordpress.org consistency lookup is cached before it is asked again. |

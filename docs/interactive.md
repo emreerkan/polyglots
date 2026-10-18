@@ -21,7 +21,7 @@ has six steps:
 1. **Locale**: the language you translate into. Type a few letters (`de`,
    `pt_BR`, `nl_NL_formal`) and choose from the matches.
 2. **Review provider**: the AI agent that reviews: Claude Code or
-   Antigravity, whichever is installed and signed in on this machine, or a
+   Antigravity or Codex, whichever is installed and signed in on this machine, or a
    model on your own computer (experimental), or **No AI**, which runs the
    rules alone ([what that means](getting-started.md#using-polyglots-without-ai)).
    Each option says what it costs.

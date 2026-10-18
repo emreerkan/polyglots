@@ -45,6 +45,7 @@ yourself.
 - For AI review, one of:
   - [Claude Code](https://claude.com/claude-code), signed in;
   - Antigravity's `agy` CLI, signed in;
+  - OpenAI's `codex` CLI, signed in;
   - a local model server (Ollama, LM Studio, llama.cpp or vLLM).
 - For machine translation drafts, optionally a DeepL or OpenAI API key, or the
   same local model server.

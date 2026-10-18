@@ -150,7 +150,7 @@ const doc = (slug: string) => `${base}docs/${slug}/`;
       </div>
       <div class="card">
         <h3>An agent for the rest</h3>
-        <p>Meaning, fluency and the soft findings go to an AI agent with the rule hints in hand and three lookups: the glossary, your memory and translate.wordpress.org’s consistency data. Claude gets those and nothing else, no shell and no files; Antigravity is held to them by <a href={doc('antigravity')}>its own settings</a>. It decides, and repairs what it rejects.</p>
+        <p>Meaning, fluency and the soft findings go to an AI agent with the rule hints in hand and three lookups: the glossary, your memory and translate.wordpress.org’s consistency data. Claude gets those and nothing else, no shell and no files; Codex gets them through flags polyglots passes (<a href={doc('codex')}>details</a>); Antigravity is held to them by <a href={doc('antigravity')}>its own settings</a>. It decides, and repairs what it rejects.</p>
       </div>
     </div>
     <p class="no-ai">Prefer no AI? Choose <strong>No AI</strong> in setup: every mechanical check still runs, on your machine, with nothing sent to a model. <a href={doc('getting-started') + '#using-polyglots-without-ai'}>What the rules catch, and what they cannot</a></p>
@@ -168,6 +168,7 @@ const doc = (slug: string) => `${base}docs/${slug}/`;
         <tbody>
           <tr><td>Reviewing</td><td><strong>Claude Code</strong> (default)</td><td>Your Claude plan’s usage, or API billing if the CLI is signed in with a key.</td></tr>
           <tr><td>Reviewing</td><td><strong>Antigravity CLI</strong> <a href={doc('antigravity')}>setup</a></td><td>Your Antigravity account’s usage.</td></tr>
+          <tr><td>Reviewing</td><td><strong>Codex CLI</strong> <a href={doc('codex')}>setup</a></td><td>Your ChatGPT plan’s usage.</td></tr>
           <tr><td>Drafting</td><td><strong>DeepL</strong> (default)</td><td>Free within DeepL API Free’s allowance (one-time for new accounts); metered on a paid plan.</td></tr>
           <tr><td>Drafting</td><td><strong>OpenAI</strong></td><td>Metered per token.</td></tr>
           <tr><td>Drafting, experimental reviewing</td><td><strong>Local models</strong>: Ollama, LM Studio, llama.cpp, vLLM <a href={doc('local-models')}>setup</a></td><td>Free; runs on your machine.</td></tr>
@@ -188,13 +189,13 @@ const doc = (slug: string) => `${base}docs/${slug}/`;
       </p>
       <p>What does leave the machine:</p>
       <ul class="leaves">
-        <li><strong>Reviewing</strong> sends each batch of strings, with its glossary terms and memory matches, to the agent you review with and its model provider (Anthropic for Claude, Google for Antigravity).</li>
+        <li><strong>Reviewing</strong> sends each batch of strings, with its glossary terms and memory matches, to the agent you review with and its model provider (Anthropic for Claude, Google for Antigravity, OpenAI for Codex).</li>
         <li><strong>Drafting</strong> sends source strings to DeepL or OpenAI.</li>
         <li><strong>Lookups</strong> query translate.wordpress.org for the glossary, exports and consistency data.</li>
         <li><strong>Usage totals</strong>, only if you turn them on: a weekly count of strings reviewed, drafted and repaired, with no names, strings or locale. <a href={doc('usage-statistics')}>What is sent</a></li>
       </ul>
       <p>
-        Only with a local model for both drafting and reviewing, or with No AI, do the strings stay on your machine. Claude is held to polyglots’ three lookups on every run and cannot open files or run commands; Antigravity’s limits come from its own settings and any other tool servers registered with it.
+        Only with a local model for both drafting and reviewing, or with No AI, do the strings stay on your machine. Claude is held to polyglots’ three lookups on every run and cannot open files or run commands; Codex is held to them by the flags polyglots passes; Antigravity’s limits come from its own settings and any other tool servers registered with it.
       </p>
     </div>
     <ul class="facts">

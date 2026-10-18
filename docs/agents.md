@@ -30,7 +30,7 @@ Work in this order. Steps 1 to 5 spend nothing; step 6 is the first that does.
 1. **Check the install.** `polyglots --version`. It needs Node.js 24 or later.
    If it is missing, `npm install -g polyglots`.
 2. **Check the reviewer.** `polyglots doctor` reports whether the agent that
-   reviews (claude or antigravity) is installed, signed in and set up. It
+   reviews (claude, antigravity or codex) is installed, signed in and set up. It
    sends no prompt. Add `--json` to parse it.
 3. **Know the locale.** `polyglots config get defaultLocale` prints it, or an
    empty line when none is set. polyglots has no default. If none is set, or

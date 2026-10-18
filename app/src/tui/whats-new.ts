@@ -16,7 +16,7 @@ export const WHATS_NEW: Readonly<Record<string, readonly string[]>> = {
   unreleased: [
     'Batch of files: time, estimate, open any file',
     'Send a problem report when a run has problems',
-    'Runs check antigravity sign-in and quota first',
+    'Review with codex: pick it in setup',
   ],
   '1.0.0': [
     'Fetch rules and memory from polyglots-data',

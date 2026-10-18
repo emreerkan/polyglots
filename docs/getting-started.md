@@ -33,10 +33,10 @@ you do there can also be scripted.
 ## Choose a reviewer
 
 A review or a translation is judged by an AI agent that runs on your machine:
-the [Claude Code](https://claude.com/claude-code) CLI (`claude`, the default)
-or the Antigravity CLI (`agy`). polyglots runs the agent for you. It does not
-call a model API itself, so the agent uses whichever account it is already
-signed in to.
+the [Claude Code](https://claude.com/claude-code) CLI (`claude`, the default),
+the Antigravity CLI (`agy`) or the Codex CLI (`codex`). polyglots runs the
+agent for you. It does not call a model API itself, so the agent uses
+whichever account it is already signed in to.
 
 Check which agents are installed and ready:
 
@@ -47,7 +47,8 @@ polyglots doctor
 `doctor` sends no prompt. `polyglots doctor --live` also sends one short
 prompt to each agent, which counts as a request on a metered plan.
 
-To use antigravity, follow [its setup](antigravity.md) first. To review or
+To use antigravity, follow [its setup](antigravity.md) first. Codex needs only
+an install and a sign-in; see [codex](codex.md). To review or
 draft with a model on your own machine, see [local models](local-models.md).
 
 ## Set your locale
@@ -171,7 +172,7 @@ machine in three ways:
 
 - **Reviewing** sends each batch of strings, with its glossary terms and
   memory matches, to the agent you review with, and so to its model provider
-  (Anthropic for Claude, Google for Antigravity).
+  (Anthropic for Claude, Google for Antigravity, OpenAI for Codex).
 - **Drafting** sends source strings to DeepL or OpenAI.
 - **Lookups** query translate.wordpress.org for the glossary, the exports and
   consistency data.
@@ -186,7 +187,8 @@ only the translate.wordpress.org lookups remain.
 Claude is limited to polyglots' three lookups on every run, and cannot open
 files or run commands. Antigravity's limits come from its own settings and
 from whatever other tool servers you registered with it; see
-[its setup](antigravity.md).
+[its setup](antigravity.md). Codex is held to them by the flags polyglots
+passes it; see [codex](codex.md).
 
 ## Using polyglots without AI
 

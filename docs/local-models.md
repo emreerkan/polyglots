@@ -27,7 +27,7 @@ or make it the default:
 polyglots config set defaultDraftEngine local
 ```
 
-The drafts are still reviewed by your agent (claude or antigravity) unless
+The drafts are still reviewed by your agent (claude, antigravity or codex) unless
 you also choose local review, below.
 
 ## Choosing the server and model

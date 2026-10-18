@@ -12,6 +12,7 @@ Entries say what changed. For why and how, read the commit.
 
 ### Added
 
+- `codex` as a review provider (`codex exec`, ChatGPT sign-in), with `codex.model` and `codex.effort` settings.
 - Review and translate keep every failed batch attempt, with its reason and duration, in `jobs.db` (`batch_failure`).
 - Review and translate write a run log in `~/.local/share/polyglots/logs`, kept 14 days, holding counts and failure reasons but not the entries.
 - The MCP server logs each tool call (tool, sizes, timing, result count, error) to a daily `mcp-<date>.jsonl` in the same folder, without its arguments or results.
