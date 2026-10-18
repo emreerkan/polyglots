@@ -24,6 +24,7 @@ import {
   engineId,
   finishRun,
   getAuditVerdict,
+  getRun,
   openJobsDb,
   reapAbandonedRuns,
   pruneStaleConfigs,
@@ -32,6 +33,9 @@ import {
   startRun,
 } from '../jobs/index.js'
 import { writeMcpConfig, MCP_ENV } from '../mcp/config.js'
+import { pruneLogs } from '../logs/paths.js'
+import { logRunEvent, openRunLog, withRunLog, type RunLog } from '../logs/run-log.js'
+import { VERSION } from '../version.js'
 import { loadPo, type Annotation } from '../po/po-file.js'
 import type { RunControl } from '../run-control.js'
 import { loadConfig } from '../config.js'
@@ -72,6 +76,11 @@ export interface ReviewOptions extends Partial<Omit<AgentRunOptions, 'provider'>
   // Stands in for the local model's transport, for tests.
   localChat?: LocalChat
   onProgress?: (event: ReviewEvent) => void
+  // Keeps prompts, agent output and entries beside the run log. Off unless asked.
+  debug?: boolean
+  // Where a warning about the run log itself goes; stderr unless a caller,
+  // a test or a screen that owns the terminal, wants the line.
+  onWarn?: (line: string) => void
 }
 
 // The name says whether a model was in the loop, because that decides whether
@@ -305,7 +314,16 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
   const pluralForms = po.promptPluralForms()
   const all = po.auditEntries()
   const reviewable = all.filter(submitted)
-  const emit = opts.onProgress ?? (() => {})
+  // Every event reaches the run log before the caller's handler, so an event
+  // whose handler throws is still on record, and the run log cannot drift from
+  // what the screen was told. Nothing is logged before the run row exists: a
+  // run log is named by its run.
+  let runLog: RunLog | undefined
+  const forward = opts.onProgress ?? (() => {})
+  const emit = (event: ReviewEvent) => {
+    if (runLog) logRunEvent(runLog, event)
+    forward(event)
+  }
   // Whatever an earlier run in this process left unreported (a rules try in
   // the TUI, say) is not this run's to name. A pattern skipped back then is
   // named again below if this run asks for it.
@@ -380,221 +398,249 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
       // on it later would be reading rule findings as Claude's opinions.
       engine: noAi ? 'rules' : engine,
     })
+    const id = runId
 
-    emit({
-      type: 'start',
+    pruneLogs()
+    runLog = openRunLog({
+      runId: id,
+      startedAt: getRun(jobs, id)!.startedAt,
+      debug: opts.debug === true,
+      warn: opts.onWarn ?? ((line) => process.stderr.write(line + '\n')),
+    })
+    runLog.write('run-start', {
+      command: 'review',
       file: opts.file,
-      total: all.length,
-      reviewable: reviewable.length,
+      locale: opts.locale,
+      engine: noAi ? 'rules' : engine,
+      provider,
+      model: opts.model ?? null,
+      batchSize,
+      version: VERSION,
+      node: process.version,
+      platform: process.platform,
+      pid: process.pid,
     })
 
-    // Nothing reads it on --no-ai or for a local model, which has no MCP.
-    const mcpConfigPath =
-      opts.mcpConfigPath ?? (noAi || local ? '' : await writeMcpConfig({ env: { [MCP_ENV.locale]: opts.locale } }))
+    // Made current for everything the run does from here, so spawnAgent finds
+    // the log without an agent option of its own.
+    summary = await withRunLog(runLog, async (): Promise<ReviewSummary> => {
+      emit({
+        type: 'start',
+        file: opts.file,
+        total: all.length,
+        reviewable: reviewable.length,
+      })
 
-    const marker: ReviewMarker = {
-      done: 0,
-      of: 0,
-      problems: 0,
-      unreviewed: 0,
-      repaired: 0,
-      byRule: {},
-    }
+      // Nothing reads it on --no-ai or for a local model, which has no MCP.
+      const mcpConfigPath =
+        opts.mcpConfigPath ?? (noAi || local ? '' : await writeMcpConfig({ env: { [MCP_ENV.locale]: opts.locale } }))
 
-    // A large submission is hundreds of batches and hours of wall clock, so the file
-    // is rewritten after every one, marker and all. Losing it to a Ctrl+C is not
-    // acceptable, and re-parsing the source each time is cheaper than the AI call
-    // that preceded it.
-    const decided: Verdict[] = []
-    // Entries in batches the run never reached. Reported by auditEntries rather
-    // than derived here, so a stopped run cannot mis-state what it looked at.
-    let pending = 0
-    let wrote = false
-    const persist = async (): Promise<number> => {
-      const annotations = new Map<string, Annotation>()
-      for (const verdict of decided) {
-        // A repair with nothing else wrong is neither a problem nor a guess, and it
-        // still belongs in the file: it is the only copy of the correction. So
-        // does an entry a locale pattern ran away on, which the model may have
-        // cleared without ever being asked about the pattern: the problems file
-        // is where the maintainer learns which entry it hung on.
-        if (!verdict.problem && !verdict.needsReview && verdict.text === undefined && !verdict.findings.some(isSkipFinding)) continue
-        const notes = verdict.findings.map((f) => f.message)
-        annotations.set(verdict.key, {
-          // A verdict with no findings still has to say something: keepOnly would
-          // otherwise fall back to a generic note, and the model's own reason is
-          // the better line to give the human reading the file.
-          notes: notes.length > 0 ? notes : [verdict.reason],
-          ...(verdict.text === undefined ? {} : { text: verdict.text }),
-        })
+      const marker: ReviewMarker = {
+        done: 0,
+        of: 0,
+        problems: 0,
+        unreviewed: 0,
+        repaired: 0,
+        byRule: {},
       }
-      if (opts.outDir) await mkdir(opts.outDir, { recursive: true })
-      const out = await loadPo(opts.file)
-      out.keepOnly(annotations)
-      out.setHeader(MARKER_HEADER, encodeMarker(marker))
-      await out.save(target)
-      // A file holding nothing but the marker is bookkeeping, not a result, so it
-      // is not announced.
-      if (!wrote && annotations.size > 0) {
-        wrote = true
-        emit({ type: 'written', file: target })
-      }
-      return annotations.size
-    }
 
-    const remembered = readMemory(reviewable, opts.locale, opts.db)
-    // A verdict carries the key, which glues the msgctxt on; the list shows the msgid.
-    const msgidOf = new Map(reviewable.map((e) => [e.key, e.msgid]))
-    const verdicts = await auditEntries({
-      entries: reviewable,
-      tm: remembered.memory,
-      memoryExact: remembered.exact,
-      ...(remembered.weak.size > 0 ? { tmWeak: remembered.weak } : {}),
-      locale: opts.locale,
-      nplurals: po.nplurals,
-      ...(pluralForms === undefined ? {} : { pluralForms }),
-      glossary,
-      properNouns,
-      mcpConfigPath,
-      batchSize,
-      engine,
-      configHash: config,
-      ...(local ? { promptVariant: auditPromptVariant(opts.locale) } : {}),
-      ...(noAi ? { noAi: true } : opts.noAi === undefined ? {} : { noAi: opts.noAi }),
-      ...(store ? { store } : {}),
-      ...(opts.control ? { control: opts.control } : {}),
-      onStopped: (info) => {
-        pending = info.pending
-        // Rewind past a failed streak, so the marker written into the file does
-        // not claim batches whose verdicts were dropped. Nothing reads `done`
-        // back: this is about what a person opening the file is told, not about
-        // what the next run does. The next run re-attempts those entries because
-        // no verdict was ever cached for them.
-        marker.done = Math.min(marker.done, info.lastGood)
-      },
-      ...(adjudicate ? { adjudicate } : {}),
-      // The agent options mean nothing to a local model, and `provider` must
-      // never reach runAgent as `local`: the audit would spawn the default CLI.
-      ...(agent && opts.bin ? { bin: opts.bin } : {}),
-      ...(agent ? { provider: agent } : {}),
-      ...(agent && opts.model ? { model: opts.model } : {}),
-      onRules: (r) =>
-        emit({
-          type: 'rules-done',
-          flagged: r.flagged,
-          suspects: r.suspects,
-          memoryApproved: r.memoryApproved,
-          memoryRepaired: r.memoryRepaired,
-        }),
-      onBatchStart: (b) => emit({ type: 'batch-start', index: b.index, of: b.of, size: b.size, at: Date.now() }),
-      // Entries an earlier run already judged. They belong in the output file
-      // from the first write, not only in the last one, or a run interrupted
-      // part way through a resume would write a file that had lost them.
-      onCached: async (cached) => {
-        emit({ type: 'cached', entries: cached.length, batches: Math.ceil(cached.length / batchSize) })
-        decided.push(...cached)
-        await persist()
-      },
-      onBatch: async (b) => {
-        // Before anything that can throw, so the reason outlives the run. The
-        // last attempt gave the batch up only when the batch is marked failed;
-        // otherwise the retry rescued it and every row is an attempt that failed.
-        for (const a of b.attempts ?? []) {
-          recordBatchFailure(jobs, {
-            runId: runId!,
-            batch: b.index,
-            attempt: a.attempt,
-            size: b.size,
-            phase: 'review',
-            reason: a.reason,
-            ms: a.ms,
-            final: b.failed !== undefined && a.attempt === b.attempts!.length,
-            at: Date.now(),
+      // A large submission is hundreds of batches and hours of wall clock, so the file
+      // is rewritten after every one, marker and all. Losing it to a Ctrl+C is not
+      // acceptable, and re-parsing the source each time is cheaper than the AI call
+      // that preceded it.
+      const decided: Verdict[] = []
+      // Entries in batches the run never reached. Reported by auditEntries rather
+      // than derived here, so a stopped run cannot mis-state what it looked at.
+      let pending = 0
+      let wrote = false
+      const persist = async (): Promise<number> => {
+        const annotations = new Map<string, Annotation>()
+        for (const verdict of decided) {
+          // A repair with nothing else wrong is neither a problem nor a guess, and it
+          // still belongs in the file: it is the only copy of the correction. So
+          // does an entry a locale pattern ran away on, which the model may have
+          // cleared without ever being asked about the pattern: the problems file
+          // is where the maintainer learns which entry it hung on.
+          if (!verdict.problem && !verdict.needsReview && verdict.text === undefined && !verdict.findings.some(isSkipFinding)) continue
+          const notes = verdict.findings.map((f) => f.message)
+          annotations.set(verdict.key, {
+            // A verdict with no findings still has to say something: keepOnly would
+            // otherwise fall back to a generic note, and the model's own reason is
+            // the better line to give the human reading the file.
+            notes: notes.length > 0 ? notes : [verdict.reason],
+            ...(verdict.text === undefined ? {} : { text: verdict.text }),
           })
         }
-        decided.push(...b.verdicts)
-        marker.done = b.index
-        marker.of = b.of
-        marker.problems += b.verdicts.filter((v) => v.problem).length
-        marker.unreviewed += b.verdicts.filter((v) => v.unreviewed).length
-        marker.repaired += b.verdicts.filter((v) => v.text !== undefined).length
-        addTally(marker.byRule, tally(b.verdicts))
-        await persist()
-        // Before the batch's terminal event, so a screen that redraws on that one
-        // already has the entries it is about to list.
-        emit({ type: 'entries', index: b.index, entries: b.verdicts.map((v) => landed(v, msgidOf.get(v.key) ?? v.key)) })
-        // One terminal event per batch: the reducer counts either as progress, so
-        // emitting both would advance the bar twice.
-        if (b.failed) emit({ type: 'batch-failed', index: b.index, size: b.size, reason: b.failed, at: Date.now() })
-        else emit({ type: 'batch-done', index: b.index, problems: b.problems, at: Date.now() })
-      },
-    })
+        if (opts.outDir) await mkdir(opts.outDir, { recursive: true })
+        const out = await loadPo(opts.file)
+        out.keepOnly(annotations)
+        out.setHeader(MARKER_HEADER, encodeMarker(marker))
+        await out.save(target)
+        // A file holding nothing but the marker is bookkeeping, not a result, so it
+        // is not announced.
+        if (!wrote && annotations.size > 0) {
+          wrote = true
+          emit({ type: 'written', file: target })
+        }
+        return annotations.size
+      }
 
-    const problems = verdicts.filter((v) => v.problem)
-    // Set only when the run was stopped part way, by auditEntries, which is the
-    // only thing that knows exactly which batches it never reached.
-
-    const needsReview = verdicts.filter((v) => v.needsReview)
-
-    // The marker is accumulated per batch so a Ctrl+C between batches leaves a
-    // usable one, but these are the authority at the end: a run that dropped an
-    // untrusted tail must not leave those counts behind in the header. The summary
-    // then reads the same numbers, so the file and the report cannot disagree.
-    marker.problems = problems.length
-    marker.unreviewed = verdicts.filter((v) => v.unreviewed).length
-    marker.repaired = verdicts.filter((v) => v.text !== undefined).length
-    marker.byRule = tally(verdicts)
-
-    // The rules-only path decides everything up front, so nothing was persisted yet.
-    decided.length = 0
-    decided.push(...verdicts)
-    const written = await persist()
-
-    summary = {
-      file: opts.file,
-      locale: opts.locale,
-      total: all.length,
-      skipped: all.length - reviewable.length,
-      reviewed: reviewable.length,
-      problems: marker.problems,
-      needsReview: needsReview.length,
-      approvable: reviewable.length - problems.length - needsReview.length - pending,
-      pending,
-      unreviewed: marker.unreviewed,
-      repaired: marker.repaired,
-      written,
-      byRule: marker.byRule,
-      byGroup: groupTally(verdicts),
-    }
-
-    if (written > 0) summary.problemsFile = target
-    // Nothing was flagged, so the only thing left in the file is the marker,
-    // which nothing reads back. A finished review has said all it has to say, so
-    // the file goes rather than sitting there looking like a result. A run that
-    // was stopped part way keeps it: it has entries nothing has looked at yet,
-    // and no file at all reads as "nothing to fix here".
-    else if (pending === 0) await rm(target, { force: true })
-
-    // Written once, from the same numbers the caller is about to be given, so the
-    // history and the report cannot disagree. A run stopped part way is ended
-    // rather than marked done: it has no totals worth freezing. It ends as
-    // `stopped`, not as a fault: the operator asked for it, and what it got
-    // through is cached for the run that resumes it.
-    if (pending > 0) endRun(jobs, runId, 'stopped')
-    else {
-      finishRun(jobs, runId, {
-        entries: summary.reviewed,
-        flagged: summary.problems,
-        repaired: summary.repaired,
-        unreviewed: summary.unreviewed,
-        approvable: summary.approvable,
-        byCategory: summary.byRule,
+      const remembered = readMemory(reviewable, opts.locale, opts.db)
+      // A verdict carries the key, which glues the msgctxt on; the list shows the msgid.
+      const msgidOf = new Map(reviewable.map((e) => [e.key, e.msgid]))
+      const verdicts = await auditEntries({
+        entries: reviewable,
+        tm: remembered.memory,
+        memoryExact: remembered.exact,
+        ...(remembered.weak.size > 0 ? { tmWeak: remembered.weak } : {}),
+        locale: opts.locale,
+        nplurals: po.nplurals,
+        ...(pluralForms === undefined ? {} : { pluralForms }),
+        glossary,
+        properNouns,
+        mcpConfigPath,
+        batchSize,
+        engine,
+        configHash: config,
+        ...(local ? { promptVariant: auditPromptVariant(opts.locale) } : {}),
+        ...(noAi ? { noAi: true } : opts.noAi === undefined ? {} : { noAi: opts.noAi }),
+        ...(store ? { store } : {}),
+        ...(opts.control ? { control: opts.control } : {}),
+        onStopped: (info) => {
+          pending = info.pending
+          // Rewind past a failed streak, so the marker written into the file does
+          // not claim batches whose verdicts were dropped. Nothing reads `done`
+          // back: this is about what a person opening the file is told, not about
+          // what the next run does. The next run re-attempts those entries because
+          // no verdict was ever cached for them.
+          marker.done = Math.min(marker.done, info.lastGood)
+        },
+        ...(adjudicate ? { adjudicate } : {}),
+        // The agent options mean nothing to a local model, and `provider` must
+        // never reach runAgent as `local`: the audit would spawn the default CLI.
+        ...(agent && opts.bin ? { bin: opts.bin } : {}),
+        ...(agent ? { provider: agent } : {}),
+        ...(agent && opts.model ? { model: opts.model } : {}),
+        onRules: (r) =>
+          emit({
+            type: 'rules-done',
+            flagged: r.flagged,
+            suspects: r.suspects,
+            memoryApproved: r.memoryApproved,
+            memoryRepaired: r.memoryRepaired,
+          }),
+        onBatchStart: (b) => emit({ type: 'batch-start', index: b.index, of: b.of, size: b.size, at: Date.now() }),
+        // Entries an earlier run already judged. They belong in the output file
+        // from the first write, not only in the last one, or a run interrupted
+        // part way through a resume would write a file that had lost them.
+        onCached: async (cached) => {
+          emit({ type: 'cached', entries: cached.length, batches: Math.ceil(cached.length / batchSize) })
+          decided.push(...cached)
+          await persist()
+        },
+        onBatch: async (b) => {
+          // Before anything that can throw, so the reason outlives the run. The
+          // last attempt gave the batch up only when the batch is marked failed;
+          // otherwise the retry rescued it and every row is an attempt that failed.
+          for (const a of b.attempts ?? []) {
+            recordBatchFailure(jobs, {
+              runId: id,
+              batch: b.index,
+              attempt: a.attempt,
+              size: b.size,
+              phase: 'review',
+              reason: a.reason,
+              ms: a.ms,
+              final: b.failed !== undefined && a.attempt === b.attempts!.length,
+              at: Date.now(),
+            })
+          }
+          decided.push(...b.verdicts)
+          marker.done = b.index
+          marker.of = b.of
+          marker.problems += b.verdicts.filter((v) => v.problem).length
+          marker.unreviewed += b.verdicts.filter((v) => v.unreviewed).length
+          marker.repaired += b.verdicts.filter((v) => v.text !== undefined).length
+          addTally(marker.byRule, tally(b.verdicts))
+          await persist()
+          // Before the batch's terminal event, so a screen that redraws on that one
+          // already has the entries it is about to list.
+          emit({ type: 'entries', index: b.index, entries: b.verdicts.map((v) => landed(v, msgidOf.get(v.key) ?? v.key)) })
+          // One terminal event per batch: the reducer counts either as progress, so
+          // emitting both would advance the bar twice.
+          if (b.failed) emit({ type: 'batch-failed', index: b.index, size: b.size, reason: b.failed, at: Date.now() })
+          else emit({ type: 'batch-done', index: b.index, problems: b.problems, at: Date.now() })
+        },
       })
-    }
+
+      const problems = verdicts.filter((v) => v.problem)
+      // Set only when the run was stopped part way, by auditEntries, which is the
+      // only thing that knows exactly which batches it never reached.
+
+      const needsReview = verdicts.filter((v) => v.needsReview)
+
+      // The marker is accumulated per batch so a Ctrl+C between batches leaves a
+      // usable one, but these are the authority at the end: a run that dropped an
+      // untrusted tail must not leave those counts behind in the header. The summary
+      // then reads the same numbers, so the file and the report cannot disagree.
+      marker.problems = problems.length
+      marker.unreviewed = verdicts.filter((v) => v.unreviewed).length
+      marker.repaired = verdicts.filter((v) => v.text !== undefined).length
+      marker.byRule = tally(verdicts)
+
+      // The rules-only path decides everything up front, so nothing was persisted yet.
+      decided.length = 0
+      decided.push(...verdicts)
+      const written = await persist()
+
+      const result: ReviewSummary = {
+        file: opts.file,
+        locale: opts.locale,
+        total: all.length,
+        skipped: all.length - reviewable.length,
+        reviewed: reviewable.length,
+        problems: marker.problems,
+        needsReview: needsReview.length,
+        approvable: reviewable.length - problems.length - needsReview.length - pending,
+        pending,
+        unreviewed: marker.unreviewed,
+        repaired: marker.repaired,
+        written,
+        byRule: marker.byRule,
+        byGroup: groupTally(verdicts),
+      }
+
+      if (written > 0) result.problemsFile = target
+      // Nothing was flagged, so the only thing left in the file is the marker,
+      // which nothing reads back. A finished review has said all it has to say, so
+      // the file goes rather than sitting there looking like a result. A run that
+      // was stopped part way keeps it: it has entries nothing has looked at yet,
+      // and no file at all reads as "nothing to fix here".
+      else if (pending === 0) await rm(target, { force: true })
+
+      // Written once, from the same numbers the caller is about to be given, so the
+      // history and the report cannot disagree. A run stopped part way is ended
+      // rather than marked done: it has no totals worth freezing. It ends as
+      // `stopped`, not as a fault: the operator asked for it, and what it got
+      // through is cached for the run that resumes it.
+      if (pending > 0) endRun(jobs, id, 'stopped')
+      else {
+        finishRun(jobs, id, {
+          entries: result.reviewed,
+          flagged: result.problems,
+          repaired: result.repaired,
+          unreviewed: result.unreviewed,
+          approvable: result.approvable,
+          byCategory: result.byRule,
+        })
+      }
+      return result
+    })
   } catch (err) {
     // A run in progress when this throws is neither done nor still running: mark
     // it stopped so history does not claim otherwise, before the handle it needs
     // to do that is closed underneath it.
+    runLog?.write('run-end', { ended: 'failed', error: err instanceof Error ? err.message : String(err) })
     if (runId !== undefined) endRun(jobs, runId, 'failed')
     throw err
   } finally {
@@ -609,6 +655,18 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
   // Named by label, and two patterns can share a note, so the same line once.
   const skippedRules = [...new Set(takeSkipped().map((s) => s.label))]
   if (skippedRules.length > 0) summary.skippedRules = skippedRules
-  emit({ type: 'done', summary })
+  // run-end after done rather than beside finishRun, so it is the log's last
+  // line, the one a reader looks for to learn how the run ended. In a finally,
+  // so a caller whose done handler throws still leaves the run's end recorded.
+  try {
+    emit({ type: 'done', summary })
+  } finally {
+    runLog?.write(
+      'run-end',
+      summary.pending > 0
+        ? { ended: 'stopped' }
+        : { ended: 'done', reviewed: summary.reviewed, problems: summary.problems, unreviewed: summary.unreviewed },
+    )
+  }
   return summary
 }

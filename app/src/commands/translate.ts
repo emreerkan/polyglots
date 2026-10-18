@@ -24,6 +24,7 @@ import {
   finishRun,
   getDraft,
   getDraftVerdict,
+  getRun,
   openJobsDb,
   reapAbandonedRuns,
   pruneStaleConfigs,
@@ -37,6 +38,9 @@ import {
   type DraftReview,
 } from '../jobs/index.js'
 import { MCP_ENV, writeMcpConfig } from '../mcp/config.js'
+import { pruneLogs } from '../logs/paths.js'
+import { logRunEvent, openRunLog, withRunLog, type RunLog } from '../logs/run-log.js'
+import { VERSION } from '../version.js'
 import { loadPo, type ApplyResult, type PoFile } from '../po/po-file.js'
 import { reviewBatch } from '../review/draft-review.js'
 import { allGlossary, findMemory, openDb } from '../storage/index.js'
@@ -151,6 +155,11 @@ export interface TranslateOptions {
   // `local` is the experimental local reviewer.
   provider?: ReviewChoice
   onProgress?: (e: TranslateEvent) => void
+  // Keeps prompts, agent output and entries beside the run log. Off unless asked.
+  debug?: boolean
+  // Where a warning about the run log itself goes; stderr unless a caller,
+  // a test or a screen that owns the terminal, wants the line.
+  onWarn?: (line: string) => void
 }
 
 type Emit = (e: TranslateEvent) => void
@@ -447,7 +456,14 @@ async function reviewDrafts(
 }
 
 export async function translateFile(opts: TranslateOptions): Promise<TranslateSummary> {
-  const emit: Emit = opts.onProgress ?? (() => undefined)
+  // Logged before the caller's handler, as in review, and nothing before the
+  // run row exists, since a run log is named by its run.
+  let runLog: RunLog | undefined
+  const forward: Emit = opts.onProgress ?? (() => undefined)
+  const emit: Emit = (event) => {
+    if (runLog) logRunEvent(runLog, event)
+    forward(event)
+  }
   // Whatever an earlier run in this process left unreported (a rules try in
   // the TUI, say) is not this run's to name. A pattern skipped back then is
   // named again below if this run asks for it.
@@ -572,216 +588,248 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
       batchSize,
       engine: engineName,
     })
+    const id = runId
+    pruneLogs()
+    runLog = openRunLog({
+      runId: id,
+      startedAt: getRun(jobs, id)!.startedAt,
+      debug: opts.debug === true,
+      warn: opts.onWarn ?? ((line) => process.stderr.write(line + '\n')),
+    })
+    runLog.write('run-start', {
+      command: 'translate',
+      file: opts.file,
+      // The start event above went out before the log was open, so these are
+      // the only file totals the log has. A review logs its start event
+      // inside the log and needs no copy here.
+      total: summary.total,
+      pending: summary.pending,
+      locale,
+      engine: engineName,
+      reviewEngine,
+      provider,
+      model: opts.model ?? null,
+      batchSize,
+      version: VERSION,
+      node: process.version,
+      platform: process.platform,
+      pid: process.pid,
+    })
 
-    const hits: ApplyResult[] = []
-    const rest: TranslationUnit[] = []
-    for (const unit of units) {
-      const hit = tmLookup(db, unit, locale, po.nplurals)
-      if (hit) hits.push(hit)
-      else rest.push(unit)
-    }
-    const savedHits = hits.length > 0 && (await persist(po, hits, opts.dryRun))
-    summary.fromTm = hits.length
-    emit({ type: 'tm-hit', count: hits.length })
-    if (hits.length > 0) {
-      const sourceOf = new Map(units.map((u) => [u.key, u.msgid]))
-      emit({
-        type: 'entries',
-        entries: hits.map(
-          (h): TranslateEntry => ({
-            key: h.key,
-            msgid: shortMsgid(sourceOf.get(h.key) ?? h.key),
-            ...(h.fuzzy ? { outcome: 'fuzzy', from: 'memory' } : { outcome: 'memory' }),
-          }),
-        ),
-      })
-    }
-    if (savedHits) emit({ type: 'saved' })
-
-    if (memoryOnly) summary.untranslated = rest.length
-    const batches = memoryOnly ? [] : chunk(rest, batchSize)
-    if (batches.length > 0) {
-      const engine =
-        opts.engine ??
-        getDraftEngine(opts.draftEngine, opts.secrets ?? loadSecrets(), {
-          onWarning: (message) => emit({ type: 'warning', message }),
-          // Where the local runner lives and which model it should load,
-          // resolved above from config so a user who set it gets what they
-          // asked for, and so the engine and its cache key agree.
-          ...(localDraft ? { local: localDraft } : {}),
-          ...(opts.localChat ? { localChat: opts.localChat } : {}),
-          idleTimeoutMs: localIdleTimeoutMs(settings),
-        })
-      const review =
-        opts.review ??
-        (localReview ? createLocalDraftReviewer(
-              opts.localChat ?? createLocalChat(localReview, { idleTimeoutMs: localIdleTimeoutMs(settings) }),
-              reviewEngine,
-            ) : reviewBatch)
-      // A local reviewer has no MCP, so nothing would read the file, and with
-      // no reviewer there is nothing to start it.
-      const mcpConfigPath =
-        opts.mcpConfigPath ?? (localReview || unreviewed ? '' : await writeMcpConfig({ env: { [MCP_ENV.locale]: locale } }))
-
-      // Review's rules, on translate's own drafts: built once for the file.
-      const checker = createDraftChecker({
-        locale,
-        nplurals: po.nplurals,
-        glossary: allGlossary(db, locale),
-        properNouns: configuredProperNouns(locale),
-        units: rest,
-      })
-      const unitOf = new Map(rest.map((u) => [u.key, u]))
-      const localAsk: LocalAsk | undefined = localReview
-        ? {
-            variant: draftReviewPromptVariant(locale),
-            // A setting the code reads takes no glossary term, as in review:
-            // its translator comment decides the value, and "kapalı" for
-            // "off" is exactly the mistake a glossary match would invite.
-            terms: (u) => (controlSpec(u) ? [] : checker.terms(u)),
-          }
-        : undefined
-
-      let consecutiveSkips = 0
-
-      batchLoop: for (const [i, batch] of batches.entries()) {
-        // Between batches, never inside one: the batch in flight has already been
-        // paid for, so it finishes and saves before anything parks.
-        if (opts.control && (await opts.control.gate()) === 'stop') {
-          summary.stopped = 'stopped before batch ' + String(i + 1)
-          break batchLoop
-        }
-        const index = i + 1
-        emit({ type: 'batch-start', index, of: batches.length, size: batch.length, at: Date.now() })
-        emit({ type: 'batch-phase', index, phase: 'drafting', at: Date.now() })
-
-        let drafts: Drafts | undefined
-        let results: Array<ReviewResult & { notes?: string[] }> | undefined
-        let lastError: unknown
-        // Which step an attempt was in when it failed, and every failure, kept
-        // for jobs.db below: the reason used to reach the screen and nowhere else.
-        let phase: 'drafting' | 'reviewing' = 'drafting'
-        const attempts: Array<{ attempt: number; phase: 'drafting' | 'reviewing'; reason: string; ms: number }> = []
-        for (let attempt = 0; attempt < 2 && results === undefined; attempt++) {
-          const started = Date.now()
-          phase = 'drafting'
-          try {
-            drafts ??= await draft(batch, engine, locale, po.nplurals, draftCache)
-            // Fixed after the draft cache, never before it: editing a fix
-            // pattern must not throw away what the engine was paid to write.
-            const prepared = new Map(batch.map((u) => [u.key, checker.prepare(u, drafts!.get(u.key) ?? [])]))
-            const fixedDrafts: Drafts = new Map([...prepared].map(([k, p]) => [k, p.drafts]))
-            const checks = new Map([...prepared].map(([k, p]) => [k, p.checks]))
-            if (unreviewed) {
-              // Nothing judged these, so every one is written for a human to
-              // confirm, and finalize still applies the fix patterns and names
-              // whatever check the draft fails.
-              results = batch.map((u) =>
-                checker.finalize(u, {
-                  key: u.key,
-                  text: fixedDrafts.get(u.key) ?? [],
-                  fuzzy: true,
-                  reason: 'Not reviewed: no review provider is set.',
-                }),
-              )
-              break
-            }
-            emit({ type: 'batch-phase', index, phase: 'reviewing', at: Date.now() })
-            phase = 'reviewing'
-            results = (
-              await reviewDrafts(batch, fixedDrafts, review, { ...opts, provider }, locale, po.nplurals, pluralForms, mcpConfigPath, reviewCache, checks, localAsk)
-            ).map((r) => {
-              const unit = unitOf.get(r.key)
-              return unit ? checker.finalize(unit, r) : r
-            })
-          } catch (err) {
-            if (isStopError(err)) {
-              summary.stopped = err.message
-              break batchLoop
-            }
-            lastError = err
-            attempts.push({ attempt: attempt + 1, phase, reason: errorMessage(err), ms: Date.now() - started })
-          }
-        }
-        for (const a of attempts) {
-          recordBatchFailure(jobs, {
-            runId: runId!,
-            batch: index,
-            attempt: a.attempt,
-            size: batch.length,
-            phase: a.phase,
-            reason: a.reason,
-            ms: a.ms,
-            final: results === undefined && a.attempt === attempts.length,
-            at: Date.now(),
-          })
-        }
-
-        if (results === undefined) {
-          summary.skipped += batch.length
-          emit({
-            type: 'entries',
-            index,
-            entries: batch.map((u): TranslateEntry => ({ key: u.key, msgid: shortMsgid(u.msgid), outcome: 'skipped' })),
-          })
-          emit({ type: 'batch-skipped', index, size: batch.length, reason: errorMessage(lastError), at: Date.now() })
-          if (++consecutiveSkips >= MAX_CONSECUTIVE_SKIPS) {
-            summary.stopped = `${consecutiveSkips} batches failed in a row: ${errorMessage(lastError)}`
-            break batchLoop
-          }
-          continue
-        }
-        consecutiveSkips = 0
-
-        const saved = await persist(po, results, opts.dryRun)
-        const fuzzy = results.filter((r) => r.fuzzy).length
-        summary.translated += results.length
-        summary.fuzzy += fuzzy
-        const fixed = results.filter((r) => r.notes?.length).length
-        if (fixed > 0) summary.fixedByRules = (summary.fixedByRules ?? 0) + fixed
+    // Made current for everything the run does from here, so spawnAgent finds
+    // the log without an agent option of its own.
+    await withRunLog(runLog, async () => {
+      const hits: ApplyResult[] = []
+      const rest: TranslationUnit[] = []
+      for (const unit of units) {
+        const hit = tmLookup(db, unit, locale, po.nplurals)
+        if (hit) hits.push(hit)
+        else rest.push(unit)
+      }
+      const savedHits = hits.length > 0 && (await persist(po, hits, opts.dryRun))
+      summary.fromTm = hits.length
+      emit({ type: 'tm-hit', count: hits.length })
+      if (hits.length > 0) {
+        const sourceOf = new Map(units.map((u) => [u.key, u.msgid]))
         emit({
           type: 'entries',
-          index,
-          entries: results.map(
-            (r): TranslateEntry => ({
-              key: r.key,
-              msgid: shortMsgid(unitOf.get(r.key)?.msgid ?? r.key),
-              ...(r.fuzzy ? { outcome: 'fuzzy', from: 'engine' } : { outcome: 'drafted' }),
+          entries: hits.map(
+            (h): TranslateEntry => ({
+              key: h.key,
+              msgid: shortMsgid(sourceOf.get(h.key) ?? h.key),
+              ...(h.fuzzy ? { outcome: 'fuzzy', from: 'memory' } : { outcome: 'memory' }),
             }),
           ),
         })
-        emit({ type: 'batch-done', index, translated: results.length, fuzzy, at: Date.now() })
-        if (saved) emit({ type: 'saved' })
       }
-    }
+      if (savedHits) emit({ type: 'saved' })
 
-    // Written once, from the same numbers the caller is about to be handed, so
-    // the history and the report cannot disagree. A run stopped part way is
-    // ended rather than marked done: it has no totals worth freezing. It ends
-    // as `stopped`, not as a fault: the operator asked for it, and its drafts
-    // are cached for the run that resumes it.
-    if (summary.stopped !== undefined) {
-      endRun(jobs, runId, 'stopped')
-    } else {
-      finishRun(jobs, runId, {
-        // The entries this run worked on, which is what review freezes in the
-        // same column. `total` is every unit in the file including ones nothing
-        // touched, and a throughput query grouping over a column that means two
-        // different things reports neither. `skipped` is what the failure
-        // breaker gave up on, which is precisely what `unreviewed` means:
-        // recording 0 filed a run that gave up as clean and complete.
-        entries: summary.pending,
-        flagged: summary.fuzzy,
-        repaired: summary.translated,
-        unreviewed: summary.skipped,
-        approvable: summary.translated - summary.fuzzy,
-        byCategory: {},
-      })
-    }
+      if (memoryOnly) summary.untranslated = rest.length
+      const batches = memoryOnly ? [] : chunk(rest, batchSize)
+      if (batches.length > 0) {
+        const engine =
+          opts.engine ??
+          getDraftEngine(opts.draftEngine, opts.secrets ?? loadSecrets(), {
+            onWarning: (message) => emit({ type: 'warning', message }),
+            // Where the local runner lives and which model it should load,
+            // resolved above from config so a user who set it gets what they
+            // asked for, and so the engine and its cache key agree.
+            ...(localDraft ? { local: localDraft } : {}),
+            ...(opts.localChat ? { localChat: opts.localChat } : {}),
+            idleTimeoutMs: localIdleTimeoutMs(settings),
+          })
+        const review =
+          opts.review ??
+          (localReview ? createLocalDraftReviewer(
+                opts.localChat ?? createLocalChat(localReview, { idleTimeoutMs: localIdleTimeoutMs(settings) }),
+                reviewEngine,
+              ) : reviewBatch)
+        // A local reviewer has no MCP, so nothing would read the file, and with
+        // no reviewer there is nothing to start it.
+        const mcpConfigPath =
+          opts.mcpConfigPath ?? (localReview || unreviewed ? '' : await writeMcpConfig({ env: { [MCP_ENV.locale]: locale } }))
+
+        // Review's rules, on translate's own drafts: built once for the file.
+        const checker = createDraftChecker({
+          locale,
+          nplurals: po.nplurals,
+          glossary: allGlossary(db, locale),
+          properNouns: configuredProperNouns(locale),
+          units: rest,
+        })
+        const unitOf = new Map(rest.map((u) => [u.key, u]))
+        const localAsk: LocalAsk | undefined = localReview
+          ? {
+              variant: draftReviewPromptVariant(locale),
+              // A setting the code reads takes no glossary term, as in review:
+              // its translator comment decides the value, and "kapalı" for
+              // "off" is exactly the mistake a glossary match would invite.
+              terms: (u) => (controlSpec(u) ? [] : checker.terms(u)),
+            }
+          : undefined
+
+        let consecutiveSkips = 0
+
+        batchLoop: for (const [i, batch] of batches.entries()) {
+          // Between batches, never inside one: the batch in flight has already been
+          // paid for, so it finishes and saves before anything parks.
+          if (opts.control && (await opts.control.gate()) === 'stop') {
+            summary.stopped = 'stopped before batch ' + String(i + 1)
+            break batchLoop
+          }
+          const index = i + 1
+          emit({ type: 'batch-start', index, of: batches.length, size: batch.length, at: Date.now() })
+          emit({ type: 'batch-phase', index, phase: 'drafting', at: Date.now() })
+
+          let drafts: Drafts | undefined
+          let results: Array<ReviewResult & { notes?: string[] }> | undefined
+          let lastError: unknown
+          // Which step an attempt was in when it failed, and every failure, kept
+          // for jobs.db below: the reason used to reach the screen and nowhere else.
+          let phase: 'drafting' | 'reviewing' = 'drafting'
+          const attempts: Array<{ attempt: number; phase: 'drafting' | 'reviewing'; reason: string; ms: number }> = []
+          for (let attempt = 0; attempt < 2 && results === undefined; attempt++) {
+            const started = Date.now()
+            phase = 'drafting'
+            try {
+              drafts ??= await draft(batch, engine, locale, po.nplurals, draftCache)
+              // Fixed after the draft cache, never before it: editing a fix
+              // pattern must not throw away what the engine was paid to write.
+              const prepared = new Map(batch.map((u) => [u.key, checker.prepare(u, drafts!.get(u.key) ?? [])]))
+              const fixedDrafts: Drafts = new Map([...prepared].map(([k, p]) => [k, p.drafts]))
+              const checks = new Map([...prepared].map(([k, p]) => [k, p.checks]))
+              if (unreviewed) {
+                // Nothing judged these, so every one is written for a human to
+                // confirm, and finalize still applies the fix patterns and names
+                // whatever check the draft fails.
+                results = batch.map((u) =>
+                  checker.finalize(u, {
+                    key: u.key,
+                    text: fixedDrafts.get(u.key) ?? [],
+                    fuzzy: true,
+                    reason: 'Not reviewed: no review provider is set.',
+                  }),
+                )
+                break
+              }
+              emit({ type: 'batch-phase', index, phase: 'reviewing', at: Date.now() })
+              phase = 'reviewing'
+              results = (
+                await reviewDrafts(batch, fixedDrafts, review, { ...opts, provider }, locale, po.nplurals, pluralForms, mcpConfigPath, reviewCache, checks, localAsk)
+              ).map((r) => {
+                const unit = unitOf.get(r.key)
+                return unit ? checker.finalize(unit, r) : r
+              })
+            } catch (err) {
+              if (isStopError(err)) {
+                summary.stopped = err.message
+                break batchLoop
+              }
+              lastError = err
+              attempts.push({ attempt: attempt + 1, phase, reason: errorMessage(err), ms: Date.now() - started })
+            }
+          }
+          for (const a of attempts) {
+            recordBatchFailure(jobs, {
+              runId: id,
+              batch: index,
+              attempt: a.attempt,
+              size: batch.length,
+              phase: a.phase,
+              reason: a.reason,
+              ms: a.ms,
+              final: results === undefined && a.attempt === attempts.length,
+              at: Date.now(),
+            })
+          }
+
+          if (results === undefined) {
+            summary.skipped += batch.length
+            emit({
+              type: 'entries',
+              index,
+              entries: batch.map((u): TranslateEntry => ({ key: u.key, msgid: shortMsgid(u.msgid), outcome: 'skipped' })),
+            })
+            emit({ type: 'batch-skipped', index, size: batch.length, reason: errorMessage(lastError), at: Date.now() })
+            if (++consecutiveSkips >= MAX_CONSECUTIVE_SKIPS) {
+              summary.stopped = `${consecutiveSkips} batches failed in a row: ${errorMessage(lastError)}`
+              break batchLoop
+            }
+            continue
+          }
+          consecutiveSkips = 0
+
+          const saved = await persist(po, results, opts.dryRun)
+          const fuzzy = results.filter((r) => r.fuzzy).length
+          summary.translated += results.length
+          summary.fuzzy += fuzzy
+          const fixed = results.filter((r) => r.notes?.length).length
+          if (fixed > 0) summary.fixedByRules = (summary.fixedByRules ?? 0) + fixed
+          emit({
+            type: 'entries',
+            index,
+            entries: results.map(
+              (r): TranslateEntry => ({
+                key: r.key,
+                msgid: shortMsgid(unitOf.get(r.key)?.msgid ?? r.key),
+                ...(r.fuzzy ? { outcome: 'fuzzy', from: 'engine' } : { outcome: 'drafted' }),
+              }),
+            ),
+          })
+          emit({ type: 'batch-done', index, translated: results.length, fuzzy, at: Date.now() })
+          if (saved) emit({ type: 'saved' })
+        }
+      }
+
+      // Written once, from the same numbers the caller is about to be handed, so
+      // the history and the report cannot disagree. A run stopped part way is
+      // ended rather than marked done: it has no totals worth freezing. It ends
+      // as `stopped`, not as a fault: the operator asked for it, and its drafts
+      // are cached for the run that resumes it.
+      if (summary.stopped !== undefined) {
+        endRun(jobs, id, 'stopped')
+      } else {
+        finishRun(jobs, id, {
+          // The entries this run worked on, which is what review freezes in the
+          // same column. `total` is every unit in the file including ones nothing
+          // touched, and a throughput query grouping over a column that means two
+          // different things reports neither. `skipped` is what the failure
+          // breaker gave up on, which is precisely what `unreviewed` means:
+          // recording 0 filed a run that gave up as clean and complete.
+          entries: summary.pending,
+          flagged: summary.fuzzy,
+          repaired: summary.translated,
+          unreviewed: summary.skipped,
+          approvable: summary.translated - summary.fuzzy,
+          byCategory: {},
+        })
+      }
+    })
   } catch (err) {
     // A run in progress when this throws is neither done nor still running:
     // mark it stopped so history does not claim otherwise, before the handle
     // it needs to do that is closed underneath it.
+    runLog?.write('run-end', { ended: 'failed', error: err instanceof Error ? err.message : String(err) })
     if (runId !== undefined) endRun(jobs, runId, 'failed')
     throw err
   } finally {
@@ -797,6 +845,17 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
   // Named by label, and two patterns can share a note, so the same line once.
   const skippedRules = [...new Set(takeSkipped().map((s) => s.label))]
   if (skippedRules.length > 0) summary.skippedRules = skippedRules
-  emit({ type: 'done', summary })
+  // run-end after done, as in review: the log's last line says how the run
+  // ended, and a done handler that throws cannot keep it from being written.
+  try {
+    emit({ type: 'done', summary })
+  } finally {
+    runLog?.write(
+      'run-end',
+      summary.stopped !== undefined
+        ? { ended: 'stopped' }
+        : { ended: 'done', translated: summary.translated, fuzzy: summary.fuzzy, skipped: summary.skipped },
+    )
+  }
   return summary
 }

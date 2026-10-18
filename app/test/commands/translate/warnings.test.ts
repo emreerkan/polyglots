@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DraftEngine, DraftResult, Secrets } from '../../../src/types.js'
 import type { GetDraftEngineOptions } from '../../../src/draft/index.js'
@@ -61,6 +62,25 @@ describe('translateFile: default engine and warnings', () => {
     const order = events.map((e) => e.type)
     expect(order.indexOf('warning')).toBeGreaterThan(order.indexOf('batch-start'))
     expect(order.indexOf('warning')).toBeLessThan(order.indexOf('batch-done'))
+  })
+
+  it('writes the warning to the run log without the msgid it quotes', async () => {
+    await translateFile({
+      file: ws.file,
+      locale: 'tr',
+      mode: 'pending',
+      draftEngine: 'openai',
+      secrets: { OPENAI_API_KEY: 'sk-test' },
+      review: fakeReview(),
+      mcpConfigPath: join(ws.home, 'mcp.json'),
+      batchSize: 25,
+    })
+
+    const logs = join(ws.home, 'data', 'logs')
+    const [name] = readdirSync(logs).filter((n) => n.endsWith('.jsonl'))
+    const text = readFileSync(join(logs, name!), 'utf8')
+    expect(text.trim().split('\n').map((l) => JSON.parse(l).kind)).toContain('warning')
+    expect(text).not.toContain('Thank you for installing')
   })
 
   it('loads secrets from the environment when none are injected', async () => {

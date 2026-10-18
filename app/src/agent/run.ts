@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { findOnPath, killTree, spawnPlan, type SpawnPlan } from '../spawn-plan.js'
+import { currentRunLog } from '../logs/run-log.js'
 import { trackAgent } from './children.js'
 import {
   AgentError,
@@ -24,6 +25,18 @@ export {
 
 const STDERR_EXCERPT = 500
 const DEFAULT_KILL_GRACE_MS = 2_000
+
+// The id an agent prints for its conversation, so a line here can be matched to
+// the agent's own log. Absent when stdout is not a whole envelope.
+function sessionOf(stdout: string): string | null {
+  try {
+    const env = JSON.parse(stdout) as Record<string, unknown>
+    const id = env.conversation_id ?? env.session_id
+    return typeof id === 'string' ? id : null
+  } catch {
+    return null
+  }
+}
 
 export function buildAgentArgs(jsonSchema: unknown, opts: AgentRunOptions): string[] {
   const spec = providerSpec(opts.provider)
@@ -122,6 +135,16 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
     })
     // Killed if this process ends first, so a hung agent is never left behind.
     trackAgent(child)
+    // The run this call belongs to, found through AsyncLocalStorage rather than
+    // an agent option (see run-log.ts). Outside a run, nothing is written.
+    const log = currentRunLog()
+    const call = log?.nextCall()
+    const t0 = Date.now()
+    log?.write('agent-spawn', { provider: spec.name, bin: command, pid: child.pid, timeoutMs, ...call })
+    // Why polyglots ended the process, when it did. 'answered' is dropped when
+    // close reports a clean exit (see below): an agent that printed its answer
+    // and exited on its own an instant later was not killed by anyone.
+    let killed: 'timeout' | 'answered' | null = null
     let stdout = ''
     let stderr = ''
     let settled = false
@@ -139,6 +162,7 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
+      killed = 'timeout'
       if (plan.shell) {
         killTree(child.pid)
       } else {
@@ -162,6 +186,7 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
       if (settled || !spec.answerComplete || !chunk.endsWith('\n') || !spec.answerComplete(stdout)) return
       settled = true
       clearTimeout(timer)
+      killed = 'answered'
       if (plan.shell) killTree(child.pid)
       else child.kill('SIGKILL')
       resolve({ stdout, stderr })
@@ -175,7 +200,28 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
       reject(new AgentError(`failed to spawn ${command}: ${err.message}`, { stderr: excerpt() }))
     })
 
+    // close fires for every ending, a kill included, and after the promise has
+    // settled for a timeout or an early answer, so the line is written before
+    // the settled check rather than after it. A bin that failed to spawn closes
+    // too, with no pid and Node's negative errno as the code.
     child.on('close', (code, signal) => {
+      log?.write('agent-exit', {
+        pid: child.pid,
+        ...call,
+        ms: Date.now() - t0,
+        code,
+        signal,
+        // The kill raced the agent's own exit and lost: it was already gone.
+        // That is told by a clean exit, not by a missing signal. On Windows a
+        // .cmd agent runs through the shell and is ended by taskkill /F, and
+        // close then reports exit code 1 with no signal; keying this on the
+        // signal logged every answered antigravity call there as an agent that
+        // had failed by itself.
+        killed: killed === 'answered' && code === 0 && signal === null ? null : killed,
+        stdoutBytes: Buffer.byteLength(stdout),
+        stderrBytes: Buffer.byteLength(stderr),
+        session: sessionOf(stdout),
+      })
       if (killTimer) clearTimeout(killTimer)
       if (settled) return
       settled = true

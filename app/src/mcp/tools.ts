@@ -1,9 +1,12 @@
+import { appendFileSync, mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
 import type Database from 'better-sqlite3'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { ConsistencyEntry, ConsistencyScope, Locale } from '../types.js'
 import { getConsistency, lookupGlossary, searchTm, setConsistency } from '../storage/index.js'
 import { normalizeLocale } from '../tmx/parse.js'
+import { mcpLogPath, pruneLogs } from '../logs/paths.js'
 import { fetchConsistency as defaultFetchConsistency } from '../wporg/consistency-scraper.js'
 
 export interface ToolDeps {
@@ -22,6 +25,66 @@ function json(value: unknown) {
 function failure(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   return { isError: true, content: [{ type: 'text' as const, text: message }] }
+}
+
+// One line per call, never its text: the arguments and results are catalogue
+// strings. The server cannot know which run called it (antigravity starts it
+// from a one-time registration with a fixed environment), so the line carries
+// its own pid and parent pid, and the report matches it to a run by time and
+// by the agent pid that run recorded.
+//
+// The wrapper takes the tool's plain value rather than its MCP result, and
+// does the json/failure wrapping itself: the result is a single text item
+// holding JSON, so counting content items would say 1 for every call, and
+// parsing the text back only to count it is work the value already did. A
+// throw becomes the tool error it always was, so the agent still sees it.
+type ToolResult = ReturnType<typeof json> | ReturnType<typeof failure>
+
+// An error message is not free of catalogue text just because it is ours: a
+// failed wp.org fetch says "GET <url> failed: 429", and the consistency URL
+// carries the source string in its query. A rate limit or a timeout is an
+// ordinary failure, so without this the log would hold source strings in
+// normal use, and the problem report that bundles these lines leaves the
+// machine. The query and fragment go; the origin and path stay, since they
+// say which endpoint failed, which is the part worth reading. Only the log
+// line is redacted: the agent still gets the whole message as its tool error.
+function redactUrls(message: string): string {
+  return message.replace(/(https?:\/\/[^\s?#]*)[?#]\S*/g, '$1?…')
+}
+
+function logged<A>(tool: string, handler: (args: A) => unknown): (args: A) => Promise<ToolResult> {
+  return async (args) => {
+    const t0 = Date.now()
+    const line = (fields: { results: number | null; error: string | null }) => {
+      try {
+        // Resolved once, so a call that ends after midnight lands whole in one file.
+        const path = mcpLogPath(t0)
+        mkdirSync(dirname(path), { recursive: true })
+        appendFileSync(
+          path,
+          JSON.stringify({
+            t: t0,
+            pid: process.pid,
+            ppid: process.ppid,
+            tool,
+            argBytes: Buffer.byteLength(JSON.stringify(args ?? null)),
+            ms: Date.now() - t0,
+            ...fields,
+          }) + '\n',
+        )
+      } catch {
+        // A lookup is never worth failing over its log line.
+      }
+    }
+    try {
+      const out = await handler(args)
+      line({ results: Array.isArray(out) ? out.length : null, error: null })
+      return json(out)
+    } catch (error) {
+      line({ results: null, error: redactUrls(error instanceof Error ? error.message : String(error)) })
+      return failure(error)
+    }
+  }
 }
 
 const localeArg = z.string().min(1).optional().describe('Target locale code; defaults to the run locale.')
@@ -55,6 +118,11 @@ function createConsistencyLookup(deps: ToolDeps, fetchConsistency: typeof defaul
 }
 
 export function registerTools(server: McpServer, deps: ToolDeps): void {
+  // A run prunes at its own start too, but antigravity can start this server
+  // outside any polyglots run (it is registered once, not per run), and the
+  // day files it writes should age out on the same terms. A readdir per
+  // server start is the whole cost.
+  pruneLogs()
   const lookupConsistency = createConsistencyLookup(deps, deps.fetchConsistency ?? defaultFetchConsistency)
   const defaultLocale = deps.locale === undefined ? undefined : normalizeLocale(deps.locale)
   // Refused rather than guessed: a lookup in the wrong locale returns another
@@ -77,13 +145,9 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
         locale: localeArg,
       },
     },
-    ({ term, locale }) => {
-      try {
-        return json(lookupGlossary(deps.db, term, resolveLocale(locale)))
-      } catch (error) {
-        return failure(error)
-      }
-    },
+    logged('glossary_lookup', ({ term, locale }: { term: string; locale?: string | undefined }) =>
+      lookupGlossary(deps.db, term, resolveLocale(locale)),
+    ),
   )
 
   server.registerTool(
@@ -102,13 +166,11 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
           ),
       },
     },
-    async ({ text, locale, scope }) => {
-      try {
-        return json(await lookupConsistency(text, resolveLocale(locale), scope ?? 'core'))
-      } catch (error) {
-        return failure(error)
-      }
-    },
+    logged(
+      'consistency_lookup',
+      ({ text, locale, scope }: { text: string; locale?: string | undefined; scope?: ConsistencyScope | undefined }) =>
+        lookupConsistency(text, resolveLocale(locale), scope ?? 'core'),
+    ),
   )
 
   server.registerTool(
@@ -122,12 +184,8 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
         limit: z.number().int().positive().max(50).optional().describe('Maximum matches to return (default 5).'),
       },
     },
-    ({ text, locale, limit }) => {
-      try {
-        return json(searchTm(deps.db, text, resolveLocale(locale), limit ?? 5))
-      } catch (error) {
-        return failure(error)
-      }
-    },
+    logged('tm_lookup', ({ text, locale, limit }: { text: string; locale?: string | undefined; limit?: number | undefined }) =>
+      searchTm(deps.db, text, resolveLocale(locale), limit ?? 5),
+    ),
   )
 }
