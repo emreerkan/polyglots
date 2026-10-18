@@ -14,7 +14,7 @@ import { isNewer } from '../update/index.js'
 // there and noise here.
 export const WHATS_NEW: Readonly<Record<string, readonly string[]>> = {
   unreleased: [
-    'Batch of files: time, estimate, open any file',
+    'Change the locale from any screen: press l',
     'Send a problem report when a run has problems',
     'Review with OpenAI codex: pick it in setup',
   ],

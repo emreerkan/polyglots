@@ -73,13 +73,17 @@ describe('WHATS_NEW', () => {
     }
   })
 
-  // Two lines whose wording the maintainer decided, pinned so a later edit is
-  // a choice. A problem report is offered for more than a failed run (a batch
-  // given up, a breaker stop), and "batches" alone also reads as the agent's
-  // batches of entries, so the line names the screen of files.
-  it('words the report and batch-of-files lines as decided', () => {
-    expect(WHATS_NEW.unreleased).toContain('Send a problem report when a run has problems')
-    expect(WHATS_NEW.unreleased).toContain('Batch of files: time, estimate, open any file')
+  // The three lines the maintainer chose for 1.1, in their order, pinned so a
+  // later edit is a choice. The batch-of-files line lost its place to the
+  // locale switch: few people would know the batch screen from its name. A
+  // problem report is offered for more than a failed run (a batch given up, a
+  // breaker stop), which is why that line says "has problems".
+  it('carries the lines the maintainer chose, in order', () => {
+    expect(WHATS_NEW.unreleased).toEqual([
+      'Change the locale from any screen: press l',
+      'Send a problem report when a run has problems',
+      'Review with OpenAI codex: pick it in setup',
+    ])
   })
 
   // The home screen gives each line one row and cuts what does not fit, at a
