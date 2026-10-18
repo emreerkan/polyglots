@@ -26,12 +26,17 @@ export function createRunControl(): RunControl {
   const set = (next: RunState): void => {
     if (state === next) return
     state = next
-    for (const listener of listeners) listener(next)
     // Anything that is not a pause frees a gate that is already waiting.
+    // Released before the listeners are told, not after: the listeners are
+    // the caller's, and one that threw used to skip the release and leave
+    // every parked job parked for good, which hung a batch that waits for
+    // all of its workers. The released gates continue as microtasks, so the
+    // listeners still run, and print, first.
     if (next !== 'paused') {
       for (const release of waiting) release()
       waiting.clear()
     }
+    for (const listener of listeners) listener(next)
   }
 
   return {

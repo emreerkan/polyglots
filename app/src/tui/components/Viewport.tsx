@@ -14,9 +14,9 @@ import { TOKENS } from '../../ui/tokens.js'
 // in step, and a keypress to reach the row the arrow keys already moved to.
 // A screen marks its cursor row with ScrollTarget and the body keeps that row
 // in view. A screen that marks nothing has no cursor to follow (Agents on a
-// small terminal, a review summary), so page up and page down move its body a
-// page at a time, and the count of rows out of sight on the last line says
-// there is more.
+// small terminal, a single review's summary), so page up and page down move
+// its body a page at a time, and the count of rows out of sight on the last
+// line says there is more. So does a followed target taller than the body.
 //
 // Measured from Ink's own layout after each commit. Yoga has computed the
 // layout by the time layout effects run, so the offset is decided against the
@@ -69,6 +69,9 @@ export function Viewport({ children, pageRef }: { children: ReactNode; pageRef?:
   const outerRef = useRef<DOMElement>(null)
   const contentRef = useRef<DOMElement>(null)
   const target = useRef<DOMElement | null>(null)
+  // Set when a different target is followed, so a tall one is first shown
+  // from its top rather than wherever the last one was paged to.
+  const arrived = useRef(false)
   const [offset, setOffset] = useState(0)
   // Read only so a resize or a screen growing re-renders the body and so
   // re-runs the layout effect below; the values themselves come from Yoga.
@@ -82,6 +85,10 @@ export function Viewport({ children, pageRef }: { children: ReactNode; pageRef?:
     // no height. Keeping the offset there means the row in focus is still
     // in view when the screen comes back.
     if (full === 0 || !contentRoot) return
+    // Taken here, past the hidden case, so a target that arrives while the
+    // body fits does not jump to its top on some later, unrelated render.
+    const fresh = arrived.current
+    arrived.current = false
     const height = heightOf(contentRoot)
     if (height <= full) return setOffset(0)
     // The marker line comes out of the room. Decided against the full height
@@ -95,12 +102,21 @@ export function Viewport({ children, pageRef }: { children: ReactNode; pageRef?:
       const top = el ? topWithin(el, contentRoot) : undefined
       if (el && top !== undefined) {
         const rows = heightOf(el)
+        // A target taller than the room cannot be kept in view whole, and
+        // the rules below would show its last page, cutting off the lines
+        // that say what it is. It starts at its top instead, and the page
+        // keys read the rest of it: the offset is only kept inside it, so a
+        // page key is not undone by the next render. A batch summary's reply
+        // is the case that needed it, a long template on a short terminal.
+        // A target just arrived at starts at its top even where it sits
+        // exactly where the last one did, as the next file's reply does.
+        if (rows > room) next = fresh ? top : Math.min(Math.max(next, top), top + rows - room)
         // A row that fits in the screen's first page shows the first page,
         // so going back up the list brings the title and the lines that
         // explain it back too, instead of leaving them cut off above a cursor
         // that is in view. Past the first page the offset moves as little as
         // keeps the row in view.
-        if (top + rows <= room) next = 0
+        else if (top + rows <= room) next = 0
         else if (top < next) next = top
         else if (top + rows > next + room) next = top + rows - room
       }
@@ -111,6 +127,7 @@ export function Viewport({ children, pageRef }: { children: ReactNode; pageRef?:
   const follow = useMemo<Follow>(
     () => ({
       follow: (el) => {
+        if (target.current !== el) arrived.current = true
         target.current = el
         recompute()
       },
@@ -123,15 +140,17 @@ export function Viewport({ children, pageRef }: { children: ReactNode; pageRef?:
 
   useLayoutEffect(recompute)
 
-  // Only where no row is followed: with a cursor on screen, the cursor is
-  // what moves the body, and a page key would be undone on the next render.
+  // Only where no row is followed, or the one followed is taller than the
+  // room: with a cursor on screen, the cursor is what moves the body, and a
+  // page key would be undone on the next render. A target taller than the
+  // room is read a page at a time, and recompute keeps the offset inside it.
   if (pageRef) {
     pageRef.current = (pages) => {
-      if (target.current) return
       const full = heightOf(outerRef.current)
       const height = heightOf(contentRef.current)
       if (full === 0 || height <= full) return
       const room = full - 1
+      if (target.current && heightOf(target.current) <= room) return
       setOffset((current) => Math.min(Math.max(0, current + pages * Math.max(1, room - 1)), height - room))
     }
   }

@@ -70,9 +70,33 @@ export async function runProjects<T>(
   const outcomes: ProjectOutcome<T>[] = new Array(files.length)
   let next = 0
 
+  // A throw from the caller's handler is the caller's fault, not a job's, so
+  // it ends the batch rather than any one file. It cannot end it at once:
+  // jobs running beside the one whose event threw still hold the databases
+  // withSharedDbs closes when this returns, and a rejection from Promise.all
+  // would return while they write. So the first throw is kept, the batch is
+  // stopped so that nothing new starts, and it is thrown once every worker
+  // has finished. Later throws, from the ends of the jobs that were still
+  // running, are dropped: the first is the one that says what broke.
+  let handlerError: { err: unknown } | undefined
+  const emit = (e: ProjectEvent<T>) => {
+    try {
+      opts.onEvent?.(e)
+    } catch (err) {
+      if (handlerError === undefined) handlerError = { err }
+      // The stop runs the control's listeners, which are the caller's too,
+      // and one that throws must not take this worker down with it.
+      try {
+        control.stop()
+      } catch {
+        // the first throw is already kept
+      }
+    }
+  }
+
   const end = (i: number, outcome: ProjectOutcome<T>) => {
     outcomes[i] = outcome
-    opts.onEvent?.({ type: 'project-end', outcome })
+    emit({ type: 'project-end', outcome })
   }
 
   const worker = async () => {
@@ -85,9 +109,10 @@ export async function runProjects<T>(
         end(i, { file, state: 'stopped' })
         continue
       }
-      opts.onEvent?.({ type: 'project-start', file })
+      emit({ type: 'project-start', file })
+      let summary: T
       try {
-        end(i, { file, state: 'done', summary: await opts.run(file, control) })
+        summary = await opts.run(file, control)
       } catch (err) {
         if (err instanceof ProviderRefusal) {
           // Ended before the stop, so the refusal is reported ahead of the
@@ -97,11 +122,31 @@ export async function runProjects<T>(
           continue
         }
         end(i, { file, state: 'failed', reason: err instanceof Error ? err.message : String(err) })
+        continue
       }
+      // Outside the try: the catch is for the job's own failure. A throw
+      // from the caller's handler here used to land in it and relabel a
+      // finished, paid-for file as failed. end keeps such a throw for the
+      // caller instead, as described where emit is defined.
+      end(i, { file, state: 'done', summary })
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(width, files.length) }, worker))
+  // allSettled, not all: the workers catch everything but a fault in this
+  // loop, and even that must not return while another worker's job runs.
+  // A worker that rejects stops the batch first, or the others would go on
+  // to start every file still queued before the rejection came back.
+  const stopping = (err: unknown): never => {
+    try {
+      control.stop()
+    } catch {
+      // the rejection is what goes back
+    }
+    throw err
+  }
+  const settled = await Promise.allSettled(Array.from({ length: Math.min(width, files.length) }, () => worker().catch(stopping)))
+  if (handlerError !== undefined) throw handlerError.err
+  for (const r of settled) if (r.status === 'rejected') throw r.reason
   return outcomes
 }
 

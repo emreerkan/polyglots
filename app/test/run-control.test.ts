@@ -93,6 +93,21 @@ describe('createRunControl', () => {
     expect(seen).not.toHaveBeenCalled()
   })
 
+  // A batch stops its control when a caller's handler throws, and then waits
+  // for every worker. A listener that threw before the parked gates were
+  // released left them parked for good, and the batch never settled.
+  it('releases a parked gate even when a listener throws on the stop', async () => {
+    const control = createRunControl()
+    control.pause()
+    const parked = control.gate()
+    control.subscribe((state) => {
+      if (state === 'stopping') throw new Error('listener broke')
+    })
+    expect(() => control.stop()).toThrow('listener broke')
+    const outcome = await Promise.race([parked, new Promise((r) => setTimeout(() => r('still parked'), 50))])
+    expect(outcome).toBe('stop')
+  })
+
   it('does nothing on a resume that was never paused', async () => {
     const control = createRunControl()
     control.resume()

@@ -59,6 +59,9 @@ export interface ProblemReportOptions {
   facts: () => ReportFacts
   // A batch of files, whose one offer names how many of them had a problem.
   batch?: boolean
+  // Whether the body follows the offer into view; on unless the screen has a
+  // cursor of its own that the reader has moved, which it then follows.
+  follow?: boolean
 }
 
 export interface ProblemReport {
@@ -74,7 +77,7 @@ export interface ProblemReport {
   element: ReactElement
 }
 
-export function useProblemReport({ ended, facts, batch = false }: ProblemReportOptions): ProblemReport {
+export function useProblemReport({ ended, facts, batch = false, follow = true }: ProblemReportOptions): ProblemReport {
   const commands = useCommands()
   const { config } = useConfig()
   const runIds = useRef<number[]>([])
@@ -206,6 +209,7 @@ export function useProblemReport({ ended, facts, batch = false }: ProblemReportO
         <ProblemReportOffer
         mode={mode}
         batch={batch}
+        follow={follow}
         offHint={offHint}
         onSend={(problems) => setMode({ kind: 'contact', problems, text: config.wporgUsername })}
         onSee={see}
@@ -238,6 +242,7 @@ function earlierLine(delivery: Delivery | { error: string }): string | undefined
 interface OfferProps {
   mode: Mode
   batch: boolean
+  follow: boolean
   offHint: boolean
   onSend: (problems: Problems) => void
   onSee: (problems: Problems) => void
@@ -247,7 +252,7 @@ interface OfferProps {
   onDismiss: () => void
 }
 
-function ProblemReportOffer({ mode, batch, offHint, onSend, onSee, onType, onSubmit, onDismiss }: OfferProps) {
+function ProblemReportOffer({ mode, batch, follow, offHint, onSend, onSee, onType, onSubmit, onDismiss }: OfferProps) {
   const offer = mode.kind === 'offer' ? mode : undefined
   useKeys({
     problemReport: {
@@ -273,7 +278,7 @@ function ProblemReportOffer({ mode, batch, offHint, onSend, onSee, onType, onSub
   // Followed into view: on a long summary the offer is the last thing drawn,
   // and a question below the window is a question nobody answers.
   return (
-    <ScrollTarget active>
+    <ScrollTarget active={follow}>
       <Box flexDirection="column" marginTop={1}>
         <Text color="yellow">
           {problemHeadline(mode.problems, batch)} {OFFER_QUESTION}

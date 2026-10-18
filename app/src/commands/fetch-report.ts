@@ -62,7 +62,14 @@ export function endOfJob(outcome: ProjectOutcome<BatchSummary>, wporgUsername: s
   const s = outcome.summary
   if ('reviewed' in s) {
     const flagged = s.problems + s.needsReview
-    const counts = `${s.reviewed} reviewed, ${flagged} flagged, ${s.repaired} repaired`
+    // A batch given up leaves its entries unreviewed and the file still done,
+    // so without this the table showed a green done beside an offer that
+    // said a batch had failed. Shown on a stopped line too: a run stopped
+    // after a batch was given up has both to say. Worded after the batches
+    // rather than as "unreviewed", which beside "not reviewed yet" read as
+    // two names for one set; only a failed batch makes these (audit.ts).
+    const unreviewed = s.unreviewed > 0 ? `, ${s.unreviewed} in failed batches` : ''
+    const counts = `${s.reviewed} reviewed, ${flagged} flagged, ${s.repaired} repaired${unreviewed}`
     // A review stopped part way returns normally with entries still pending.
     // Calling that done would read like a finished review in the table.
     if (s.pending > 0) return { tally: 'stopped', detail: `${counts}, ${s.pending} not reviewed yet` }
@@ -76,7 +83,10 @@ export function endOfJob(outcome: ProjectOutcome<BatchSummary>, wporgUsername: s
     }
   }
   const fixed = s.fixedByRules === undefined ? '' : `, ${s.fixedByRules} fixed by locale rules`
-  const counts = `${s.translated} translated, ${s.fuzzy} fuzzy, ${s.fromTm} from TM${fixed}`
+  // The entries of a batch given up, for the same reason and in the same
+  // words as a review's above.
+  const skipped = s.skipped > 0 ? `, ${s.skipped} in failed batches` : ''
+  const counts = `${s.translated} translated, ${s.fuzzy} fuzzy, ${s.fromTm} from TM${fixed}${skipped}`
   return s.stopped ? { tally: 'stopped', detail: `${counts}, stopped: ${s.stopped}` } : { tally: 'done', detail: counts }
 }
 

@@ -36,6 +36,9 @@ export interface ReviewProgressState {
   // A batch has started and not yet finished. The bar cannot move while that is
   // true, so it is what the elapsed clock hangs off.
   inFlight: boolean
+  // When the batch in flight opened, from its event's own stamp, so the clock
+  // reads the same however late the screen showing it was opened.
+  openedAt?: number
   batchIndex: number
   batchDurations: number[]
   remainingMs?: number
@@ -173,6 +176,7 @@ export function reduceReviewProgress(events: ReviewEvent[]): ReviewProgressState
     state.problems = state.summary.problems
     state.unreviewed = state.summary.unreviewed
   }
+  if (state.inFlight && openedAt !== undefined) state.openedAt = openedAt
   return state
 }
 
@@ -250,7 +254,7 @@ export interface ReviewProgressProps {
  */
 export function ReviewProgress({ events, wporgUsername = '', templates = [], requester = '' }: ReviewProgressProps) {
   const state = reduceReviewProgress(events)
-  const elapsed = useElapsed(state.inFlight, state.batchIndex)
+  const elapsed = useElapsed(state.inFlight, state.batchIndex, state.openedAt)
   const [copied, setCopied] = useState<'yes' | 'no' | undefined>(undefined)
   const [templateIndex, setTemplateIndex] = useState(0)
   const [opened, setOpened] = useState(false)

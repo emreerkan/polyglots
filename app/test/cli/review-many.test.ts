@@ -122,6 +122,20 @@ describe('review with several files', () => {
     for (const c of calls) expect(c).toMatchObject({ noAi: true, fresh: true, batchSize: 40, locale: 'tr', outDir: '/tmp/out' })
   })
 
+  // The single-file commands print a run's warnings, the debug notice among
+  // them, with the warn prefix. A batch printed them bare, so the one line a
+  // debug run must not go unnoticed read like any other progress line.
+  it('prints a run warning with the warn prefix', async () => {
+    const r = await run(['review', a, b, '--debug'], {
+      reviewFile: async (opts) => {
+        opts.onWarn?.('Debug mode: prompts and agent output are saved in /tmp/x')
+        return reviewSummary(opts.file)
+      },
+    })
+    expect(r.code).toBe(0)
+    expect(r.stderr).toContain('! Debug mode: prompts and agent output are saved in /tmp/x')
+  })
+
   it('runs up to --parallel files at once', async () => {
     const c = join(home, 'c-tr.po')
     await writeFile(c, po('tr'))

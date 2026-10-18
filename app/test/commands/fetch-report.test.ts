@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { endOfJob } from '../../src/commands/fetch-report.js'
 import type { TranslateSummary } from '../../src/commands/translate.js'
+import type { ReviewSummary } from '../../src/types.js'
 
 const translated = (patch: Partial<TranslateSummary> = {}): TranslateSummary => ({
   file: 'a.po',
@@ -24,5 +25,42 @@ describe('endOfJob: a translate line', () => {
   it('says nothing about locale rules when none fixed anything', () => {
     const end = endOfJob({ file: 'a.po', state: 'done', summary: translated() }, 'me')
     expect(end.detail).toBe('5 translated, 1 fuzzy, 2 from TM')
+  })
+})
+
+// A file with a batch given up still ends done, since the rest of it was
+// worked. The detail is the only place on the table line that can say part
+// of it was not, which the problem report offer below the table already
+// counts as a failed batch.
+describe('endOfJob: a file with a batch given up', () => {
+  it('names the entries a translate skipped', () => {
+    const end = endOfJob({ file: 'a.po', state: 'done', summary: translated({ skipped: 4 }) }, 'me')
+    expect(end.tally).toBe('done')
+    expect(end.detail).toBe('5 translated, 1 fuzzy, 2 from TM, 4 in failed batches')
+  })
+
+  const reviewed = (patch: Partial<ReviewSummary> = {}): ReviewSummary => ({
+    file: 'a.po', locale: 'tr', total: 10, skipped: 0, reviewed: 10, problems: 0, needsReview: 1,
+    approvable: 6, unreviewed: 3, repaired: 0, written: 0, pending: 0, byRule: {}, byGroup: {},
+    ...patch,
+  })
+
+  it('names the entries a review could not review', () => {
+    const summary = reviewed()
+    const end = endOfJob({ file: 'a.po', state: 'done', summary }, 'me')
+    expect(end.tally).toBe('done')
+    expect(end.detail).toBe('10 reviewed, 1 flagged, 0 repaired, 3 in failed batches')
+  })
+
+  // A stopped review also has entries it never reached. The two counts are
+  // different sets, so they must not read as near synonyms of each other.
+  it('keeps the failed batches apart from the entries a stopped review never reached', () => {
+    const end = endOfJob({ file: 'a.po', state: 'done', summary: reviewed({ reviewed: 5, pending: 5 }) }, 'me')
+    expect(end).toEqual({ tally: 'stopped', detail: '5 reviewed, 1 flagged, 0 repaired, 3 in failed batches, 5 not reviewed yet' })
+  })
+
+  it('names the failed batches on a stopped translate line', () => {
+    const end = endOfJob({ file: 'a.po', state: 'done', summary: translated({ skipped: 4, stopped: 'stopped by the operator' }) }, 'me')
+    expect(end).toEqual({ tally: 'stopped', detail: '5 translated, 1 fuzzy, 2 from TM, 4 in failed batches, stopped: stopped by the operator' })
   })
 })

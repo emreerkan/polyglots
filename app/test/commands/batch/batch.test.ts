@@ -178,6 +178,93 @@ describe('runProjects', () => {
     expect([...seen]).toEqual([control])
   })
 
+  // The end of a finished file was reported inside the try that catches the
+  // job's own failure, so a throw from the caller's handler there relabelled
+  // a file whose work was done and paid for as failed.
+  it('never reports a finished file as failed when the end handler throws', async () => {
+    const ends: string[] = []
+    const run = runProjects(['a.po'], {
+      parallel: 1,
+      run: async () => 'ok',
+      onEvent: (e) => {
+        if (e.type !== 'project-end') return
+        ends.push(e.outcome.state)
+        if (e.outcome.state === 'done') throw new Error('EPIPE')
+      },
+    })
+    await expect(run).rejects.toThrow('EPIPE')
+    expect(ends).toEqual(['done'])
+  })
+
+  // With jobs running beside the one whose handler threw, rejecting at once
+  // returned to withSharedDbs, which closed both databases under jobs still
+  // writing to them. The batch now stops, waits for those jobs, and only then
+  // hands the first throw back.
+  it('waits for the jobs still running before it rethrows a handler throw, and starts no more', async () => {
+    const b = deferred()
+    const control = createRunControl()
+    const started: string[] = []
+    const ends: string[] = []
+    let settled = false
+    const run = runProjects(['a.po', 'b.po', 'c.po'], {
+      parallel: 2,
+      control,
+      run: async (file) => {
+        started.push(file)
+        if (file === 'b.po') await b.promise
+        return 'ok'
+      },
+      onEvent: (e) => {
+        if (e.type !== 'project-end') return
+        ends.push(`${e.outcome.file} ${e.outcome.state}`)
+        if (e.outcome.file === 'a.po') throw new Error('EPIPE')
+      },
+    }).finally(() => (settled = true))
+    const outcome = expect(run).rejects.toThrow('EPIPE')
+    await tick()
+    await tick()
+    expect(settled).toBe(false)
+    expect(control.state).toBe('stopping')
+    b.resolve()
+    await outcome
+    expect(started).toEqual(['a.po', 'b.po'])
+    expect(ends).toEqual(['a.po done', 'c.po stopped', 'b.po done'])
+  })
+
+  // A worker can still reject on a fault in the loop itself, here a gate that
+  // throws. allSettled then waits for the others, and without a stop they
+  // went on to start every file still queued before the throw came back.
+  it('starts no queued file once a worker has rejected', async () => {
+    const real = createRunControl()
+    let gates = 0
+    const control: RunControl = {
+      get state() {
+        return real.state
+      },
+      pause: () => real.pause(),
+      resume: () => real.resume(),
+      stop: () => real.stop(),
+      subscribe: (l) => real.subscribe(l),
+      gate: () => (++gates === 2 ? Promise.reject(new Error('gate broke')) : real.gate()),
+    }
+    const b = deferred()
+    const started: string[] = []
+    const run = runProjects(['a.po', 'b.po', 'c.po', 'd.po'], {
+      parallel: 2,
+      control,
+      run: async (file) => {
+        started.push(file)
+        if (file === 'a.po') await b.promise
+        return 'ok'
+      },
+    })
+    const outcome = expect(run).rejects.toThrow('gate broke')
+    await tick()
+    b.resolve()
+    await outcome
+    expect(started).toEqual(['a.po'])
+  })
+
   it('tells the caller when each project starts and ends', async () => {
     const events: ProjectEvent<string>[] = []
     await runProjects(['a.po'], { parallel: 1, run: async () => 'ok', onEvent: (e) => events.push(e) })

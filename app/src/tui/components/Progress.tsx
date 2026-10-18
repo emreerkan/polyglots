@@ -197,7 +197,7 @@ function translateRow(entry: TranslateEntry): PanelRow {
 
 export function Progress({ events }: { events: TranslateEvent[] }) {
   const state = reduceProgress(events)
-  const elapsed = useElapsed(state.phase !== undefined, state.phase?.since ?? 0)
+  const elapsed = useElapsed(state.phase !== undefined, state.phase?.since ?? 0, state.phase?.since)
   const [opened, setOpened] = useState(false)
   // Translate writes in place, so the file to open is the one that was handed in.
   const translatedFile = state.summary?.file

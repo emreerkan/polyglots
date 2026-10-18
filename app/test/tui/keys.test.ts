@@ -275,10 +275,13 @@ describe('footer keys by stage', () => {
     expect(footer(screen, 'pick')).not.toContain('move between fields')
   })
 
-  // A batch of marked files ends in a table, with no one result to open or copy.
+  // A batch of marked files ends in a table, with no one result to open or
+  // copy; enter opens the file under the cursor instead, so esc is the way back.
   it.each(['review', 'translate'] as const)('%s lists marking in the picker, and no open key under a batch summary', (screen) => {
     expect(footer(screen, 'pick')).toContain('mark or unmark a file for one batch')
-    expect(footer(screen, 'summary')).toContain('back to the menu once it is done')
+    expect(footer(screen, 'summary')).toContain("open a file's own progress")
+    expect(footer(screen, 'summary')).toContain('back')
+    expect(footer(screen, 'summary')).not.toContain('back to the menu once it is done')
     expect(footer(screen, 'summary').join(' ')).not.toMatch(/open the/)
   })
 

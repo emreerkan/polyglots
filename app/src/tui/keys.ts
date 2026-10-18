@@ -228,9 +228,16 @@ export const KEYS = {
   // line, shown one at a time, since each goes to a different request thread
   // and a copy must carry exactly one of them.
   batchResult: {
-    move: { keys: '↑↓', does: 'another reply', match: vertical },
     copy: { keys: 'c', does: 'copy the reply or message shown', match: char('c') },
     template: { keys: 't', does: 'next reply template', match: char('t') },
+  },
+  // A batch's file list, while it runs and on its summary. The cursor picks
+  // the file enter opens, and on the summary the reply shown is that file's,
+  // so one cursor serves both rather than a second one for the replies that
+  // could stand on a different line from the file it would open.
+  batchFiles: {
+    move: { keys: '↑↓', does: 'move between files', match: vertical },
+    inspect: { keys: 'enter', does: "open a file's own progress", match: enter },
   },
   fetchResolved: {
     next: { keys: 'enter', does: 'continue to the options', match: enter },
@@ -386,14 +393,21 @@ export interface ScreenKeys {
  */
 export type FooterStage = 'pick' | 'options' | 'running' | 'done' | 'summary'
 
-const { menu, runForm, run, finished, retry, picker, fields, marks, batchResult, problemReport } = KEYS
+const { menu, runForm, run, finished, retry, picker, fields, marks, batchResult, batchFiles, problemReport } = KEYS
 // What a batch's summary binds, in footer order. Translate's batch never has a
 // reply to show, but it renders the same component, so its help lists them.
-const BATCH_DONE = [batchResult.move, batchResult.copy, finished.close, batchResult.template]
+// Enter opens the file under the cursor, so esc and q are the way back, and
+// the footer adds esc on its own.
+const BATCH_DONE = [batchFiles.inspect, batchResult.copy, batchFiles.move, batchResult.template]
 const MENU = [menu.move, menu.open, menu.hotkey]
 const RUN = [run.pause, run.resume, run.stop]
 const FORM = [runForm.move, runForm.change, runForm.select]
 const REPORT = [problemReport.send, problemReport.see, problemReport.dismiss]
+// A batch opens any file's own progress screen, the single run's component,
+// and that screen's result keys come with it once the file has finished. So
+// translate's help lists review's, and review's lists translate's open: the
+// batch component draws both, by action, and fetch runs either.
+const INSPECTED_REVIEW = [KEYS.reviewResult.open, KEYS.reviewResult.copy, KEYS.reviewResult.template]
 
 export const SCREENS: Record<ScreenId, ScreenKeys> = {
   home: {
@@ -404,13 +418,25 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
   config: { shown: MENU },
   translate: {
     shown: [...FORM, ...RUN, KEYS.translateResult.open],
-    more: [marks.toggle, marks.all, KEYS.another.file, picker.sort, finished.close, batchResult.move, batchResult.copy, batchResult.template, ...REPORT],
+    more: [
+      marks.toggle,
+      marks.all,
+      KEYS.another.file,
+      picker.sort,
+      finished.close,
+      batchFiles.move,
+      batchFiles.inspect,
+      batchResult.copy,
+      batchResult.template,
+      ...INSPECTED_REVIEW,
+      ...REPORT,
+    ],
     stages: {
       pick: [marks.toggle, marks.all, picker.sort],
       options: FORM,
       running: RUN,
       done: [KEYS.translateResult.open, KEYS.another.file, finished.close],
-      summary: [finished.close],
+      summary: [batchFiles.inspect, batchFiles.move],
     },
   },
   review: {
@@ -422,9 +448,11 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
       KEYS.another.file,
       picker.sort,
       finished.close,
-      batchResult.move,
+      batchFiles.move,
+      batchFiles.inspect,
       batchResult.copy,
       batchResult.template,
+      KEYS.translateResult.open,
       ...REPORT,
     ],
     stages: {
@@ -450,9 +478,12 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
       ...FORM,
       finished.close,
       KEYS.needsLocale.setup,
-      batchResult.move,
+      batchFiles.move,
+      batchFiles.inspect,
       batchResult.copy,
       batchResult.template,
+      ...INSPECTED_REVIEW,
+      KEYS.translateResult.open,
       ...REPORT,
     ],
     stages: { options: FORM, running: RUN, done: BATCH_DONE },

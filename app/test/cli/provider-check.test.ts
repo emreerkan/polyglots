@@ -179,7 +179,9 @@ describe('the provider check on the command line', () => {
     expect(r.stderr).toContain(STOP)
     expect(files).toEqual([a])
     expect(checkProvider).toHaveBeenCalledTimes(1)
+    expect(r.stderr).not.toContain('Stopping after')
   })
+
   it('stops a review of several files on the first refusal, says it once, and records no failure', async () => {
     await config({ defaultLocale: 'tr', reviewProvider: 'antigravity' })
     const a = join(home, 'a-tr.po')
@@ -201,6 +203,9 @@ describe('the provider check on the command line', () => {
     expect(checkProvider).toHaveBeenCalledTimes(1)
     expect(adjudicate).not.toHaveBeenCalled()
     expect(r.stderr.split(STOP).length - 1).toBe(1)
+    // The refusal stops the batch through the same control a person's q
+    // uses, but the operator's stopping notice would misread it.
+    expect(r.stderr).not.toContain('Stopping after')
     const out = r.stdout.replace(/\s+/g, ' ')
     expect(out).toContain(`stopped ${STOP}`)
     expect(out).toContain('stopped not started')
