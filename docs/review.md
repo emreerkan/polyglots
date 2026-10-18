@@ -17,12 +17,14 @@ polyglots review *-de.po --parallel 3
 ```
 
 `--parallel` runs up to that many files at once, 1 to 8 (default 1). A batch
-prints one line per file as it starts and ends, then a table of how each one
-ended, the message for each file's contributor, and a tally. With a reply
-template, each file's reply is printed instead of its message. `--template`
-and `--requester` apply to every file. One file failing
-does not stop the others. `p` pauses, `r` resumes and `q` stops after the
-batches in flight, as for one file.
+prints one line per file as it starts and ends, and one each time a file
+finishes a batch: the file, the batch, the file's time, and how many files are
+done, running and queued, with the estimate and any failed batches beneath it
+when they change. Then it prints a table of how each one ended, the message for
+each file's contributor, and a tally. With a reply template, each file's reply
+is printed instead of its message. `--template` and `--requester` apply to every
+file. One file failing does not stop the others. `p` pauses, `r` resumes and `q`
+stops after the batches in flight, as for one file.
 
 With `--locale` or a configured locale, every file is reviewed in it. With
 neither, each file is reviewed in the locale its own `Language` header names,
@@ -131,20 +133,21 @@ polyglots config set wporgUsername your-name
 ```
 
 To post a whole reply rather than the sentence alone, with a greeting, the PTE
-verdict and your team's links around it, write a
-[reply template](reply-templates.md). The review then prints the filled reply
-instead of the message, which the reply already holds. `--requester <username>` fills in who it is addressed to,
-and `--template declined` picks a template other than `approved`. When entries
-are left for you to judge, a line above the reply says how many, so you can
-check the verdict before you post it.
+verdict and your team's links around it, write a [reply
+template](reply-templates.md). The review then prints the filled reply instead
+of the message, which the reply already holds. `--requester <username>` fills in
+who it is addressed to, and `--template declined` picks a template other than
+`approved`. When entries are left for you to judge, a line above the reply says
+how many, so you can check the verdict before you post it.
 
 ## Rules only
 
-`--no-ai` runs the deterministic checks and nothing else: no agent, no model,
-no cost. It writes `<name>-problems.po` with the entries the rules found, and
-the soft findings no one has judged are counted as "guesses". It is a quick
-first pass, and the honest way to see what the rules alone catch. To work this way all the time, choose No AI
-in setup; see [Using polyglots without AI](getting-started.md#using-polyglots-without-ai).
+`--no-ai` runs the deterministic checks and nothing else: no agent, no model, no
+cost. It writes `<name>-problems.po` with the entries the rules found, and the
+soft findings no one has judged are counted as "guesses". It is a quick first
+pass, and the honest way to see what the rules alone catch. To work this way all
+the time, choose No AI in setup; see [Using polyglots without
+AI](getting-started.md#using-polyglots-without-ai).
 
 ## Batches, time and cost
 
@@ -162,3 +165,62 @@ stops cleanly and exits with code 3; run it again later to carry on.
 
 Verdicts are cached per reviewer and per model, so switching reviewers
 reviews again rather than serving one's opinions as another's.
+
+## Run logs and debug mode
+
+Every review and translate run writes a run log, so a failed batch can be
+explained after the screen is gone:
+
+```
+~/.local/share/polyglots/logs/<start time>-run<id>.jsonl
+```
+
+With `POLYGLOTS_HOME` set, the folder is `$POLYGLOTS_HOME/data/logs`. Each
+line is one JSON event: how the run started (command, file, locale, provider,
+model, batch size, versions), each batch and the reason it failed, every agent
+call (its process id, how long it took, its exit code or signal, whether
+polyglots ended it on the time limit, how much it printed), antigravity's
+[sign-in and quota check](antigravity.md#sign-in-and-quota), and how the run
+ended. It holds counts and reasons, not the entries. A reason can quote the
+first few hundred characters of what the agent printed, though, and when the
+answer was malformed, that can include entries.
+
+Beside it, one file a day, `mcp-<date>.jsonl`, gets a line for each lookup the
+agent made through the polyglots tools: which tool, the size of the question,
+how long it took, how many results, and any error. Never the question or the
+answer.
+
+At the start of each run, logs and debug folders older than 14 days are
+deleted. Only names polyglots writes are touched, so a note of your own in
+the folder stays. A log that cannot be written, on a full disk or a folder
+without permission, never fails a run: one line says so and the run goes on
+without it.
+
+### Debug mode
+
+When the log says a batch failed but not why, turn on debug mode and run
+again. It is off by default. Any of these turns it on:
+
+- `--debug` on `review` or `translate`, for that run;
+- `POLYGLOTS_DEBUG=1` in the environment, for every run while it is set;
+- `polyglots config set debug on`, until `polyglots config set debug off`;
+- in the app, `d` on **Configuration › Check AI agents**.
+
+The environment variable and the setting also apply to `fetch`. A run in debug
+mode says so once at the start, with the folder, so it is not left on by
+accident. The folder sits beside the run log, with the same name without
+`.jsonl`, and holds for each agent call:
+
+- `batch-<NNN>-attempt-<k>.prompt.txt`: the whole prompt sent;
+- `batch-<NNN>-attempt-<k>.stdout.txt` and `.stderr.txt`: everything the
+  agent printed, kept also when the call ran out of time or the run was
+  stopped;
+- with antigravity, a copy of agy's own log for the time of the call
+  (`.agy-cli-<time>.log`), which is never put in a problem report;
+
+and for the run, `entries.jsonl` with the entries as the screen showed them,
+and `warnings.jsonl` with the draft engines' warnings in full.
+
+The prompts hold the entries, and so does the agent's output. A debug folder
+holds the run's entries in full, and it is the one part of a
+[problem report](usage-statistics.md#problem-reports) that can be large.

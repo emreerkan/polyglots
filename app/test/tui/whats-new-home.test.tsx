@@ -52,13 +52,38 @@ describe("What's new on home", () => {
     expect(lastSeen(tui)).toBe('0.34.0')
   })
 
-  it('leaves an empty line between the cards and the heading', async () => {
-    const { lastFrame } = app(settled('0.33.0'), '0.34.0')
-    await waitForText(lastFrame, "What's new in 0.34.0")
-    const lines = lastFrame().split('\n')
-    const at = lines.findIndex((l) => l.includes("What's new in 0.34.0"))
-    expect(lines[at - 1]!.trim()).toBe('')
-    expect(lines[at - 2]!.trim()).not.toBe('')
+  // whatsNewLines counts one empty line above the heading, so the block must
+  // draw exactly one: none would crowd it against the row above, and two
+  // would cost a row the count did not budget for. The row above is the cards
+  // or, when it is shown, the status line under them, and both are checked.
+  describe('leaves exactly one empty line above the heading', () => {
+    const gapAbove = (frame: string | undefined): { gap: number; above: string } => {
+      const lines = (frame ?? '').split('\n')
+      const at = lines.findIndex((l) => l.includes("What's new in 0.34.0"))
+      let row = at - 1
+      while (row >= 0 && lines[row]!.trim() === '') row -= 1
+      return { gap: at - 1 - row, above: lines[row] ?? '' }
+    }
+
+    it('under the cards', async () => {
+      const { lastFrame } = app(settled('0.33.0'), '0.34.0')
+      await waitForText(lastFrame, "What's new in 0.34.0")
+      const { gap, above } = gapAbove(lastFrame())
+      expect(gap).toBe(1)
+      expect(above).not.toContain('Checking agents…')
+    })
+
+    it('under the status line', async () => {
+      const tui = memoryTuiState(settled('0.33.0'))
+      const { lastFrame } = render(
+        <App commands={fakeCommands({ ...tui, discoverAgents: () => new Promise(() => {}) })} cwd={cwd} version="0.34.0" whatsNew={LIST} />,
+        { columns: 120, rows: 40 },
+      )
+      await waitForText(lastFrame, "What's new in 0.34.0")
+      const { gap, above } = gapAbove(lastFrame())
+      expect(above).toContain('Checking agents…')
+      expect(gap).toBe(1)
+    })
   })
 
   // Three lines at most, whatever was skipped: the rest are a link away.

@@ -87,7 +87,7 @@ import { debugEnabled } from './logs/debug.js'
 import { checkGlossaries, glossaryNotice, type StaleGlossary } from './glossary/freshness.js'
 import { offerProblemReport, type ReportContext, type SendResult } from './cli/problem-report.js'
 import { providerVersion, reportModel } from './report/offer.js'
-import { sendReport } from './report/send.js'
+import { DEFAULT_REPORTS_URL, sendReport } from './report/send.js'
 
 const EXIT_OK = 0
 const EXIT_ERROR = 1
@@ -951,11 +951,12 @@ const ENVIRONMENT_HELP = [
   '  POLYGLOTS_AGENT_BIN   agent executable for the review pass, whichever provider is set (default: claude or agy on PATH)',
   '  POLYGLOTS_CLAUDE_BIN  the older name, applied to claude only',
   '  POLYGLOTS_HOME        root for config/ and data/ instead of the XDG directories',
-  '  POLYGLOTS_DEBUG=1     what --debug does, for every review and translate run (also: config set debug on)',
+  "  POLYGLOTS_DEBUG=1     save each batch's prompt and agent output beside the run log, for every review, translate and fetch run (also: config set debug on)",
   '  POLYGLOTS_WP_BIN      wp executable for polyglots lint (default: wp on PATH, else WP-CLI downloaded and run with php)',
   '  POLYGLOTS_ASCII=1     plain ASCII glyphs instead of Unicode; =0 keeps Unicode (also NO_COLOR, FORCE_COLOR)',
   '  DO_NOT_TRACK=1        never send usage statistics, whatever usageStats says',
   '  POLYGLOTS_USAGE_URL   where opted-in usage statistics go (default: https://ada.tools/polyglots/api/usage)',
+  `  POLYGLOTS_REPORTS_URL where problem reports go (default: ${DEFAULT_REPORTS_URL})`,
   '  NO_UPDATE_NOTIFIER=1  never check npm for a newer version (also CI, or: config set updateCheck off)',
 ].join('\n')
 
@@ -1383,6 +1384,9 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
       'after',
       "\nNames are slugs, wp-plugins/<slug>[/<sub-project>] or wp-themes/<slug>, or translate.wordpress.org\nURLs, as arguments or one per line on stdin. A bare slug is tried as a theme first, then as a plugin. A plugin also brings its readme\nwhen it has strings to get; a URL that names one sub-project fetches only that one.",
     )
+    // Fetch reviews and translates what it downloads, so the run log, debug
+    // mode and problem reports are its own as much as review's.
+    .addHelpText('after', ENVIRONMENT_HELP)
     .action(async (names: string[], flags: FetchFlags & { sendReport?: boolean }) => {
       const config = cli.config()
       // Set before the run and read only if one started, by which point

@@ -13,11 +13,23 @@ Entries say what changed. For why and how, read the commit.
 ### Added
 
 - Review and translate keep every failed batch attempt, with its reason and duration, in `jobs.db` (`batch_failure`).
+- Review and translate write a run log in `~/.local/share/polyglots/logs`, kept 14 days, holding counts and failure reasons but not the entries.
+- The MCP server logs each tool call (tool, sizes, timing, result count, error) to a daily `mcp-<date>.jsonl` in the same folder, without its arguments or results.
+- `--debug`, `POLYGLOTS_DEBUG=1` or the Debug mode setting saves each batch's prompt and agent output beside the run log.
+- When a run has problems, the CLI and the app offer to send a problem report to the maintainer; `--send-report` sends without asking, `problemReports: never` stops the offers.
+- The batch screen shows elapsed time, an estimate and failed batches, and `enter` opens any file's own progress.
+- A batch on the command line prints a line each time a file finishes a batch, with the file's time, the files done, running and queued, the estimate and failed batches.
+
+### Changed
+
+- With antigravity, a run checks sign-in and quota beside its rules pass, and stops before its first agent call when signed out or out of quota, ending a batch of files there too and saying it stopped, not failed; `doctor` shows both.
 
 ### Fixed
 
 - Quitting the app or stopping a run with Ctrl+C or a kill no longer leaves a running agent (such as a hung `agy`) behind.
 - An antigravity batch that answered but never exited is read at once instead of lost to the 20-minute limit and marked unreviewed.
+- A file with a batch given up counts the entries in its failed batches on its batch table line.
+- `fetch --help` lists the environment variables, as `review` and `translate` do.
 
 ## [1.0.1] - 2026-10-17
 

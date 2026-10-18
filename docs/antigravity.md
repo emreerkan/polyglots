@@ -95,12 +95,62 @@ polyglots doctor
 
 `doctor` reads the settings file and the tool registration, without sending
 a prompt. It names any rule that is missing, and a registered path to Node or
-to polyglots that no longer exists. Then review a small file:
+to polyglots that no longer exists. It also asks agy whether you are signed in
+and prints the quota left in each group, as
+`quota: <group> <n>% left (<limit>, resets <time>)`; see
+[sign-in and quota](#sign-in-and-quota). Then review a small file:
 
 ```
 polyglots config set reviewProvider antigravity
 polyglots review small-file.po
 ```
+
+## Sign-in and quota
+
+A signed-out agy does not fail. Asked to review, it prints a Google sign-in
+link and waits a minute for a code nobody types, and a review would do that
+once for every attempt at every batch. A quota that has run out fails batches
+with nothing on screen to say why. So before the first batch, polyglots asks
+agy two things:
+
+1. `agy models`, which never prompts, says whether you are signed in.
+2. Only when it said yes, `agy -p /usage` gives the quota left in each group
+   of models. It is never run otherwise, because signed out it is the command
+   that starts the sign-in.
+
+The quota is reported by group, not by model, so the model chosen in agy's
+settings is matched to its groups: a Claude or GPT model to "Claude and GPT
+models", a Gemini model to "Gemini Models" and to any group that names its
+family, such as "Gemini 4 Argon". The lowest of those counts.
+
+On the command line the check starts with `review`, `translate` or `fetch`,
+beside reading the file, and the run waits for it at most 10 seconds before
+the first batch. In the app it runs in the background when the app opens and
+when you switch to antigravity, and the header shows the result, for example
+`antigravity · Gemini 4 Argon · 90% weekly`, or
+`signed out: run agy once to sign in`. A run started within 5 minutes of the
+last check uses that result. After a batch is given up the quota is read
+again, so the [run log](review.md#run-logs-and-debug-mode) says whether it
+ran out part way.
+
+What the messages mean:
+
+- **`antigravity is signed out. Run agy once to sign in, then start again.`**
+  Run `agy` with no arguments in a terminal and sign in. The run stopped
+  before its first batch, so nothing was spent, and in a batch of files no
+  further file was started. The exit code is 1.
+- **`antigravity has no quota left for <model> (<group>: 0%, resets <time>).`**
+  The run stopped before its first batch. Start it again after the reset
+  time, or choose a model from another group in agy's settings.
+- **`antigravity quota is low for <model>: <group> <n>% left.`** Below 10%.
+  A warning only; the run goes on, and may still run out part way.
+- **No message.** Either agy answered and all is well, or its answer could not
+  be read: agy is missing, took longer than its time limit, or printed
+  something this version of polyglots does not recognise. An answer that
+  cannot be read never stops a run.
+
+A run stopped by this check ends as stopped, not failed, so it is not counted
+as a fault and offers no [problem report](usage-statistics.md#problem-reports).
 
 ## Good to know
 

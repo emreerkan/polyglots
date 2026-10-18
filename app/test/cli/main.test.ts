@@ -958,6 +958,25 @@ describe('--version', () => {
   })
 })
 
+describe('environment help', () => {
+  // The two variables a run reads that change what leaves it: where debug
+  // files are kept, and where a problem report is sent.
+  // Fetch runs the same reviews and translates and reads both, so its help
+  // names them too.
+  it('names POLYGLOTS_DEBUG and POLYGLOTS_REPORTS_URL under review, translate and fetch', async () => {
+    for (const command of ['review', 'translate', 'fetch']) {
+      const h = harness()
+      expect(await h.run([command, '--help'])).toBe(0)
+      const text = h.stdout.text.replace(/\s+/g, ' ')
+      // Fetch has no --debug flag, so the line says what it does instead of
+      // pointing at a flag one of the three commands lacks.
+      expect(text).toContain("POLYGLOTS_DEBUG=1 save each batch's prompt and agent output beside the run log, for every review, translate and fetch run")
+      expect(text).not.toContain('what --debug does')
+      expect(text).toContain('POLYGLOTS_REPORTS_URL where problem reports go (default: https://ada.tools/polyglots/api/reports)')
+    }
+  })
+})
+
 describe('translate fail-fast on a missing engine key', () => {
   it('exits 1 before prompting or calling translateFile', async () => {
     delete process.env.DEEPL_API_KEY

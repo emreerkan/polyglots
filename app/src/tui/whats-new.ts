@@ -13,6 +13,11 @@ import { isNewer } from '../update/index.js'
 // flags, and a patch like "the entry table is no longer written" is right
 // there and noise here.
 export const WHATS_NEW: Readonly<Record<string, readonly string[]>> = {
+  unreleased: [
+    'Batch of files: time, estimate, open any file',
+    'Send a problem report when a run has problems',
+    'Runs check antigravity sign-in and quota first',
+  ],
   '1.0.0': [
     'Fetch rules and memory from polyglots-data',
     'Build your rules file in the browser',

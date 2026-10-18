@@ -31,6 +31,8 @@ polyglots config set batchSize 50
 | `localModelServers` | none | Extra servers for `polyglots models` to list, comma-separated. Replaces the whole list. |
 | `localIdleTimeout` | `180` | Seconds a local server may send nothing before polyglots gives up on the reply. Raise it on slow hardware: `polyglots config set localIdleTimeout 600`. |
 | `usageStats` | off | Whether to share anonymous weekly totals for the website: `on` or `off`. See [usage statistics](usage-statistics.md). |
+| `debug` | off | Whether every review and translate run saves its prompts and the agent's output beside the run log: `on` or `off`. See [debug mode](review.md#debug-mode). |
+| `problemReports` | `ask` | Whether a run that had a problem offers to send a report to the maintainer: `ask` or `never`. See [problem reports](usage-statistics.md#problem-reports). |
 | `updateCheck` | on | Whether to ask npm once a day for a newer version, and say so at the end of a command and in the app's header: `on` or `off`. Also asks translate.wordpress.org once a day whether a glossary you synced has changed since. |
 
 The two context lengths are cleared with an empty value:
@@ -94,6 +96,8 @@ Reviewing needs no key: the agent uses its own sign-in.
 |---|---|
 | `POLYGLOTS_HOME` | Keep settings and data under this folder (`config/` and `data/`) instead of `~/.config` and `~/.local/share`. |
 | `POLYGLOTS_AGENT_BIN` | The agent executable to run, when it is not `claude` or `agy` on your `PATH`. |
+| `POLYGLOTS_DEBUG=1` | Debug mode for every review and translate run, as `--debug` does for one. See [debug mode](review.md#debug-mode). |
+| `POLYGLOTS_REPORTS_URL` | Where problem reports are sent, instead of `https://ada.tools/polyglots/api/reports`. |
 | `POLYGLOTS_ASCII=1` | Plain ASCII instead of Unicode symbols and box lines. Also chosen automatically when the locale is not UTF-8, and on Windows outside Windows Terminal, VS Code and a few other terminals. `POLYGLOTS_ASCII=0` keeps Unicode in every case. |
 | `NO_COLOR` | No colour in the output. |
 | `FORCE_COLOR` | Colour even when the output is not a terminal. |

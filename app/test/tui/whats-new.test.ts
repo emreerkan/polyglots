@@ -73,6 +73,15 @@ describe('WHATS_NEW', () => {
     }
   })
 
+  // Two lines whose wording the maintainer decided, pinned so a later edit is
+  // a choice. A problem report is offered for more than a failed run (a batch
+  // given up, a breaker stop), and "batches" alone also reads as the agent's
+  // batches of entries, so the line names the screen of files.
+  it('words the report and batch-of-files lines as decided', () => {
+    expect(WHATS_NEW.unreleased).toContain('Send a problem report when a run has problems')
+    expect(WHATS_NEW.unreleased).toContain('Batch of files: time, estimate, open any file')
+  })
+
   // The home screen gives each line one row and cuts what does not fit, at a
   // frame that can be 60 columns wide with a version in front.
   it('keeps every line short enough for the narrowest frame', () => {

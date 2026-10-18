@@ -165,11 +165,23 @@ translation fills pending entries only. Leave the locale empty, shown as
 names; a file whose header names none fails on its own and the rest carry on.
 `esc` goes back to the file list with the marks kept.
 
-The run and its summary are Fetch's too: a line per file while it runs, then
-how each one ended and the tally. Under them is one reviewed file's reply, or
-its message for the contributor when there is no template. `↑↓` moves to the
-next file's, `c` copies the one shown and `t` switches its template. A
-requester typed in the options fills every reply; left empty, each reply
+The run and its summary are Fetch's too. While it runs, two lines on top say
+how many files are done, running and queued, how long the batch has taken,
+an estimate of the time left (an upper bound while files are still queued)
+and how many batches failed. Under them is a line per file: a running file
+shows its batch and how long that batch has been open, in yellow with "near
+the time limit" once it is a minute short of the agent's timeout, and a
+finished file shows its total time and any failed batches. `↑↓` moves over
+the files and `enter` opens one file's own progress screen, the one a single
+run shows, updating as it runs; `esc` goes back to the list. `p`, `r` and
+`q` still act on the whole batch from there.
+
+The summary lists how each file ended and the tally. Under them is the reply
+for the file under the cursor, or its message for the contributor when there
+is no template. `↑↓` moves to another file, `c` copies the one shown and `t`
+switches its template. `enter` opens that file's final screen, with its
+time and the reason each failed batch gave; `esc` or `q` leaves the summary.
+A requester typed in the options fills every reply; left empty, each reply
 keeps `{username}` for you to fill in. `a` is not offered after a batch. The
 command line does the same with `polyglots review a.po b.po --parallel 2`.
 
@@ -200,12 +212,12 @@ again once stopped.
 | `g` | Sync WordPress.org glossary | Downloads your locale's glossary. Run it again when your team changes it. |
 | `r` | Locale rules | Edits your locale's rules: which built-in checks run, proper nouns, common mistakes, patterns, and guidance for the reviewer. `s` saves. **Fetch from polyglots-data** shows what the published file would change and writes it on `y`. **Open the rules builder in your browser** opens the website's rules builder for the locale, and shows its address. |
 | `t` | Reply templates | Your locale's [reply templates](reply-templates.md): `e` edits one, `n` creates one from a starter, `d` deletes one, `v` previews it clean or with problems. |
-| `a` | Check AI agents | Shows whether each review agent is installed, signed in and set up for polyglots. `r` checks again. |
+| `a` | Check AI agents | Shows whether each review agent is installed, signed in and set up for polyglots. `r` checks again. `d` turns [debug mode](review.md#debug-mode) on or off. |
 | `m` | Local models | Finds model servers on this machine, such as Ollama or LM Studio, and chooses the drafting model. See [Local models](local-models.md). |
 | `k` | Configure API keys | Stores your DeepL and OpenAI keys. A key set in your environment wins over a saved one. |
 | `w` | Setup wizard | The six setup steps, from wherever you left them. |
 | `i` | Interface settings | Settings for the app only, such as printing the last output path after you quit. |
-| `u` | Usage statistics | Shows exactly what would be shared for the website's totals, and turns it on or off. See [Usage statistics](usage-statistics.md). |
+| `u` | Usage statistics | Shows exactly what would be shared for the website's totals, and turns it on or off. Below it, whether to offer [problem reports](usage-statistics.md#problem-reports). See [Usage statistics](usage-statistics.md). |
 
 Everything set here is the same configuration the commands read; see
 [Configuration](configuration.md).
