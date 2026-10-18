@@ -26,6 +26,11 @@ these flags, and each one has a reason:
   comes from contributors, so the agent reading it must not reach them. This
   keeps your sign-in. polyglots reads two keys from that file itself; see
   [model and effort](#model-and-effort).
+- **`-c project_doc_max_bytes=0`.** Codex does not read an `AGENTS.md` from
+  the folder it runs in. `--ignore-user-config` does not cover that file, so
+  without this flag the folder you start a review in could change what the
+  agent is told, and a stored verdict would not match the prompt it was
+  stored for.
 - **The polyglots tools, approved for that server only.** Codex refuses a tool
   it cannot ask you about, and a review runs headless. Without the approval
   every lookup is denied and the verdicts come back without the glossary.
@@ -48,7 +53,10 @@ on its own, first match wins:
 2. polyglots' setting `codex.model` or `codex.effort`.
 3. The top-level `model` and `model_reasoning_effort` in
    `$CODEX_HOME/config.toml` (`~/.codex/config.toml` by default). polyglots
-   reads those two keys and nothing else in the file.
+   reads those two keys and nothing else in the file. If the file sets a
+   top-level `profile`, polyglots reads neither key, because the profile
+   decides them and polyglots does not follow it. An effort there is passed
+   to codex as written, even one polyglots does not list.
 4. Codex's own built-in default.
 
 Which models you can use depends on your ChatGPT plan. To set them for
@@ -60,9 +68,11 @@ polyglots config set codex.effort medium
 polyglots config set codex.effort ''
 ```
 
-Effort is `minimal`, `low`, `medium`, `high` or `xhigh`. An empty value
+Effort is `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` or
+`ultra`, the values codex-cli 0.155.1 knows. Not every model takes every
+value; the model check before a run says when yours does not. An empty value
 removes the override, and codex's own choice applies again. On the AI agents
-screen of the app, `e` cycles the effort through those five and then back to
+screen of the app, `e` cycles the effort through those eight and then back to
 codex's own.
 
 When you switch to codex, polyglots says which model and effort it will use
@@ -107,6 +117,9 @@ What the results mean:
 - **`codex cannot use the model <model>: ...`** Your plan does not have that
   model. The run stops before its first batch. Choose another with
   `polyglots config set codex.model <name>`.
+- **`codex cannot use the effort <effort> with ...`** The model does not take
+  that effort. The run stops before its first batch. Choose another with
+  `polyglots config set codex.effort <level>`.
 - **A rate-limit warning.** Your plan's limit is reached. The run goes on and
   may fail batches until it resets.
 - **No message.** Either all is well, or the answer could not be read. An

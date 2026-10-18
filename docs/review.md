@@ -179,8 +179,10 @@ With `POLYGLOTS_HOME` set, the folder is `$POLYGLOTS_HOME/data/logs`. Each
 line is one JSON event: how the run started (command, file, locale, provider,
 model, batch size, versions), each batch and the reason it failed, every agent
 call (its process id, how long it took, its exit code or signal, whether
-polyglots ended it on the time limit, how much it printed), antigravity's
-[sign-in and quota check](antigravity.md#sign-in-and-quota), and how the run
+polyglots ended it on the time limit, how much it printed), the provider
+check that runs before the first batch (antigravity's
+[sign-in and quota](antigravity.md#sign-in-and-quota), codex's
+[sign-in and model](codex.md#sign-in-and-the-model-check)), and how the run
 ended. It holds counts and reasons, not the entries. A reason can quote the
 first few hundred characters of what the agent printed, though, and when the
 answer was malformed, that can include entries.

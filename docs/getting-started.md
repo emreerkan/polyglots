@@ -47,9 +47,9 @@ polyglots doctor
 `doctor` sends no prompt. `polyglots doctor --live` also sends one short
 prompt to each agent, which counts as a request on a metered plan.
 
-To use antigravity, follow [its setup](antigravity.md) first. Codex needs only
-an install and a sign-in; see [codex](codex.md). To review or
-draft with a model on your own machine, see [local models](local-models.md).
+To use antigravity, follow [its setup](antigravity.md) first. Codex needs
+only an install and a sign-in; see [codex](codex.md). To review or draft with
+a model on your own machine, see [local models](local-models.md).
 
 ## Set your locale
 
