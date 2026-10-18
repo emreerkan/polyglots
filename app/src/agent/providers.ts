@@ -3,12 +3,26 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { docsUrl } from '../docs-links.js'
-import type { ReviewChoice, ReviewProvider } from '../types.js'
+import { CODEX_EFFORTS, type CodexEffort } from '../config.js'
+import type { PolyglotsConfig, ReviewChoice, ReviewProvider } from '../types.js'
 import { excerpt } from '../logs/excerpt.js'
+import {
+  CODEX_DISABLED_FEATURES,
+  codexAnswerComplete,
+  codexAnswerText,
+  codexMcpArgs,
+  codexProbeArgs,
+  codexSettings,
+  codexUsage,
+  readCodexStream,
+  readLoginStatus,
+  strictSchema,
+} from './codex.js'
 
-// The only tools a review is allowed to reach for. Both providers restrict to
+// The only tools a review is allowed to reach for. Every provider restricts to
 // these, by different means: Claude takes a flag, antigravity takes allow-rules
-// in its own settings file, which is why it needs a documented setup step.
+// in its own settings file, which is why it needs a documented setup step, and
+// codex is given only the polyglots server and has its other tools disabled.
 export const MCP_TOOLS = [
   'mcp__polyglots__glossary_lookup',
   'mcp__polyglots__consistency_lookup',
@@ -19,7 +33,7 @@ export const MCP_TOOLS = [
 // caller's timer gives up on it.
 const GRACE_SECONDS = 30
 
-export const PROVIDERS: readonly ReviewProvider[] = ['claude', 'antigravity']
+export const PROVIDERS: readonly ReviewProvider[] = ['claude', 'antigravity', 'codex']
 
 // Claude stays the default. It is the faster of the two and the more
 // conservative, and it is what every cached verdict was formed under.
@@ -56,6 +70,9 @@ export interface AgentRunOptions {
   // on PATH.
   bin?: string
   model?: string
+  // codex only. The others take effort inside the model name (antigravity) or
+  // not at all from us (claude), so a value here is ignored by their argv.
+  effort?: CodexEffort
   cwd?: string
   timeoutMs?: number
   killGraceMs?: number
@@ -155,6 +172,15 @@ export interface ProviderSpec {
    * agent known to hang after answering; absent means wait for the exit.
    */
   answerComplete?(stdout: string): boolean
+  /**
+   * The schema as this CLI will accept it, applied before it is written or
+   * passed. Absent means the schema as given. codex wants OpenAI's strict form
+   * (see strictSchema), which the other two would accept but do not need, and
+   * the zod side keeps validating the original either way.
+   */
+  prepareSchema?(schema: unknown): unknown
+  /** Token counts from the output, for the run log's agent-exit line. */
+  usage?(stdout: string): Record<string, number> | undefined
 }
 
 function envelopeOf(stdout: string, provider: string): Record<string, unknown> {
@@ -384,7 +410,85 @@ const antigravity: ProviderSpec = {
   },
 }
 
-const SPECS: Record<ReviewProvider, ProviderSpec> = { claude, antigravity }
+const codex: ProviderSpec = {
+  name: 'codex',
+  bin: 'codex',
+  schemaAs: 'file',
+  // The spike's 50-entry batches took 6 to 17 seconds. A batch of 100 with
+  // real lookups was not measured, and ten minutes is room for the tail.
+  defaultTimeoutMs: 600_000,
+  versionArgs: ['--version'],
+  // Local and free: it reads the stored credential and sends nothing.
+  async checkAuth(ctx) {
+    return readLoginStatus(await ctx.exec(ctx.bin, ['login', 'status'], { timeoutMs: ctx.timeoutMs, env: ctx.env }))
+  },
+  // No MCP and the shell disabled: one model turn, nothing else. Without a
+  // model or effort, so it asks whatever codex itself would use.
+  liveProbe: {
+    args: () => codexProbeArgs({}),
+    read(stdout) {
+      codexAnswerText(stdout)
+    },
+  },
+  // Wrapped rather than assigned: codex.ts imports AgentError from this
+  // module, and a plain reference read while that cycle is still loading
+  // would be undefined.
+  prepareSchema: (schema) => strictSchema(schema),
+  /**
+   * --ignore-user-config is not optional. The person's ~/.codex/config.toml
+   * loads plugins and other MCP servers, any of which is a tool a .po string
+   * could steer the model to, and may name a model their plan cannot use; the
+   * flag drops all of it and keeps the sign-in. The model and effort it would
+   * have given are read by agentModel instead and passed back as -m and -c.
+   *
+   * The MCP server comes from the mcp.json written for Claude, so one file
+   * decides the launch line and the locale and POLYGLOTS_HOME reach codex's
+   * server exactly as they reach Claude's. codexMcpArgs ends with the
+   * approval flag: exec has no one to ask, and without it every tool call is
+   * cancelled and the run exits zero with verdicts formed on no lookups.
+   *
+   * --sandbox read-only is belt and braces, since the shell is disabled
+   * anyway. The prompt goes on stdin through the trailing dash.
+   */
+  buildArgs(schema, opts) {
+    return [
+      'exec',
+      '--ignore-user-config',
+      '--ephemeral',
+      '--skip-git-repo-check',
+      '--json',
+      '--sandbox',
+      'read-only',
+      '--output-schema',
+      schema,
+      ...(opts.model ? ['-m', opts.model] : []),
+      ...(opts.effort === undefined ? [] : ['-c', `model_reasoning_effort="${opts.effort}"`]),
+      ...codexMcpArgs(readMcpConfig(opts.mcpConfigPath)),
+      ...CODEX_DISABLED_FEATURES.flatMap((feature) => ['--disable', feature]),
+      '-c',
+      'web_search="disabled"',
+      '-',
+    ]
+  },
+  readEnvelope: (stdout) => readCodexStream(stdout),
+  // No hang was seen in the spike. This is the antigravity contract kept as
+  // cheap insurance: a codex that answers and stays costs nothing.
+  answerComplete: (stdout) => codexAnswerComplete(stdout),
+  usage: (stdout) => codexUsage(stdout),
+}
+
+const SPECS: Record<ReviewProvider, ProviderSpec> = { claude, antigravity, codex }
+
+// An AgentError rather than the bare ENOENT, so a batch that cannot start
+// codex is reported and retried like any other agent failure, and says which
+// file it looked for.
+function readMcpConfig(path: string): string {
+  try {
+    return readFileSync(path, 'utf8')
+  } catch (err) {
+    throw new AgentError(`could not read the MCP config for codex at ${path}: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
 
 function antigravityDir(home: string): string {
   return join(home, '.gemini', 'antigravity-cli')
@@ -562,6 +666,80 @@ export function configuredModel(provider: ReviewProvider, home: string = homedir
   }
 }
 
+/** Where a resolved codex model came from, for the hints that name it. */
+export type ModelSource = 'flag' | 'polyglots config' | 'codex config' | 'codex default'
+export type EffortSource = Exclude<ModelSource, 'flag'>
+
+export interface AgentModel {
+  model?: string
+  effort?: CodexEffort
+  modelFrom?: ModelSource
+  effortFrom?: EffortSource
+}
+
+/**
+ * The model, and for codex the effort, a run will pass, and where each came
+ * from.
+ *
+ * For codex polyglots has no default of its own: model access depends on the
+ * ChatGPT plan, so a model chosen here would fail every batch for anyone
+ * whose plan lacks it. Each value is resolved on its own, so a polyglots
+ * effort can sit beside codex's own model. config.toml is read by us because
+ * --ignore-user-config stops codex reading it; an effort there outside the
+ * five this build knows is read as unset rather than passed, since codex would
+ * refuse a value polyglots config would have refused too. Nothing resolved is
+ * 'codex default': no flag, and codex picks.
+ *
+ * antigravity's model is its settings file's, read only for the engine id;
+ * claude takes the flag or picks its own.
+ */
+export function agentModel(
+  provider: ReviewProvider,
+  config: PolyglotsConfig,
+  flagModel?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): AgentModel {
+  if (provider === 'claude') return flagModel === undefined ? {} : { model: flagModel }
+  if (provider === 'antigravity') {
+    const model = flagModel ?? configuredModel('antigravity')
+    return model === undefined ? {} : { model }
+  }
+  const own = config.codex ?? {}
+  const theirs = codexSettings(env)
+  const theirEffort = (CODEX_EFFORTS as readonly string[]).includes(theirs.effort ?? '')
+    ? (theirs.effort as CodexEffort)
+    : undefined
+  const model: Pick<AgentModel, 'model' | 'modelFrom'> =
+    flagModel !== undefined
+      ? { model: flagModel, modelFrom: 'flag' }
+      : own.model !== undefined
+        ? { model: own.model, modelFrom: 'polyglots config' }
+        : theirs.model !== undefined && theirs.model !== ''
+          ? { model: theirs.model, modelFrom: 'codex config' }
+          : { modelFrom: 'codex default' }
+  const effort: Pick<AgentModel, 'effort' | 'effortFrom'> =
+    own.effort !== undefined
+      ? { effort: own.effort, effortFrom: 'polyglots config' }
+      : theirEffort !== undefined
+        ? { effort: theirEffort, effortFrom: 'codex config' }
+        : { effortFrom: 'codex default' }
+  return { ...model, ...effort }
+}
+
+/**
+ * The label engineId puts after `codex:`. Both parts name the engine, since
+ * the same model at another effort does not reach the same verdicts, and a
+ * part that resolved to nothing is left out rather than guessed, so nothing
+ * at all gives a bare `codex`, as antigravity does when its settings are
+ * unreadable.
+ */
+export function codexEngineLabel(model?: string, effort?: string): string | undefined {
+  if (model && effort) return `${model} (${effort})`
+  if (model) return model
+  if (effort) return `(${effort})`
+  return undefined
+}
+
 export function providerSpec(name: ReviewProvider = DEFAULT_PROVIDER): ProviderSpec {
   return SPECS[name]
 }
@@ -572,7 +750,7 @@ export function providerSpec(name: ReviewProvider = DEFAULT_PROVIDER): ProviderS
 const schemaFiles = new Map<string, string>()
 
 export function schemaArgument(spec: ProviderSpec, jsonSchema: unknown): string {
-  const text = JSON.stringify(jsonSchema)
+  const text = JSON.stringify(spec.prepareSchema ? spec.prepareSchema(jsonSchema) : jsonSchema)
   if (spec.schemaAs === 'inline') return text
   const digest = createHash('sha256').update(text).digest('hex').slice(0, 16)
   const cached = schemaFiles.get(digest)

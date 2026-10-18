@@ -16,6 +16,8 @@ import { excerpt } from '../logs/excerpt.js'
 
 export {
   AgentError,
+  agentModel,
+  codexEngineLabel,
   configuredModel,
   MCP_TOOLS,
   PROVIDERS,
@@ -39,6 +41,17 @@ function sessionOf(stdout: string): string | null {
     return typeof id === 'string' ? id : null
   } catch {
     return null
+  }
+}
+
+// Read defensively: a usage line is worth nothing next to the agent-exit line
+// it would cost if a reader threw on a stream it did not expect.
+function usageOf(spec: ProviderSpec, stdout: string): { usage: Record<string, number> } | undefined {
+  try {
+    const usage = spec.usage?.(stdout)
+    return usage === undefined ? undefined : { usage }
+  } catch {
+    return undefined
   }
 }
 
@@ -289,6 +302,9 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
         stdoutBytes: Buffer.byteLength(stdout),
         stderrBytes: Buffer.byteLength(stderr),
         session: sessionOf(stdout),
+        // Only a provider that reports them, and only when it did: the field
+        // is absent rather than empty, so a reader can tell the two apart.
+        ...(usageOf(spec, stdout) ?? {}),
       })
       // On close rather than on the answer, so a timed-out or killed call
       // keeps everything it printed up to the end, which is the part that

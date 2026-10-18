@@ -223,7 +223,7 @@ export interface ConsistencyEntry {
  * which subscription to spend. Each run still records the one it used, because
  * verdicts are cached per engine and the two providers do not agree.
  */
-export type ReviewProvider = 'claude' | 'antigravity'
+export type ReviewProvider = 'claude' | 'antigravity' | 'codex'
 
 /**
  * What adjudicates a review: an agent CLI, or a local model.

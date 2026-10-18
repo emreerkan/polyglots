@@ -474,7 +474,8 @@ describe('switching only between usable agents', () => {
 describe('nextProvider', () => {
   it('cycles every provider when nothing is known about which are usable', () => {
     expect(nextProvider('claude')).toBe('antigravity')
-    expect(nextProvider('antigravity')).toBe('claude')
+    expect(nextProvider('antigravity')).toBe('codex')
+    expect(nextProvider('codex')).toBe('claude')
   })
 
   it('keeps the current provider in the rotation even when it is not usable', () => {

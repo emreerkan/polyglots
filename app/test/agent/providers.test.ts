@@ -3,16 +3,22 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  agentModel,
   AgentError,
+  codexEngineLabel,
   configuredModel,
   DEFAULT_PROVIDER,
   isReviewProvider,
   MCP_TOOLS,
   PROVIDERS,
   providerSpec,
+  resolveAgentBin,
   schemaArgument,
 } from '../../src/agent/providers.js'
 import { buildAgentArgs, readAgentOutput } from '../../src/agent/run.js'
+import { CODEX_DISABLED_FEATURES, codexMcpArgs, codexProbeArgs, strictSchema } from '../../src/agent/codex.js'
+import { auditBatchJsonSchema } from '../../src/audit/schema.js'
+import { DEFAULT_CONFIG } from '../../src/config.js'
 
 const SCHEMA = { type: 'object', properties: { ok: { type: 'boolean' } } }
 const base = { mcpConfigPath: '/tmp/mcp.json' }
@@ -37,7 +43,8 @@ describe('provider registry', () => {
   })
 
   it('knows its own names and rejects anything else', () => {
-    expect([...PROVIDERS]).toEqual(['claude', 'antigravity'])
+    expect([...PROVIDERS]).toEqual(['claude', 'antigravity', 'codex'])
+    expect(isReviewProvider('codex')).toBe(true)
     expect(isReviewProvider('antigravity')).toBe(true)
     expect(isReviewProvider('gemini')).toBe(false)
   })
@@ -230,5 +237,196 @@ describe('the model a provider will actually use', () => {
     expect(configuredModel('antigravity', empty)).toBeUndefined()
     writeFileSync(join(empty, '.gemini', 'antigravity-cli', 'settings.json'), JSON.stringify({ model: 42 }))
     expect(configuredModel('antigravity', empty)).toBeUndefined()
+  })
+})
+
+describe('codex arguments', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'polyglots-codex-args-'))
+  // The same mcp.json Claude is given, so the locale and POLYGLOTS_HOME reach
+  // codex's server exactly as they reach Claude's.
+  const mcpConfigPath = join(dir, 'mcp.json')
+  writeFileSync(
+    mcpConfigPath,
+    JSON.stringify({ mcpServers: { polyglots: { command: '/usr/bin/node', args: ['/x/server.js'], env: { POLYGLOTS_LOCALE: 'tr' } } } }),
+  )
+  const mcp = codexMcpArgs(readFileSync(mcpConfigPath, 'utf8'))
+  const disabled = CODEX_DISABLED_FEATURES.flatMap((f) => ['--disable', f])
+
+  it('builds the exact flag list, model and effort included when given', () => {
+    const args = buildAgentArgs(SCHEMA, { mcpConfigPath, provider: 'codex', model: 'gpt-5.6-luna', effort: 'low' })
+    const schemaFile = args[args.indexOf('--output-schema') + 1]!
+    expect(args).toEqual([
+      'exec',
+      '--ignore-user-config',
+      '--ephemeral',
+      '--skip-git-repo-check',
+      '--json',
+      '--sandbox',
+      'read-only',
+      '--output-schema',
+      schemaFile,
+      '-m',
+      'gpt-5.6-luna',
+      '-c',
+      'model_reasoning_effort="low"',
+      ...mcp,
+      ...disabled,
+      '-c',
+      'web_search="disabled"',
+      '-',
+    ])
+    expect(mcp.at(-1)).toBe('mcp_servers.polyglots.default_tools_approval_mode="approve"')
+  })
+
+  // Nothing resolved means codex picks; a model of ours could be one the
+  // person's plan refuses.
+  it('passes neither -m nor an effort when neither resolved', () => {
+    const args = buildAgentArgs(SCHEMA, { mcpConfigPath, provider: 'codex' })
+    expect(args).not.toContain('-m')
+    expect(args.some((a) => a.startsWith('model_reasoning_effort'))).toBe(false)
+    expect(args.slice(args.indexOf('--output-schema') + 2, args.indexOf('--output-schema') + 2 + mcp.length)).toEqual(mcp)
+  })
+
+  it('writes the strict form of the schema, and leaves claude its own', () => {
+    const args = buildAgentArgs(auditBatchJsonSchema, { mcpConfigPath, provider: 'codex' })
+    const file = args[args.indexOf('--output-schema') + 1]!
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(strictSchema(auditBatchJsonSchema))
+    const claudeArgs = buildAgentArgs(auditBatchJsonSchema, { mcpConfigPath })
+    expect(JSON.parse(claudeArgs[claudeArgs.indexOf('--json-schema') + 1]!)).toEqual(auditBatchJsonSchema)
+  })
+
+  // npm on Windows writes backslash paths; JSON.stringify writes them as a
+  // TOML basic string reads them back.
+  it('carries a Windows path into the MCP flags', () => {
+    const winPath = join(dir, 'mcp-win.json')
+    writeFileSync(winPath, JSON.stringify({ mcpServers: { polyglots: { command: 'C:\\Program Files\\nodejs\\node.exe', args: [] } } }))
+    const args = buildAgentArgs(SCHEMA, { mcpConfigPath: winPath, provider: 'codex' })
+    expect(args).toContain('mcp_servers.polyglots.command="C:\\\\Program Files\\\\nodejs\\\\node.exe"')
+  })
+
+  it('has a ten-minute default and no setup step', () => {
+    const spec = providerSpec('codex')
+    expect(spec.defaultTimeoutMs).toBe(600_000)
+    expect(spec.schemaAs).toBe('file')
+    expect(spec.checkSetup).toBeUndefined()
+  })
+
+  it('probes with the no-MCP exec argv', () => {
+    expect(providerSpec('codex').liveProbe.args(60_000)).toEqual(codexProbeArgs({}))
+  })
+
+  // The probe asks for the word OK, not for JSON, so only the stream's error
+  // rules apply: a plain-text answer is a success.
+  it('reads a plain-text probe answer as a success, and a failed turn as a failure', () => {
+    const line = (o: unknown) => `${JSON.stringify(o)}\n`
+    const read = providerSpec('codex').liveProbe.read
+    expect(() => read(line({ type: 'item.completed', item: { type: 'agent_message', text: 'OK' } }) + line({ type: 'turn.completed' }))).not.toThrow()
+    expect(() => read(line({ type: 'turn.failed', error: { message: 'model not supported' } }))).toThrow(/model not supported/)
+    expect(() => read(line({ type: 'turn.completed' }))).toThrow(AgentError)
+  })
+
+  it('names the MCP config it could not read, as an agent failure', () => {
+    expect(() => buildAgentArgs(SCHEMA, { mcpConfigPath: join(dir, 'missing.json'), provider: 'codex' })).toThrow(AgentError)
+    expect(() => buildAgentArgs(SCHEMA, { mcpConfigPath: join(dir, 'missing.json'), provider: 'codex' })).toThrow(/missing\.json/)
+  })
+
+  it('runs codex unless told otherwise', () => {
+    expect(resolveAgentBin('codex', {})).toEqual({ bin: 'codex', source: 'default' })
+  })
+})
+
+describe('codex sign-in', () => {
+  const ctx = (result: { code: number | null; stdout: string; stderr?: string; timedOut?: boolean }) => {
+    const calls: string[][] = []
+    return {
+      calls,
+      ctx: {
+        bin: 'codex',
+        home: '/nowhere',
+        env: {},
+        timeoutMs: 5_000,
+        exec: async (_cmd: string, args: string[]) => {
+          calls.push(args)
+          return { code: result.code, stdout: result.stdout, stderr: result.stderr ?? '', timedOut: result.timedOut ?? false }
+        },
+      },
+    }
+  }
+  const check = providerSpec('codex').checkAuth
+
+  it('reads a signed-in status and its method', async () => {
+    const { ctx: c, calls } = ctx({ code: 0, stdout: 'Logged in using ChatGPT\n' })
+    expect(await check(c)).toEqual({ state: 'signed-in', detail: 'ChatGPT' })
+    expect(calls).toEqual([['login', 'status']])
+  })
+
+  it('reads a signed-out status from stderr too', async () => {
+    expect((await check(ctx({ code: 1, stdout: '', stderr: 'Not logged in\n' }).ctx)).state).toBe('signed-out')
+  })
+
+  it('says unknown for anything else, a timeout included', async () => {
+    expect((await check(ctx({ code: 2, stdout: 'error: unrecognized subcommand' }).ctx)).state).toBe('unknown')
+    expect((await check(ctx({ code: null, stdout: '', timedOut: true }).ctx)).state).toBe('unknown')
+  })
+})
+
+describe('the model and effort codex will run', () => {
+  const codexHome = mkdtempSync(join(tmpdir(), 'polyglots-codex-home-'))
+  const env = { CODEX_HOME: codexHome }
+  const toml = (text: string) => writeFileSync(join(codexHome, 'config.toml'), text)
+  const none = { ...DEFAULT_CONFIG }
+  const ours = { ...DEFAULT_CONFIG, codex: { model: 'ours-model', effort: 'high' as const } }
+
+  it('takes the flag model first, our config next, then codex, each value on its own', () => {
+    toml('model = "toml-model"\nmodel_reasoning_effort = "medium"\n')
+    expect(agentModel('codex', ours, 'flag-model', env)).toEqual({
+      model: 'flag-model',
+      modelFrom: 'flag',
+      effort: 'high',
+      effortFrom: 'polyglots config',
+    })
+    expect(agentModel('codex', ours, undefined, env)).toEqual({
+      model: 'ours-model',
+      modelFrom: 'polyglots config',
+      effort: 'high',
+      effortFrom: 'polyglots config',
+    })
+    expect(agentModel('codex', { ...DEFAULT_CONFIG, codex: { model: 'ours-model' } }, undefined, env)).toEqual({
+      model: 'ours-model',
+      modelFrom: 'polyglots config',
+      effort: 'medium',
+      effortFrom: 'codex config',
+    })
+    expect(agentModel('codex', none, undefined, env)).toEqual({
+      model: 'toml-model',
+      modelFrom: 'codex config',
+      effort: 'medium',
+      effortFrom: 'codex config',
+    })
+  })
+
+  it('leaves both to codex when nothing names them', () => {
+    toml('[profiles.x]\nmodel = "not-top-level"\n')
+    expect(agentModel('codex', none, undefined, env)).toEqual({ modelFrom: 'codex default', effortFrom: 'codex default' })
+  })
+
+  // config refuses an unknown effort, but config.toml is codex's file and
+  // may hold a value a newer codex accepts and this one cannot name.
+  it('reads an effort outside the five as unset', () => {
+    toml('model_reasoning_effort = "extreme"\n')
+    expect(agentModel('codex', none, undefined, env)).toEqual({ modelFrom: 'codex default', effortFrom: 'codex default' })
+  })
+
+  it('gives claude the flag and antigravity its own settings', () => {
+    expect(agentModel('claude', ours, 'opus', env)).toEqual({ model: 'opus' })
+    expect(agentModel('claude', ours, undefined, env)).toEqual({})
+    expect(agentModel('antigravity', ours, 'flash', env)).toEqual({ model: 'flash' })
+  })
+
+  it('labels the engine with whatever resolved', () => {
+    expect(codexEngineLabel('gpt-5.6-luna', 'low')).toBe('gpt-5.6-luna (low)')
+    expect(codexEngineLabel('gpt-5.6-luna')).toBe('gpt-5.6-luna')
+    expect(codexEngineLabel(undefined, 'low')).toBe('(low)')
+    expect(codexEngineLabel()).toBeUndefined()
   })
 })

@@ -88,7 +88,10 @@ function events(stdout: string, completeOnly = false): Json[] {
 const messageOf = (v: unknown): string | undefined =>
   isObject(v) && typeof v.message === 'string' ? v.message : undefined
 
-export function readCodexStream(stdout: string): unknown {
+// The agent's last message as text, or the failure the stream reported. Kept
+// apart from readCodexStream for the live probe, which asks for a word, not
+// for JSON, and so wants the stream's error rules without the parse.
+export function codexAnswerText(stdout: string): string {
   let answer: string | undefined
   let failure: string | undefined
   for (const e of events(stdout)) {
@@ -103,6 +106,11 @@ export function readCodexStream(stdout: string): unknown {
   // An error wins over an answer: a turn can fail after it said something.
   if (failure !== undefined) throw new AgentError(`codex failed: ${excerpt(failure, 200)}`)
   if (answer === undefined) throw new AgentError('codex gave no answer (no agent message in its output)')
+  return answer
+}
+
+export function readCodexStream(stdout: string): unknown {
+  const answer = codexAnswerText(stdout)
   try {
     return dropNulls(JSON.parse(answer))
   } catch {

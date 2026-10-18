@@ -391,7 +391,10 @@ describe('memoisation', () => {
     const live = fakeExec({ claude: (_a, input) => (input ? { stdout: '{"is_error":false,"result":"OK"}' } : undefined), agy: (_a, input) => (input ? { stdout: '{"status":"SUCCESS"}' } : undefined) })
     const liveResult = await discoverAgents({ env, home, platform: 'darwin', exec: live, live: true })
     expect(live.calls.length).toBeGreaterThan(spawned)
-    expect(liveResult.every((s) => s.live !== undefined)).toBe(true)
+    // Only a usable provider is probed live; codex has no binary on this PATH.
+    const usable = liveResult.filter((s) => s.usable)
+    expect(usable.map((s) => s.provider)).toEqual(['claude', 'antigravity'])
+    expect(usable.every((s) => s.live !== undefined)).toBe(true)
 
     const after = fakeExec()
     const cached = await discoverAgents({ env, home, platform: 'darwin', exec: after })

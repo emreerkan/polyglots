@@ -73,7 +73,7 @@ const configSchema = z.object({
   // formed under. `local` is the experimental local reviewer, which only an
   // explicit `config set reviewProvider local` writes. `none` is rules only,
   // with no AI at all.
-  reviewProvider: z.enum(['claude', 'antigravity', 'local', 'none']).default('claude'),
+  reviewProvider: z.enum(['claude', 'antigravity', 'codex', 'local', 'none']).default('claude'),
   // Defaulted rather than required, so a config written before the requester
   // message had a link still parses. Trimmed, because a stray space would be
   // pasted straight into a URL.

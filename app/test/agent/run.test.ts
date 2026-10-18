@@ -65,6 +65,15 @@ describe('agentSpawnPlan', () => {
       shell: true,
     })
   })
+  // npm installs codex as codex.cmd too, so it takes the same shell path,
+  // and is killed with taskkill /F the same way.
+  it('runs codex.cmd through the shell on Windows', () => {
+    writeFileSync(join(bin, 'codex.cmd'), '@echo off')
+    const env = { PATH: bin, PATHEXT: '.com;.exe;.bat;.cmd' }
+    const plan = agentSpawnPlan('codex', ['exec', '-c', 'web_search="disabled"', '-'], env, 'win32')
+    expect(plan.shell).toBe(true)
+    expect(plan.file.startsWith(`"${join(bin, 'codex.cmd')}" "exec"`)).toBe(true)
+  })
   it('runs the bin as named elsewhere', () => {
     expect(agentSpawnPlan('claude', ['-p'], { PATH: bin }, 'darwin')).toEqual({ file: 'claude', args: ['-p'], shell: false })
   })
