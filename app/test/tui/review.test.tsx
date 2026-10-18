@@ -426,7 +426,7 @@ describe('Review screen', () => {
     view.stdin.write(keys.down)
     await tick()
     view.stdin.write(keys.enter)
-    await waitForText(view.lastFrame, /Locale/)
+    await waitForText(view.lastFrame, /Start review/)
   }
 
   it('filters the picker to .po files', async () => {
@@ -435,12 +435,25 @@ describe('Review screen', () => {
     expect(lastFrame()).not.toContain('memory.tmx')
   })
 
-  it('defaults the locale from the config', async () => {
+  // The form has no locale field once one is configured, so what the config
+  // holds is read off the run it starts rather than off the screen.
+  it('runs in the locale from the config, without a field for it', async () => {
     await mkdir(join(home.path, 'config'), { recursive: true })
     await writeFile(join(home.path, 'config', 'config.json'), JSON.stringify({ defaultLocale: 'de' }))
-    const view = await openReview()
+    const reviewFile = vi.fn<ReviewFile>(async (opts) => {
+      opts.onProgress?.({ type: 'done', summary: reviewSummaryOf(opts.file) })
+      return reviewSummaryOf(opts.file)
+    })
+    const view = await openReview(fakeCommands({ reviewFile }))
     await pickFile(view)
-    expect(view.lastFrame()).toContain('de')
+    expect(flat(view.lastFrame())).not.toContain('Locale:')
+    for (let i = 0; i < 3; i++) {
+      view.stdin.write(keys.down)
+      await tick()
+    }
+    view.stdin.write(keys.enter)
+    await waitFor(() => reviewFile.mock.calls.length > 0)
+    expect(reviewFile.mock.calls[0]?.[0]).toMatchObject({ locale: 'de' })
   })
 
   it('passes the picked file, locale and AI choice to the command', async () => {
@@ -453,8 +466,6 @@ describe('Review screen', () => {
     await pickFile(view)
     const { lastFrame, stdin } = view
 
-    stdin.write(keys.down)
-    await tick()
     stdin.write(keys.down)
     await tick()
     stdin.write(' ')
@@ -486,10 +497,8 @@ describe('Review screen', () => {
     const { lastFrame, stdin } = view
     await waitForText(lastFrame, /Skip AI checks:\s*yes/i)
     expect(flat(lastFrame())).toContain('No AI is set up as the review provider')
-    for (let i = 0; i < 2; i++) {
-      stdin.write(keys.down)
-      await tick()
-    }
+    stdin.write(keys.down)
+    await tick()
     stdin.write(' ')
     await tick()
     expect(flat(lastFrame())).toMatch(/Skip AI checks:\s*yes/i)
@@ -521,8 +530,6 @@ describe('Review screen', () => {
     await pickFile(view)
     const { lastFrame, stdin } = view
 
-    stdin.write(keys.down)
-    await tick()
     stdin.write(keys.down)
     await tick()
     stdin.write(keys.down)
@@ -583,8 +590,6 @@ describe('Review screen', () => {
     await pickFile(view)
     const { lastFrame, stdin } = view
 
-    stdin.write(keys.down)
-    await tick()
     stdin.write(keys.right)
     await waitForText(lastFrame, /Batch size:\s*50/)
     stdin.write(keys.down)
@@ -614,8 +619,6 @@ describe('Review screen', () => {
     await tick()
     stdin.write(keys.down)
     await tick()
-    stdin.write(keys.down)
-    await tick()
     stdin.write(' ')
     await waitForText(lastFrame, /Start over:\s*yes/i)
     stdin.write(keys.down)
@@ -640,8 +643,6 @@ describe('Review screen', () => {
     await tick()
     view.stdin.write(keys.down)
     await tick()
-    view.stdin.write(keys.down)
-    await tick()
     view.stdin.write(keys.enter)
 
     await waitFor(() => reviewFile.mock.calls.length > 0)
@@ -660,7 +661,7 @@ describe('Review screen', () => {
       })
       const view = await openReview(fakeCommands({ reviewFile }))
       await pickFile(view)
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 3; i++) {
         view.stdin.write(keys.down)
         await tick()
       }
@@ -676,8 +677,6 @@ describe('Review screen', () => {
   it('shows the summary when the run finishes', async () => {
     const view = await openReview()
     await pickFile(view)
-    view.stdin.write(keys.down)
-    await tick()
     view.stdin.write(keys.down)
     await tick()
     view.stdin.write(keys.down)

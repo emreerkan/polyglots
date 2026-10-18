@@ -41,7 +41,7 @@ async function pickFile(view: View) {
   await waitForText(view.lastFrame, 'a.po')
   await press(view, keys.down)
   view.stdin.write(keys.enter)
-  await waitForText(view.lastFrame, 'Locale:')
+  await waitForText(view.lastFrame, /Start (review|translation)/)
 }
 
 const NOTICE = 'Debug mode: prompts and agent output are saved in /logs/run7'
@@ -61,7 +61,7 @@ describe('debug mode in the app', () => {
       </CommandsProvider>,
     )
     await pickFile(view)
-    await press(view, keys.down, 4)
+    await press(view, keys.down, 3)
     view.stdin.write(keys.enter)
     await waitFor(() => reviewFile.mock.calls.length === 1)
     expect(reviewFile.mock.calls[0]?.[0]).toMatchObject({ debug: true })
@@ -93,8 +93,8 @@ describe('debug mode in the app', () => {
     await press(view, keys.down)
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, /Parallel/)
-    // Locale, then parallel up to 2 so both files run at once, then start.
-    await press(view, keys.down, 1)
+    // The locale is fixed, so the cursor starts on parallel: up to 2 so both
+    // files run at once, then down to start.
     await press(view, keys.right, 1)
     await press(view, keys.down, 4)
     view.stdin.write(keys.enter)
@@ -123,7 +123,7 @@ describe('debug mode in the app', () => {
       </CommandsProvider>,
     )
     await pickFile(view)
-    await press(view, keys.down, 5)
+    await press(view, keys.down, 4)
     view.stdin.write(keys.enter)
     await waitFor(() => translateFile.mock.calls.length === 1)
     expect(translateFile.mock.calls[0]?.[0]).toMatchObject({ debug: false })

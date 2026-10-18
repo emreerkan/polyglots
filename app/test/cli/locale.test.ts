@@ -6,6 +6,7 @@ import { PassThrough } from 'node:stream'
 import Database from 'better-sqlite3'
 import { main, type CliDeps } from '../../src/cli.js'
 import { loadConfig } from '../../src/config.js'
+import { headerLanguageOtherThan } from '../../src/cli/locale.js'
 import type { ReviewSummary } from '../../src/types.js'
 
 // No locale is assumed any more. These pin down what a person without one is
@@ -298,5 +299,27 @@ describe('the Language header', () => {
     expect(stderr.text).toContain('tr')
     expect(stderr.text).toContain(NO_LOCALE)
     expect(translate).not.toHaveBeenCalled()
+  })
+})
+
+// The run forms say when a picked file was written for another locale than
+// the configured one. de_DE names de or de/formal, so the language is what
+// is compared, not one locale the header cannot settle.
+describe('headerLanguageOtherThan', () => {
+  const po = (language: string | undefined) => poFile('x.po', language)
+
+  it('names the header of another language, as the header writes it', async () => {
+    expect(await headerLanguageOtherThan(await po('nl_NL'), 'tr')).toBe('nl_NL')
+  })
+
+  it('is quiet for the same language in another variant or form', async () => {
+    expect(await headerLanguageOtherThan(await po('tr_TR'), 'tr')).toBeUndefined()
+    expect(await headerLanguageOtherThan(await po('de_DE'), 'de/formal')).toBeUndefined()
+  })
+
+  it('is quiet when there is no header, an unknown one, or no file', async () => {
+    expect(await headerLanguageOtherThan(await po(undefined), 'tr')).toBeUndefined()
+    expect(await headerLanguageOtherThan(await po('xx_YY'), 'tr')).toBeUndefined()
+    expect(await headerLanguageOtherThan(join(home, 'missing.po'), 'tr')).toBeUndefined()
   })
 })

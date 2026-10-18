@@ -137,5 +137,25 @@ export async function headerLocaleOf(file: string): Promise<Locale | undefined> 
   }
 }
 
+/**
+ * The Language header of a file written for another language than `locale`,
+ * as the header writes it, for a run form to say so when the configured
+ * locale is the one that will run. Compared by language rather than through
+ * headerLocaleOf, which gives nothing for de_DE (de or de/formal) and so would
+ * say nothing for most Dutch and German files. Undefined for the same
+ * language, and for a header it cannot read: a warning that guesses is noise.
+ */
+export async function headerLanguageOtherThan(file: string, locale: Locale): Promise<string | undefined> {
+  try {
+    const language = (await loadPo(file)).headers['Language']?.trim()
+    const header = language ? resolveLocale(language) : undefined
+    const configured = resolveLocale(locale)
+    if (!header || !configured) return undefined
+    return header.slug === configured.slug ? undefined : language
+  } catch {
+    return undefined
+  }
+}
+
 export const headerLocaleNotice = (locale: Locale): string =>
   `Locale ${locale}, from the file's Language header. Pass --locale to choose another.`

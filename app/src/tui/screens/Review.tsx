@@ -7,7 +7,8 @@ import type { ReviewEvent, ReviewSummary } from '../../types.js'
 import { agentBinOverride } from '../../agent/providers.js'
 import { debugEnabled } from '../../logs/debug.js'
 import { initialBatchSize, providerLabel, screenBatchAdvice } from '../local.js'
-import { headerLocaleOf } from '../../cli/locale.js'
+import { headerLanguageOtherThan, headerLocaleOf } from '../../cli/locale.js'
+import { configuredLocale } from '../../config.js'
 import { useCommands, useConfig } from '../commands.js'
 import { preflightFor, useProviderCheck } from '../provider-check.js'
 import { ProviderRefusal } from '../../agent/agy-check.js'
@@ -79,10 +80,16 @@ export function Review({ cwd, onBack }: ReviewProps) {
   const { config, error: configError } = useConfig()
   const [phase, setPhase] = useState<Phase>('pick')
   const [file, setFile] = useState('')
+  // With a locale configured there is no field: the header names the locale
+  // on every screen and l changes it. A field here was a second, per-screen
+  // switch, and one Antigravity's lookup server never heard, since it starts
+  // with the configured locale: a typed nl was answered from the tr memory.
+  const configured = configuredLocale(config)
   // Empty with no locale configured, and then filled from the picked file's
   // Language header when that names one locale for certain (headerLocaleOf).
-  const [locale, setLocale] = useState(config.defaultLocale ?? '')
-  // The locale read from the picked file, kept to say so beside the field.
+  const [locale, setLocale] = useState(configured ?? '')
+  // The locale read from the picked file, kept to say so beside the field, or
+  // with a configured locale to say when the file names another.
   const [headerLocale, setHeaderLocale] = useState<string | undefined>(undefined)
   // Whether the person typed into the locale field, as against it holding
   // what config or the file's header put there. Only a typed locale is carried
@@ -111,7 +118,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
   const [batchSize, setBatchSize] = useState(initialBatchSize(config))
   const [requester, setRequester] = useState('')
   const hasTemplates = useMemo(() => templatesFor(locale).length > 0, [locale])
-  const fields: Field[] = ['locale', ...(hasTemplates ? (['requester'] as const) : []), 'batch', 'noAi', 'fresh', 'start']
+  const fields: Field[] = [...(configured === undefined ? (['locale'] as const) : []), ...(hasTemplates ? (['requester'] as const) : []), 'batch', 'noAi', 'fresh', 'start']
   const [focus, setFocus] = useState(0)
   const field = fields[Math.min(focus, fields.length - 1)]!
   const [events, setEvents] = useState<ReviewEvent[]>([])
@@ -199,7 +206,7 @@ export function Review({ cwd, onBack }: ReviewProps) {
     setPickDir(dirname(file))
     setFresh(false)
     setHeaderLocale(undefined)
-    if (!localeTyped) setLocale(config.defaultLocale ?? '')
+    if (!localeTyped) setLocale(configured ?? '')
     // The requester goes too: the next file in a folder of submissions is
     // usually someone else's, and a reply carried over would greet the last
     // contributor by name. The field stays in view on the options screen.
@@ -283,7 +290,11 @@ export function Review({ cwd, onBack }: ReviewProps) {
             onBatch={() => setPhase('batch')}
             onPick={(path) => {
               setFile(path)
-              if (headerAllowed) {
+              if (configured !== undefined) {
+                void headerLanguageOtherThan(path, configured).then((other) => {
+                  if (other) setHeaderLocale(other)
+                })
+              } else if (headerAllowed) {
                 void headerLocaleOf(path).then((found) => {
                   if (!found) return
                   setHeaderLocale(found)
@@ -305,9 +316,9 @@ export function Review({ cwd, onBack }: ReviewProps) {
           noun={{ one: 'file', many: 'files' }}
           inputs={batchItems.map((i) => i.input)}
           prepare={async () => ({ items: batchItems, ends: new Map() })}
-          // Empty with no locale configured, which runs each file in the
-          // locale its own header names; see BatchRun.
-          locale={{ field: config.defaultLocale ?? '' }}
+          // An empty field with no locale configured, which runs each file in
+          // the locale its own header names; see BatchRun.
+          locale={configured === undefined ? { field: '' } : { fixed: configured }}
           before={<MarkedFiles items={batchItems} />}
           // Back to the files rather than the menu: the marks are what an
           // escape from here most likely wants to change, and they are kept.
@@ -320,34 +331,41 @@ export function Review({ cwd, onBack }: ReviewProps) {
 
       {stage === 'options' && (
         <>
-          <Box>
-            <Text>{marker('locale')}Locale:          </Text>
-            {typing && field === 'locale' ? (
-              <TextInput value={locale} onChange={typeLocale} onSubmit={() => setFocus(1)} />
-            ) : (
-              <Text>{locale}</Text>
+          {configured !== undefined && headerLocale !== undefined && (
+            <Text color="yellow">The file's Language header says {headerLocale}. Press l to change the locale.</Text>
+          )}
+          {configured === undefined && (
+            <>
+            <Box>
+              <Text>{marker('locale')}Locale:          </Text>
+              {typing && field === 'locale' ? (
+                <TextInput value={locale} onChange={typeLocale} onSubmit={() => setFocus(1)} />
+              ) : (
+                <Text>{locale}</Text>
+              )}
+            </Box>
+            {headerLocale !== undefined && locale === headerLocale && <Text dimColor>  From the file's Language header.</Text>}
+            {/* A typed locale is never overwritten by the header, and one carried
+                from the last file by a arrives with the cursor already on Start.
+                Without this line a carry that does not fit the new file goes
+                through on a single enter with nothing on screen to say so. Held
+                back while typing, where every partial keystroke would disagree. */}
+            {!typing && headerLocale !== undefined && locale.trim() !== '' && resolvedLocale(locale) !== headerLocale && (
+              <Text color="yellow">  The file's Language header says {headerLocale}.</Text>
             )}
-          </Box>
-          {headerLocale !== undefined && locale === headerLocale && <Text dimColor>  From the file's Language header.</Text>}
-          {/* A typed locale is never overwritten by the header, and one carried
-              from the last file by a arrives with the cursor already on Start.
-              Without this line a carry that does not fit the new file goes
-              through on a single enter with nothing on screen to say so. Held
-              back while typing, where every partial keystroke would disagree. */}
-          {!typing && headerLocale !== undefined && locale.trim() !== '' && resolvedLocale(locale) !== headerLocale && (
-            <Text color="yellow">  The file's Language header says {headerLocale}.</Text>
-          )}
-          {locale.trim() === '' && config.reviewProvider === 'antigravity' && config.defaultLocale === undefined && (
-            <Text color="yellow">  With Antigravity reviewing, type the locale: its lookup server never hears one read from the file.</Text>
-          )}
-          {locale.trim() === '' && !(config.reviewProvider === 'antigravity' && config.defaultLocale === undefined) && (
-            <Text color="yellow">  No locale set: type the one you translate into, or choose it once in Setup.</Text>
+            {locale.trim() === '' && config.reviewProvider === 'antigravity' && config.defaultLocale === undefined && (
+              <Text color="yellow">  With Antigravity reviewing, type the locale: its lookup server never hears one read from the file.</Text>
+            )}
+            {locale.trim() === '' && !(config.reviewProvider === 'antigravity' && config.defaultLocale === undefined) && (
+              <Text color="yellow">  No locale set: type the one you translate into, or choose it once in Setup.</Text>
+            )}
+            </>
           )}
           {hasTemplates && (
             <Box>
               <Text>{marker('requester')}Requester:       </Text>
               {field === 'requester' ? (
-                <TextInput value={requester} onChange={setRequester} onSubmit={() => setFocus((f) => f + 1)} />
+                <TextInput value={requester} onChange={setRequester} placeholder="optional, fills {username} in the reply" onSubmit={() => setFocus((f) => f + 1)} />
               ) : (
                 <Text dimColor={requester === ''}>{requester === '' ? 'optional, fills {username} in the reply' : requester}</Text>
               )}

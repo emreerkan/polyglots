@@ -114,6 +114,10 @@ export const KEYS = {
   retry: {
     again: { keys: 'enter', does: 'try again after a failure', match: enter },
   },
+  // Sync glossary with a locale configured, which has no field to submit.
+  syncGlossary: {
+    start: { keys: 'enter', does: 'sync the configured locale', match: enter },
+  },
   // On a screen that needs a locale when none is configured.
   needsLocale: {
     setup: { keys: 'enter', does: 'open setup to choose a locale', match: enter },
@@ -516,7 +520,7 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
     shown: [KEYS.exportFormat.format, KEYS.exportFormat.next, KEYS.target.folder],
     more: [fields.write, picker.sort, finished.close, retry.again, KEYS.needsLocale.setup],
   },
-  'sync-glossary': { shown: [fields.sync], more: [finished.close, retry.again] },
+  'sync-glossary': { shown: [fields.sync], more: [KEYS.syncGlossary.start, finished.close, retry.again] },
   'locale-rules': {
     shown: [KEYS.localeRules.move, KEYS.localeRules.open],
     more: [

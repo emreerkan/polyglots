@@ -242,8 +242,8 @@ describe('the review screen with the panel', () => {
       view.stdin.write(keys.down)
       await tick()
       view.stdin.write(keys.enter)
-      await waitForText(view.lastFrame, /Locale/)
-      for (let i = 0; i < 4; i++) {
+      await waitForText(view.lastFrame, /Start review/)
+      for (let i = 0; i < 3; i++) {
         view.stdin.write(keys.down)
         await tick()
       }

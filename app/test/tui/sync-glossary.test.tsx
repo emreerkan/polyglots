@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import React from 'react'
 import { saveConfig } from '../../src/config.js'
 import { CommandsProvider } from '../../src/tui/commands.js'
@@ -26,16 +28,24 @@ function mount(commands = fakeCommands(), onBack: () => void = () => undefined) 
   )
 }
 
-describe('SyncGlossary', () => {
-  it('prefills the configured locale, lets the user edit it and reports the count', async () => {
-    saveConfig({ defaultLocale: 'de' })
+// The field exists only for someone with no locale configured: with one, the
+// header names it and l changes it. saveConfig merges, so no locale is written
+// over the file instead.
+async function noLocale() {
+  await mkdir(join(home.path, 'config'), { recursive: true })
+  await writeFile(join(home.path, 'config', 'config.json'), '{}')
+}
+
+describe('SyncGlossary with no locale configured', () => {
+  beforeEach(noLocale)
+
+  it('starts with an empty field, lets the user type a locale and reports the count', async () => {
     const commands = fakeCommands()
     let back = 0
     const { lastFrame, stdin } = mount(commands, () => back++)
     await waitForText(lastFrame, /Locale/)
-    expect(lastFrame()).toContain('de')
 
-    stdin.write('-at')
+    stdin.write('de-at')
     await waitForText(lastFrame, 'de-at')
     stdin.write(keys.enter)
     await waitForText(lastFrame, 'Synced 42 glossary entries for de-at.')
@@ -47,11 +57,10 @@ describe('SyncGlossary', () => {
   })
 
   it('normalizes the locale before syncing', async () => {
-    saveConfig({ defaultLocale: 'tr' })
     const commands = fakeCommands()
     const { lastFrame, stdin } = mount(commands)
     await waitForText(lastFrame, /Locale/)
-    stdin.write('_TR ')
+    stdin.write('tr_TR ')
     await waitForText(lastFrame, 'tr_TR')
     stdin.write(keys.enter)
     await waitForText(lastFrame, 'Synced 42 glossary entries for tr.')
@@ -67,7 +76,7 @@ describe('SyncGlossary', () => {
     const commands = fakeCommands({ syncGlossary })
     const { lastFrame, stdin } = mount(commands, () => back++)
     await waitForText(lastFrame, /Locale/)
-    stdin.write('x')
+    stdin.write('trx')
     await waitForText(lastFrame, 'trx')
     stdin.write(keys.enter)
     await waitForText(lastFrame, /No glossary entries found for locale "trx"/)
@@ -85,5 +94,26 @@ describe('SyncGlossary', () => {
     stdin.write(keys.enter)
     await waitForText(lastFrame, 'Synced 7 glossary entries for de.')
     expect(syncGlossary).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('SyncGlossary with a locale configured', () => {
+  // With no field to edit, a failed sync has nothing to fix on this screen, so
+  // enter runs the same locale again instead of opening a field.
+  it('retries the configured locale on enter after a failure', async () => {
+    saveConfig({ defaultLocale: 'de' })
+    let calls = 0
+    const syncGlossary = vi.fn(async (_: { locale: string }) => {
+      if (++calls === 1) throw new Error('network down')
+      return { entries: 7 }
+    })
+    const { lastFrame, stdin } = mount(fakeCommands({ syncGlossary }))
+    await waitForText(lastFrame, 'enter to sync')
+    stdin.write(keys.enter)
+    await waitForText(lastFrame, /Sync failed: network down/)
+    await waitForText(lastFrame, 'enter to retry')
+    stdin.write(keys.enter)
+    await waitForText(lastFrame, 'Synced 7 glossary entries for de.')
+    expect(syncGlossary.mock.calls.map((c) => c[0].locale)).toEqual(['de', 'de'])
   })
 })

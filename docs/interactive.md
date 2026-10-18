@@ -134,8 +134,7 @@ Review and Translate work the same way, in four stages.
 1. **Pick a file.** The list shows the `.po` files in the folder you started
    polyglots from, newest first, with how many entries each holds. `..` goes
    up a folder, `s` changes the order.
-2. **Options.** The locale (filled in from your settings, or from the file
-   itself when you have none), how many entries go to the agent at a time,
+2. **Options.** How many entries go to the agent at a time,
    for a review, whether to skip the AI and use the rules alone, and for a
    translation, the mode and the draft engine. **Start over** ignores what is
    cached and asks again: for a review, instead of carrying on where an
@@ -143,7 +142,11 @@ Review and Translate work the same way, in four stages.
    reviews from an earlier run, which a re-translation of every entry would
    otherwise take from the cache unchanged.
    Move with `↑` `↓` or `tab`, change a choice with `←` `→` or `space`, and
-   choose **Start** with `enter`.
+   choose **Start** with `enter`. The run uses the locale in the header;
+   `l` changes it. When the file's `Language` header names another language,
+   the options say so. With no locale set, the options start with a
+   **Locale** field instead, filled in from the file's `Language` header when
+   it names one.
 3. **Running.** A progress bar, the batch being worked on, the time left and
    when it should finish, and a panel of the most recent entries with what
    happened to each: approved, flagged, repaired or unreviewed. `p` pauses,
@@ -161,10 +164,10 @@ in the folder of the file just done, and the pick goes straight to the
 options with your last choices filled in and **Start** selected, so one
 `enter` starts it. The batch size, skip AI and draft engine carry over. Start
 over goes back to no, and a translation's mode goes back to pending only, so
-neither throws away work in the next file. A locale you typed carries over; a
-locale that came from your settings or the file's `Language` header is read
-again for the new file. When a carried locale does not match the new file's
-`Language` header, the options screen says what the header names.
+neither throws away work in the next file. With no locale set, a locale you
+typed carries over, and one that came from the file's `Language` header is
+read again for the new file. When a carried locale does not match the new
+file's `Language` header, the options screen says what the header names.
 
 A stopped run is never wasted. Start the same file again and only the entries
 that were not reached are sent; the rest come from the cache.
@@ -181,13 +184,15 @@ the list says why when you try.
 
 `enter` with nothing marked opens the one file, as above. `enter` on a file
 with anything marked opens the batch options instead, which list the marked
-files first. They are Fetch's: the locale, the **Requester** when your
-locale has a [reply template](reply-templates.md), how many files run at once
+files first. They are Fetch's: the **Requester** when your locale has a
+[reply template](reply-templates.md), how many files run at once
 (**Parallel**, 1 to 8), the batch size, whether to start over, and for a
 review whether to skip the AI, or for a translation the draft engine. A batch
-translation fills pending entries only. Leave the locale empty, shown as
-**per file**, and each file runs in the locale its own `Language` header
-names; a file whose header names none fails on its own and the rest carry on.
+translation fills pending entries only. Every file runs in the locale in the
+header. With no locale set there is a **Locale** field first: leave it
+empty, shown as **per file**, and each file runs in the locale its own
+`Language` header names; a file whose header names none fails on its own and
+the rest carry on.
 `esc` goes back to the file list with the marks kept.
 
 The run and its summary are Fetch's too. While it runs, two lines on top say
@@ -234,7 +239,7 @@ again once stopped.
 
 | Key | Screen | What it does |
 |---|---|---|
-| `g` | Sync WordPress.org glossary | Downloads your locale's glossary. Run it again when your team changes it. |
+| `g` | Sync WordPress.org glossary | Downloads your locale's glossary on `enter`. Run it again when your team changes it. With no locale set, it asks which. |
 | `r` | Locale rules | Edits your locale's rules: which built-in checks run, proper nouns, common mistakes, patterns, and guidance for the reviewer. `s` saves. It opens on the current locale, and asks which locale only when none is set. **Fetch from polyglots-data** comes first in the list when polyglots-data has maintained rules for the locale; it shows what the published file would change and writes it on `y`. **Open the rules builder in your browser** opens the website's rules builder for the locale, and shows its address. |
 | `t` | Reply templates | Your locale's [reply templates](reply-templates.md): `e` edits one, `n` creates one from a starter, `d` deletes one, `v` previews it clean or with problems. |
 | `a` | Check AI agents | Shows whether each review agent is installed, signed in and set up for polyglots. `r` checks again. `d` turns [debug mode](review.md#debug-mode) on or off. |

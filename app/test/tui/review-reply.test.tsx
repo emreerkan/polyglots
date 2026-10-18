@@ -197,7 +197,7 @@ describe('Review screen requester field', () => {
     view.stdin.write(keys.down)
     await tick()
     view.stdin.write(keys.enter)
-    await waitForText(view.lastFrame, /Locale/)
+    await waitForText(view.lastFrame, /Start review/)
     return view
   }
 
@@ -217,10 +217,10 @@ describe('Review screen requester field', () => {
       return summary
     })
     const view = await openOptions(reviewFile)
-    expect(flat(view.lastFrame())).toContain('Requester')
+    // The cursor starts on the requester, the first field with the locale
+    // hidden, so the hint saying what it is for has to show inside the field.
+    expect(flat(view.lastFrame())).toMatch(/❯ Requester: +optional, fills \{username\} in the reply/)
 
-    view.stdin.write(keys.down)
-    await tick()
     view.stdin.write('ayse')
     await waitForText(view.lastFrame, /Requester:\s*ayse/)
     // Requester, batch, skip AI, start over, then Start.

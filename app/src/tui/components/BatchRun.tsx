@@ -67,9 +67,10 @@ export interface BatchRunProps {
   // What the screen says while prepare runs: "Downloading 3 exports...".
   preparing?: string
   /**
-   * Fetch has one locale for the list. Local files have a field: what was
-   * typed runs every file, and an empty field runs each file in the locale
-   * its own header names, as a single file is.
+   * Fetch has one locale for the list, and so do local files once a locale
+   * is configured: the header names it and l changes it. With none, local
+   * files have a field: what was typed runs every file, and an empty field
+   * runs each file in the locale its own header names, as a single file is.
    */
   locale: { fixed: Locale } | { field: string }
   // Shown above the fields, such as the marked files.
@@ -500,7 +501,7 @@ export function BatchRun(props: BatchRunProps) {
           <Box>
             <Text>{marker('requester')}Requester:     </Text>
             {field === 'requester' ? (
-              <TextInput value={requester} onChange={setRequester} onSubmit={() => setFocus((f) => f + 1)} />
+              <TextInput value={requester} onChange={setRequester} placeholder="optional, fills {username} in every reply" onSubmit={() => setFocus((f) => f + 1)} />
             ) : (
               <Text dimColor={requester === ''}>{requester === '' ? 'optional, fills {username} in every reply' : requester}</Text>
             )}

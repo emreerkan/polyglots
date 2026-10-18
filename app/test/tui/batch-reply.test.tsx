@@ -86,10 +86,10 @@ async function toOptions(view: View) {
   await waitForText(view.lastFrame, /Parallel/)
 }
 
-// Locale → Requester → parallel → batch size → start over → skip AI → start.
+// Requester → parallel → batch size → start over → skip AI → start.
 async function runWith(view: View, requester: string) {
   await toOptions(view)
-  await press(view, keys.down, ...requester.split(''), keys.down, keys.down, keys.down, keys.down, keys.down, keys.enter)
+  await press(view, ...requester.split(''), keys.down, keys.down, keys.down, keys.down, keys.down, keys.enter)
   await waitForText(view.lastFrame, /2 done, 0 failed/)
 }
 
@@ -100,18 +100,23 @@ describe('batch options with a reply template', () => {
     await template('approved', APPROVED)
     const view = mount()
     await toOptions(view)
+    // The cursor starts on the field, so the hint shows inside it as well as
+    // beside it once the cursor has moved on.
+    expect(flat(view.lastFrame())).toMatch(/❯ Requester:\s+optional, fills \{username\} in every reply/)
+    await press(view, keys.down)
     expect(flat(view.lastFrame())).toMatch(/Requester:\s+optional, fills \{username\} in every reply/)
   })
 
-  // Both fields are text inputs, and a typed key once went into both.
-  it('types into the Requester field alone, leaving the locale as it was', async () => {
+  // Both fields were text inputs, and a typed key once went into both. With
+  // the locale fixed there is one, and the cursor starts on it.
+  it('types into the Requester field, which has no locale field above it', async () => {
     await template('approved', APPROVED)
     const view = mount()
     await toOptions(view)
-    await press(view, keys.down, 'a', 'y', 's', 'e')
+    await press(view, 'a', 'y', 's', 'e')
     const frame = flat(view.lastFrame())
-    expect(frame).toMatch(/Requester:\s+ayse/)
-    expect(frame).toMatch(/Locale:\s+tr\s+❯ Requester/)
+    expect(frame).toMatch(/❯ Requester:\s+ayse/)
+    expect(frame).not.toContain('Locale:')
   })
 
   it('offers no Requester field without a template', async () => {
@@ -180,7 +185,7 @@ describe('batch replies', () => {
   it('shows the requester messages one at a time without a template, and copies the one it is on', async () => {
     const view = mount()
     await toOptions(view)
-    await press(view, keys.down, keys.down, keys.down, keys.down, keys.down, keys.enter)
+    await press(view, keys.down, keys.down, keys.down, keys.down, keys.enter)
     await waitForText(view.lastFrame, /2 done, 0 failed/)
     // The clean file has no message, so there is only one.
     const frame = flat(view.lastFrame())

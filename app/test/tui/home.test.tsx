@@ -295,14 +295,18 @@ describe('overlays', () => {
     expect(lastFrame()).not.toContain('Keys on this screen')
   })
 
+  // The sync field exists only with no locale configured, so this one runs
+  // without.
   it('leaves ? to a text field that is being typed into', async () => {
+    await mkdir(join(home.path, 'config'), { recursive: true })
+    await writeFile(join(home.path, 'config', 'config.json'), '{}')
     const { lastFrame, stdin } = render(<App commands={fakeCommands()} cwd={cwd} />)
     await openFromHome(stdin, 'sync-glossary')
     await waitForText(lastFrame, 'Locale:')
     stdin.write('?')
     await tick()
     expect(lastFrame()).not.toContain('Keys on this screen')
-    expect(lastFrame()).toContain('tr?')
+    expect(flat(lastFrame())).toContain('Locale: ?')
   })
 
   it('finds and opens a screen from the command palette', async () => {

@@ -48,14 +48,24 @@ async function pickFile(stdin: { write(data: string): void }, lastFrame: () => s
 }
 
 describe('Translate options', () => {
+  // The locale is no longer a row of the form: the header names it. What the
+  // config holds is read off the run the form starts.
   it('defaults to the configured engine and locale', async () => {
     saveConfig({ defaultDraftEngine: 'openai', defaultLocale: 'de' })
-    const { lastFrame, stdin } = mount()
+    const commands = fakeCommands()
+    const { lastFrame, stdin } = mount(commands)
     await pickFile(stdin, lastFrame)
     const frame = lastFrame() ?? ''
     expect(frame).toMatch(/Draft engine:\s+openai/)
-    expect(frame).toMatch(/Locale:\s+de/)
+    expect(frame).not.toContain('Locale:')
     expect(frame).toMatch(/Mode:\s+pending/)
+    for (let i = 0; i < 4; i++) {
+      stdin.write(keys.down)
+      await tick()
+    }
+    stdin.write(keys.enter)
+    await waitFor(() => (commands.translateFile as ReturnType<typeof vi.fn>).mock.calls.length > 0)
+    expect((commands.translateFile as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toMatchObject({ draftEngine: 'openai', locale: 'de' })
   })
 
   it('toggles mode and engine with the arrow keys', async () => {
@@ -119,18 +129,10 @@ describe('Translate run', () => {
 
     stdin.write(keys.right)
     await waitForText(lastFrame, /Mode:\s+all/)
-    stdin.write(keys.down)
-    await tick()
-    stdin.write(keys.down)
-    await tick()
-    stdin.write('_TR ')
-    await waitForText(lastFrame, /Locale:\s+tr_TR/)
-    stdin.write(keys.down)
-    await tick()
-    stdin.write(keys.down)
-    await tick()
-    stdin.write(keys.down)
-    await tick()
+    for (let i = 0; i < 4; i++) {
+      stdin.write(keys.down)
+      await tick()
+    }
     stdin.write(keys.enter)
     await waitForText(lastFrame, 'Done. 2 translated, 1 fuzzy, 1 from TM, 0 skipped.')
     expect(flat(lastFrame())).toContain(`Open ${poFile} in your .po editor to review.`)
@@ -303,7 +305,7 @@ describe('Translate batch size', () => {
     await pickFile(stdin, lastFrame)
     expect(flat(lastFrame())).toMatch(/Batch size:\s+25/)
 
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       stdin.write(keys.down)
       await tick()
     }
@@ -345,7 +347,7 @@ describe('Translate start over', () => {
     const commands = fakeCommands()
     const { lastFrame, stdin } = mount(commands)
     await pickFile(stdin, lastFrame)
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
       stdin.write(keys.down)
       await tick()
     }

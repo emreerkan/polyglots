@@ -209,14 +209,14 @@ describe('the batch options', () => {
 })
 
 describe('the batch run', () => {
-  // Locale → parallel → batch size → start over → skip AI → start.
+  // Parallel → batch size → start over → skip AI → start, the locale being fixed.
   it('reviews every marked file with the options chosen and lists how each ended', async () => {
     const reviewFile = reviewing()
     const view = mount('review', { reviewFile })
     await waitForText(view.lastFrame, 'a.po')
     await press(view, '*', keys.down, keys.enter)
     await waitForText(view.lastFrame, /Parallel/)
-    await press(view, keys.down, keys.right, keys.down, keys.down, ' ', keys.down, keys.down, keys.enter)
+    await press(view, keys.right, keys.down, keys.down, ' ', keys.down, keys.down, keys.enter)
     await waitForText(view.lastFrame, /2 done, 0 failed, 0 skipped/)
     const calls = reviewFile.mock.calls.map((c) => c[0])
     expect(calls.map((c) => c.file)).toEqual([join(cwd, 'a.po'), join(cwd, 'b.po')])
@@ -262,7 +262,7 @@ describe('the batch run', () => {
     expect(reviewFile).toHaveBeenCalledTimes(1)
   })
 
-  // Locale → parallel → batch size → draft engine → start over → start.
+  // Parallel → batch size → draft engine → start over → start, the locale being fixed.
   it('translates every marked file in pending mode with the chosen engine', async () => {
     const calls: TranslateOptions[] = []
     const view = mount('translate', {
@@ -274,7 +274,7 @@ describe('the batch run', () => {
     await waitForText(view.lastFrame, 'a.po')
     await press(view, '*', keys.down, keys.enter)
     await waitForText(view.lastFrame, /Parallel/)
-    await press(view, keys.down, keys.down, keys.down, keys.right, keys.down, keys.down, keys.enter)
+    await press(view, keys.down, keys.down, keys.right, keys.down, keys.down, keys.enter)
     await waitForText(view.lastFrame, /2 done/)
     expect(calls.map((c) => c.file)).toEqual([join(cwd, 'a.po'), join(cwd, 'b.po')])
     expect(calls[0]).toMatchObject({ mode: 'pending', draftEngine: 'openai', locale: 'tr' })

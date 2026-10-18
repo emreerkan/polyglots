@@ -58,7 +58,7 @@ async function pickFirst(view: View) {
   await waitForText(view.lastFrame, 'a.po')
   await press(view, keys.down)
   view.stdin.write(keys.enter)
-  await waitForText(view.lastFrame, 'Locale:')
+  await waitForText(view.lastFrame, /Start (review|translation)/)
 }
 
 // After `a`: the picker is already in fr/, and b.po is the second file.
@@ -67,7 +67,7 @@ async function pickSecond(view: View) {
   expect(flat(view.lastFrame())).toContain(`Browsing ${folder}`)
   await press(view, keys.down, 2)
   view.stdin.write(keys.enter)
-  await waitForText(view.lastFrame, 'Locale:')
+  await waitForText(view.lastFrame, /Start (review|translation)/)
 }
 
 const reviewDone: ReviewFile = async (opts) => {
@@ -91,7 +91,7 @@ describe('another file after a review', () => {
     const view = renderReview(reviewFile)
     await pickFirst(view)
 
-    await press(view, keys.down) // batch
+    // With the locale configured the cursor starts on the batch size.
     await press(view, keys.right)
     await waitForText(() => flat(view.lastFrame()), /Batch size:\s*50/)
     await press(view, keys.down) // skip AI
@@ -135,7 +135,7 @@ describe('another file after a review', () => {
     const reviewFile = vi.fn<ReviewFile>(reviewDone)
     const view = renderReview(reviewFile)
     await pickFirst(view)
-    await press(view, keys.down) // requester
+    // The cursor starts on the requester, the first field with the locale hidden.
     view.stdin.write('ayse')
     await waitForText(() => flat(view.lastFrame()), /Requester:\s*ayse/)
     await press(view, keys.down, 4)
@@ -197,19 +197,24 @@ describe('another file after a review', () => {
     expect(carried).toMatch(/^pt/)
   })
 
-  it('resolves a configured locale again rather than treating it as typed', async () => {
+  // The configured locale is not a field, so nothing can be carried: the next
+  // file runs in it again, and says so when its header names another language.
+  it('runs the next file in the configured locale again, and says when its header disagrees', async () => {
     saveConfig({ defaultLocale: 'tr' })
     const reviewFile = vi.fn<ReviewFile>(reviewDone)
     const view = renderReview(reviewFile)
     await pickFirst(view)
-    await press(view, keys.down, 4)
+    await press(view, keys.down, 3)
     view.stdin.write(keys.enter)
     await waitFor(() => reviewFile.mock.calls.length === 1)
     await waitForText(() => flat(view.lastFrame()), 'a another file')
     view.stdin.write('a')
     await pickSecond(view)
-    expect(flat(view.lastFrame())).toMatch(/Locale: +tr\b/)
-    expect(flat(view.lastFrame())).not.toContain("From the file's Language header")
+    await waitForText(() => flat(view.lastFrame()), "The file's Language header says fi. Press l to change the locale.")
+    expect(flat(view.lastFrame())).not.toContain('Locale:')
+    view.stdin.write(keys.enter)
+    await waitFor(() => reviewFile.mock.calls.length === 2)
+    expect(reviewFile.mock.calls[1]?.[0]).toMatchObject({ file: join(folder, 'b.po'), locale: 'tr' })
   })
 
   // Stopping to look at the output and moving on is ordinary use, so a run
@@ -235,8 +240,7 @@ describe('another file after a review', () => {
     })
     const view = renderReview(reviewFile)
     await pickFirst(view)
-    await press(view, keys.down) // batch
-    await press(view, keys.right)
+    await press(view, keys.right) // batch, where the cursor starts
     await press(view, keys.down, 3)
     view.stdin.write(keys.enter)
     await waitFor(() => reviewFile.mock.calls.length === 1)
@@ -256,7 +260,7 @@ describe('another file after a review', () => {
     const reviewFile = vi.fn<ReviewFile>(async () => new Promise<never>(() => {}))
     const view = renderReview(reviewFile)
     await pickFirst(view)
-    await press(view, keys.down, 4)
+    await press(view, keys.down, 3)
     view.stdin.write(keys.enter)
     await waitFor(() => reviewFile.mock.calls.length === 1)
     view.stdin.write('a')
@@ -285,7 +289,7 @@ describe('another file after a translation', () => {
     await press(view, keys.down) // engine
     await press(view, keys.right) // deepl -> openai
     await waitForText(() => flat(view.lastFrame()), /Draft engine:\s*openai/)
-    await press(view, keys.down, 2) // batch
+    await press(view, keys.down) // batch
     await press(view, keys.right)
     await waitForText(() => flat(view.lastFrame()), /Batch size:\s*50/)
     await press(view, keys.down) // start over
@@ -408,7 +412,7 @@ describe('another file after a translation, the locale and a stop', () => {
     await press(view, keys.down) // engine
     await press(view, keys.right)
     await waitForText(() => flat(view.lastFrame()), /Draft engine:\s*openai/)
-    await press(view, keys.down, 4)
+    await press(view, keys.down, 3)
     view.stdin.write(keys.enter)
     await waitFor(() => translateFile.mock.calls.length === 1)
     view.stdin.write('q')

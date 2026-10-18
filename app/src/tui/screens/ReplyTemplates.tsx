@@ -24,7 +24,7 @@ import { useReportUnsaved } from '../unsaved.js'
 // The locale is the configured one, with no way to type another. A reply
 // template is the locale manager's own comment for their own team, and a
 // screen that offered every locale would mostly offer ways to edit the wrong
-// one. Someone who manages two can switch the locale in setup.
+// one. Someone who manages two switches the locale with l.
 
 export interface ReplyTemplatesProps {
   onBack: () => void

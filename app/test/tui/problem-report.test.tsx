@@ -371,8 +371,8 @@ describe('the problem report offer in the app', () => {
       await waitForText(view.lastFrame, 'a.po')
       await press(view, keys.down, keys.enter)
       await waitForText(view.lastFrame, 'Start review')
-      // Locale, batch size, skip AI (on), start over, start.
-      await press(view, keys.down, keys.down, ' ')
+      // Batch size, skip AI (on), start over, start: the locale is fixed.
+      await press(view, keys.down, ' ')
       await waitForText(() => frame(view), /Skip AI checks:\s*yes/)
       await press(view, keys.down, keys.down, keys.enter)
       expect(await sendIt(view)).toEqual({ name: 'rules' })
@@ -383,8 +383,8 @@ describe('the problem report offer in the app', () => {
       await waitForText(view.lastFrame, 'a.po')
       await press(view, '*', keys.down, keys.enter)
       await waitForText(view.lastFrame, /Parallel/)
-      // Locale, parallel, batch size, start over, skip AI (on), start.
-      await press(view, keys.down, keys.down, keys.down, keys.down, ' ')
+      // Parallel, batch size, start over, skip AI (on), start: the locale is fixed.
+      await press(view, keys.down, keys.down, keys.down, ' ')
       await waitForText(() => frame(view), /Skip AI:\s*yes/)
       await press(view, keys.down, keys.enter)
       expect(await sendIt(view)).toEqual({ name: 'rules' })
@@ -414,8 +414,8 @@ describe('the problem report offer in the app', () => {
     await waitForText(view.lastFrame, 'a.po')
     await press(view, '*', keys.down, keys.enter)
     await waitForText(view.lastFrame, /Parallel/)
-    // Locale, parallel, batch size, start over, skip AI, start.
-    await press(view, keys.down, keys.down, keys.down, keys.down, keys.down, keys.enter)
+    // Parallel, batch size, start over, skip AI, start: the locale is fixed.
+    await press(view, keys.down, keys.down, keys.down, keys.down, keys.enter)
     await waitForText(() => frame(view), `1 batch failed in 1 file. ${OFFER}`)
     expect(frame(view).split(OFFER)).toHaveLength(2)
     await press(view, 's')

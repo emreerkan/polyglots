@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import React from 'react'
 import { loadConfig, saveConfig } from '../../src/config.js'
@@ -65,12 +65,16 @@ describe('the locale picker', () => {
     expect(tui.loadTuiState().recentLocales).toEqual(['nl', 'tr'])
   })
 
+  // The sync field exists only with no locale configured, so this one runs
+  // without.
   it('l is ignored while a text field has focus', async () => {
+    await mkdir(join(home.path, 'config'), { recursive: true })
+    await writeFile(join(home.path, 'config', 'config.json'), '{}')
     const view = render(<App commands={fakeCommands()} cwd={cwd} />)
     await openFromHome(view.stdin, 'sync-glossary')
     await waitForText(view.lastFrame, 'Locale:')
     view.stdin.write('l')
-    await waitForText(view.lastFrame, 'trl')
+    await waitForText(view.lastFrame, 'Locale: l')
     expect(flat(view.lastFrame())).not.toContain('Change locale')
   })
 
@@ -101,10 +105,10 @@ describe('the locale picker', () => {
     const save = vi.fn(saveConfig)
     const view = render(<App commands={fakeCommands({ saveConfig: save })} cwd={cwd} />)
     await openFromHome(view.stdin, 'sync-glossary')
-    await waitForText(view.lastFrame, 'Locale:')
-    view.stdin.write('x')
-    await waitForText(view.lastFrame, 'trx')
-    // Over the field, through the palette: l would type into it.
+    await waitForText(view.lastFrame, 'enter to sync')
+    // Through the palette, as it was when this screen had a field that l would
+    // have typed into. The screen has none with a locale configured, and what
+    // it still shows is the proof that nothing moved.
     view.stdin.write('\u000b')
     await waitForText(view.lastFrame, 'Go to')
     await type(view.stdin, 'locale')
@@ -115,7 +119,7 @@ describe('the locale picker', () => {
     await tick(20)
     expect(flat(view.lastFrame())).not.toContain('Change locale')
     expect(save).not.toHaveBeenCalled()
-    expect(view.lastFrame()).toContain('trx')
+    expect(flat(view.lastFrame())).toContain('Sync glossary from translate.wordpress.org')
   })
 
   it('refuses while a run is busy', async () => {

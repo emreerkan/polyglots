@@ -27,6 +27,7 @@ Entries say what changed. For why and how, read the commit.
 ### Changed
 
 - Locale rules opens on the current locale and lists maintained polyglots-data rules first.
+- Review, translate, their batches and glossary sync use the header's locale and drop their locale field when one is set; a file whose `Language` header names another language is pointed out.
 - With antigravity, a run checks sign-in and quota beside its rules pass, and stops before its first agent call when signed out or out of quota, ending a batch of files there too and saying it stopped, not failed; `doctor` shows both.
 - Translate prefers a memory match that uses the glossary term, and marks one that does not fuzzy.
 - Translate's AI review gets each entry's glossary terms in the prompt and calls the lookup tools less.

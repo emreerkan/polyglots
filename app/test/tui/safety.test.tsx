@@ -195,7 +195,7 @@ describe('setup facts', () => {
     await waitForText(view.lastFrame, 'Translate a .po file')
     expect(glossaryCount.mock.calls.length).toBe(atLaunch)
     await openFromHome(view.stdin, 'sync-glossary')
-    await waitForText(view.lastFrame, 'Locale:')
+    await waitForText(view.lastFrame, 'enter to sync')
     view.stdin.write(keys.esc)
     await tick(ESC_DELAY)
     await waitForText(view.lastFrame, 'Setup wizard')

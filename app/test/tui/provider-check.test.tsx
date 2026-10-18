@@ -110,8 +110,8 @@ describe('the provider check in the app', () => {
     view.stdin.write(keys.down)
     await tick()
     view.stdin.write(keys.enter)
-    await waitForText(view.lastFrame, /Locale/)
-    for (let i = 0; i < 4; i++) {
+    await waitForText(view.lastFrame, /Start review/)
+    for (let i = 0; i < 3; i++) {
       view.stdin.write(keys.down)
       await tick()
     }
@@ -174,8 +174,8 @@ describe('a review the provider check refused', () => {
     view.stdin.write(keys.down)
     await tick()
     view.stdin.write(keys.enter)
-    await waitForText(view.lastFrame, /Locale/)
-    for (let i = 0; i < 4; i++) {
+    await waitForText(view.lastFrame, /Start review/)
+    for (let i = 0; i < 3; i++) {
       view.stdin.write(keys.down)
       await tick()
     }
@@ -294,8 +294,8 @@ describe('the provider check per provider', () => {
     view.stdin.write(keys.down)
     await tick()
     view.stdin.write(keys.enter)
-    await waitForText(view.lastFrame, /Locale/)
-    for (let i = 0; i < 4; i++) {
+    await waitForText(view.lastFrame, /Start review/)
+    for (let i = 0; i < 3; i++) {
       view.stdin.write(keys.down)
       await tick()
     }

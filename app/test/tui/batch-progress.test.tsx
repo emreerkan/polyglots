@@ -114,13 +114,13 @@ async function escape(view: View) {
   await tick(ESC_DELAY + 20)
 }
 
-// Mark both, open the options, then Locale → parallel → batch size → start
+// Mark both, open the options, then parallel → batch size → start
 // over → skip AI → start, on one slot so b.po waits in the queue.
 async function startBatch(view: View) {
   await waitForText(view.lastFrame, 'a.po')
   await press(view, '*', keys.down, keys.enter)
   await waitForText(view.lastFrame, /Parallel/)
-  await press(view, keys.down, keys.down, keys.down, keys.down, keys.down, keys.enter)
+  await press(view, keys.down, keys.down, keys.down, keys.down, keys.enter)
   await waitForText(view.lastFrame, /in this batch/)
 }
 
@@ -300,7 +300,7 @@ describe('a batch the provider check refused', () => {
     await press(view, '*', keys.down, keys.enter)
     await waitForText(view.lastFrame, /Parallel/)
     // Two at once, so b.po is still running when a.po is refused.
-    await press(view, keys.down, keys.right, keys.down, keys.down, keys.down, keys.down, keys.enter)
+    await press(view, keys.right, keys.down, keys.down, keys.down, keys.down, keys.enter)
     await waitForText(view.lastFrame, 'Stopped: antigravity is signed out.')
     expect(frame(view)).not.toContain('Stopping after')
     release()
