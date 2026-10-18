@@ -12,7 +12,7 @@ import { useTmListing } from '../hooks/useTmListing.js'
 import { TextInput } from '../input.js'
 import { DRAFT_ENGINES, REVIEW_PROVIDERS, type DraftEngineOption, type ProviderOption } from '../providers.js'
 import { STEP_LABELS, type SetupStatus } from '../setup.js'
-import { SETUP_STEPS, type SetupStep, type TuiState } from '../state.js'
+import { recordStep, SETUP_STEPS, type SetupStep, type TuiState } from '../state.js'
 import { useGlyphs } from '../theme.js'
 import { ConfigureKeys } from './ConfigureKeys.js'
 import { TmFetch } from './ImportTm.js'
@@ -312,16 +312,15 @@ export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: W
   const record = (kind: 'confirmed' | 'skipped') => {
     // The answer to the usage question lives in config.json, not in tui.json.
     if (step === 'usage') return
-    onRecord((s) => ({
-      ...s,
-      wizard: {
-        ...s.wizard,
-        [kind]: [...s.wizard[kind].filter((x) => x !== step), step],
-        // A step chosen after being skipped is no longer skipped, and the
-        // other way round: the latest answer is the one that counts.
-        [kind === 'confirmed' ? 'skipped' : 'confirmed']: s.wizard[kind === 'confirmed' ? 'skipped' : 'confirmed'].filter((x) => x !== step),
-      },
-    }))
+    // Read now, not from the render: the locale step saves the locale just
+    // before it records, and a stale one would file the answer under none.
+    let locale: string | undefined
+    try {
+      locale = configuredLocale(commands.loadConfig())
+    } catch {
+      locale = undefined
+    }
+    onRecord((s) => recordStep(s, locale, kind, step))
   }
   const skip = () => {
     record('skipped')

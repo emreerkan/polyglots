@@ -21,7 +21,7 @@ import { hasProviderCheck, providerOf, type CheckedProvider, type ProviderCheck 
 import { createServices, ServicesProvider, useServices, useStatsError, useStatsUrl, type Services } from './services.js'
 import { memoryState, setupStatus, tmListed, type SetupStatus } from './setup.js'
 import { frameLayout, frameSize, MIN_SIZE, SizeProvider, useSize } from './size.js'
-import { SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
+import { localeWizard, migrateTuiState, SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
 import { Agents } from './screens/Agents.js'
 import { ConfigureKeys } from './screens/ConfigureKeys.js'
 import { Fetch } from './screens/Fetch.js'
@@ -145,7 +145,20 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   const statsUrl = useStatsUrl()
   const statsError = useStatsError()
 
-  const [tuiState, setTuiState] = useState<TuiState>(() => commands.loadTuiState())
+  const [tuiState, setTuiState] = useState<TuiState>(() => {
+    const loaded = commands.loadTuiState()
+    // A file written before the wizard kept answers per locale holds them in
+    // the global lists. Moved once, at launch, into the locale configured now.
+    const migrated = migrateTuiState(loaded, configuredLocale(tryOr(() => commands.loadConfig(), DEFAULT_CONFIG)))
+    if (migrated !== loaded) {
+      try {
+        commands.saveTuiState(migrated)
+      } catch {
+        // As in record: the in-memory state still moves on.
+      }
+    }
+    return migrated
+  })
   // Worked out once, from the state as launched: recording the version moves
   // tuiState on, and the block stays for the session rather than vanishing the
   // moment it is first drawn.
@@ -252,7 +265,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   const memoryLocale = useMemo(memoryLocaleNow, [commands, setupEpoch])
   const [listing, setListing] = useState<{ locale: Locale; listed?: boolean }>()
   const asksManifest =
-    memoryLocale !== undefined && !(memoryRows !== undefined && memoryRows > 0) && !tuiState.wizard.skipped.includes('memory')
+    memoryLocale !== undefined && !(memoryRows !== undefined && memoryRows > 0) && !localeWizard(tuiState, memoryLocale).skipped.includes('memory')
   useEffect(() => {
     if (!asksManifest || memoryLocale === undefined || listing?.locale === memoryLocale) return
     setListing({ locale: memoryLocale })

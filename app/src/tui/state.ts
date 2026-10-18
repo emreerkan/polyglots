@@ -12,13 +12,30 @@ import { VERSION } from '../version.js'
 export const SETUP_STEPS = ['locale', 'provider', 'keys', 'glossary', 'memory', 'rules'] as const
 export type SetupStep = (typeof SETUP_STEPS)[number]
 
+// The steps whose answer belongs to one locale: its glossary, its memory and
+// its rules. The others (locale, provider, keys) are about the install. A skip
+// of the memory step kept in the global list used to outlive a change of
+// locale, so a person who skipped tr's memory was never offered nl's.
+export const LOCALE_STEPS = ['glossary', 'memory', 'rules'] as const satisfies readonly SetupStep[]
+const isLocaleStep = (step: SetupStep): boolean => (LOCALE_STEPS as readonly SetupStep[]).includes(step)
+
+export interface LocaleWizard {
+  skipped: SetupStep[]
+  confirmed: SetupStep[]
+  // Set once the person has been offered this locale's steps, so switching to
+  // a locale that was never set up can tell it apart from one that was.
+  asked?: true
+}
+
 export interface TuiState {
   wizard: {
     // Set when the wizard was finished or walked past to the end. It then
     // stops opening by itself; Configuration still reaches it.
     dismissed: boolean
+    // The install-wide steps only; the per-locale ones live in locales.
     skipped: SetupStep[]
     confirmed: SetupStep[]
+    locales: Record<string, LocaleWizard>
   }
   settings: {
     // Print the last run's output path on the normal screen after quitting.
@@ -35,7 +52,7 @@ export interface TuiState {
 }
 
 export const DEFAULT_TUI_STATE: TuiState = {
-  wizard: { dismissed: false, skipped: [], confirmed: [] },
+  wizard: { dismissed: false, skipped: [], confirmed: [], locales: {} },
   settings: { exitSummary: true },
   // No file at all is someone opening the app here for the first time, to
   // whom nothing is new. A damaged file lands here too, which costs at most
@@ -71,6 +88,16 @@ export function parseTuiState(raw: string): TuiState {
       dismissed: wizard.dismissed === true,
       skipped: steps(wizard.skipped),
       confirmed: steps(wizard.confirmed),
+      locales: Object.fromEntries(
+        Object.entries(obj(wizard.locales))
+          // An entry that is not an object is damage, and is dropped rather
+          // than read as an empty one, which would claim the locale was asked.
+          .filter(([, v]) => v !== null && typeof v === 'object' && !Array.isArray(v))
+          .map(([locale, v]): [string, LocaleWizard] => {
+            const entry = obj(v)
+            return [locale, { skipped: steps(entry.skipped), confirmed: steps(entry.confirmed), ...(entry.asked === true ? { asked: true as const } : {}) }]
+          }),
+      ),
     },
     settings: {
       exitSummary: typeof settings.exitSummary === 'boolean' ? settings.exitSummary : DEFAULT_TUI_STATE.settings.exitSummary,
@@ -78,6 +105,58 @@ export function parseTuiState(raw: string): TuiState {
     // Not the default's version: a file without one predates the feature.
     whatsNew: typeof whatsNew.seen === 'string' ? { seen: whatsNew.seen } : {},
   }
+}
+
+export function localeWizard(state: TuiState, locale: string | undefined): LocaleWizard {
+  return (locale === undefined ? undefined : state.wizard.locales[locale]) ?? { skipped: [], confirmed: [] }
+}
+
+// The latest answer counts: a step chosen after being skipped is no longer
+// skipped, and the other way round. A per-locale step with no locale has
+// nowhere to go, and changes nothing.
+export function recordStep(state: TuiState, locale: string | undefined, kind: 'confirmed' | 'skipped', step: SetupStep): TuiState {
+  const other = kind === 'confirmed' ? 'skipped' : 'confirmed'
+  const place = <T extends { skipped: SetupStep[]; confirmed: SetupStep[] }>(lists: T): T => ({
+    ...lists,
+    [kind]: [...lists[kind].filter((x) => x !== step), step],
+    [other]: lists[other].filter((x) => x !== step),
+  })
+  if (!isLocaleStep(step)) return { ...state, wizard: { ...state.wizard, ...place({ skipped: state.wizard.skipped, confirmed: state.wizard.confirmed }) } }
+  if (locale === undefined) return state
+  return { ...state, wizard: { ...state.wizard, locales: { ...state.wizard.locales, [locale]: place(localeWizard(state, locale)) } } }
+}
+
+export function markAsked(state: TuiState, locale: string): TuiState {
+  return { ...state, wizard: { ...state.wizard, locales: { ...state.wizard.locales, [locale]: { ...localeWizard(state, locale), asked: true } } } }
+}
+
+// Moves the per-locale answers an older file kept in the global lists into the
+// locale configured now, which is the only one they can have been given for,
+// and marks it asked. With no locale there is nothing to attach them to, and
+// they are dropped: the steps read as unanswered, which is what they are.
+// Returns the same object when nothing changes, so the caller can skip a save.
+export function migrateTuiState(state: TuiState, locale: string | undefined): TuiState {
+  const { skipped, confirmed } = state.wizard
+  const movable = (list: SetupStep[]) => list.filter(isLocaleStep)
+  const nothingToMove = movable(skipped).length === 0 && movable(confirmed).length === 0
+  if (nothingToMove && (locale === undefined || state.wizard.locales[locale]?.asked === true)) return state
+  const stripped: TuiState = {
+    ...state,
+    wizard: { ...state.wizard, skipped: skipped.filter((s) => !isLocaleStep(s)), confirmed: confirmed.filter((s) => !isLocaleStep(s)) },
+  }
+  if (locale === undefined) return stripped
+  const entry = localeWizard(state, locale)
+  const merge = (a: SetupStep[], b: SetupStep[]) => [...a, ...b.filter((x) => !a.includes(x))]
+  return markAsked(
+    {
+      ...stripped,
+      wizard: {
+        ...stripped.wizard,
+        locales: { ...state.wizard.locales, [locale]: { ...entry, skipped: merge(entry.skipped, movable(skipped)), confirmed: merge(entry.confirmed, movable(confirmed)) } },
+      },
+    },
+    locale,
+  )
 }
 
 export function loadTuiState(): TuiState {

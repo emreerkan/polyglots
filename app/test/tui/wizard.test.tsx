@@ -12,10 +12,12 @@ import {
   flat,
   keys,
   makeHome,
+  manifestWith,
   memoryTuiState,
   modelServer,
   render,
   tick,
+  tmEntry,
   unusableAgent,
   waitForText,
   type Home,
@@ -109,6 +111,42 @@ describe('the steps', () => {
     await tick(ESC_DELAY)
     await waitForText(lastFrame, 'Step 2 of 6')
     expect(state.saveTuiState.mock.calls.at(-1)![0].wizard.skipped).toEqual(['locale'])
+  })
+
+  it('records a skipped memory step under the configured locale, not globally', async () => {
+    const config = configStore({ defaultLocale: 'nl' })
+    const state = memoryTuiState(fresh())
+    const commands = fakeCommands({
+      ...config,
+      ...state,
+      dataClient: {
+        manifest: async () => manifestWith({ tm: [tmEntry({ locale: 'nl_NL', slug: 'nl' })] }),
+        download: async () => {
+          throw new Error('not here')
+        },
+      },
+    })
+    const { lastFrame, stdin } = render(<App commands={commands} />)
+    for (const step of [1, 2, 3, 4]) {
+      await waitForText(lastFrame, `Step ${step} of 6`)
+      stdin.write(keys.esc)
+      await tick(ESC_DELAY)
+    }
+    await waitForText(lastFrame, 'Step 5 of 6')
+    stdin.write(keys.esc)
+    await tick(ESC_DELAY)
+    await waitForText(lastFrame, 'Step 6 of 6')
+    const last = state.saveTuiState.mock.calls.at(-1)![0]
+    expect(last.wizard.locales.nl?.skipped).toEqual(['memory'])
+    expect(last.wizard.skipped).not.toContain('memory')
+  })
+
+  it('moves a global memory skip into the configured locale at launch and saves it', () => {
+    const state = memoryTuiState({ ...fresh(), wizard: { ...fresh().wizard, dismissed: true, skipped: ['memory', 'keys'] } })
+    render(<App commands={fakeCommands({ ...configStore({ defaultLocale: 'tr' }), ...state })} />)
+    const saved = state.saveTuiState.mock.calls[0]![0]
+    expect(saved.wizard.skipped).toEqual(['keys'])
+    expect(saved.wizard.locales.tr).toEqual({ skipped: ['memory'], confirmed: [], asked: true })
   })
 
   it('offers only providers that are ready, with what each costs, and saves the pick', async () => {

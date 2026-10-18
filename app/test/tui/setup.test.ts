@@ -47,6 +47,19 @@ describe('setupStatus', () => {
     expect(setupStatus(facts({ state: confirmed })).steps.locale).toBe('done')
   })
 
+  // The skip belongs to the locale it was made for: a person who switches
+  // from tr to nl has not declined nl's memory.
+  it('a memory skip for one locale does not count for another', () => {
+    const state = { ...DEFAULT_TUI_STATE, wizard: { ...DEFAULT_TUI_STATE.wizard, locales: { tr: { skipped: ['memory' as const], confirmed: [] } } } }
+    expect(setupStatus(facts({ state, config: { ...DEFAULT_CONFIG, defaultLocale: 'tr' }, memory: 'missing' })).steps.memory).toBe('done')
+    expect(setupStatus(facts({ state, config: { ...DEFAULT_CONFIG, defaultLocale: 'nl' }, memory: 'missing' })).steps.memory).toBe('missing')
+  })
+
+  it('a global memory skip no longer counts', () => {
+    const state = { ...DEFAULT_TUI_STATE, wizard: { ...DEFAULT_TUI_STATE.wizard, skipped: ['memory' as const] } }
+    expect(setupStatus(facts({ state, config: { ...DEFAULT_CONFIG, defaultLocale: 'nl' }, memory: 'missing' })).steps.memory).toBe('missing')
+  })
+
   it('reads the provider as unknown until discovery answers, and missing when it is unusable', () => {
     const { agents: _, ...rest } = facts()
     expect(setupStatus(rest).steps.provider).toBe('unknown')
@@ -109,9 +122,10 @@ describe('the memory step', () => {
   })
 
   it('counts a skipped memory step as done, since fetching is optional', () => {
-    const skipped = { ...DEFAULT_TUI_STATE, wizard: { ...DEFAULT_TUI_STATE.wizard, skipped: ['memory' as const] } }
-    expect(setupStatus(facts({ state: skipped, memory: 'missing' })).steps.memory).toBe('done')
-    expect(setupStatus(facts({ state: skipped, memory: 'unknown' })).steps.memory).toBe('done')
+    const skipped = { ...DEFAULT_TUI_STATE, wizard: { ...DEFAULT_TUI_STATE.wizard, locales: { tr: { skipped: ['memory' as const], confirmed: [] } } } }
+    const config = { ...DEFAULT_CONFIG, defaultLocale: 'tr' }
+    expect(setupStatus(facts({ state: skipped, config, memory: 'missing' })).steps.memory).toBe('done')
+    expect(setupStatus(facts({ state: skipped, config, memory: 'unknown' })).steps.memory).toBe('done')
   })
 })
 
@@ -193,7 +207,7 @@ describe('tui.json', () => {
 
   it('round-trips through the file beside config.json', () => {
     const state = {
-      wizard: { dismissed: true, skipped: ['keys' as const], confirmed: ['locale' as const] },
+      wizard: { dismissed: true, skipped: ['keys' as const], confirmed: ['locale' as const], locales: { tr: { skipped: ['memory' as const], confirmed: [], asked: true as const } } },
       settings: { exitSummary: false },
       whatsNew: { seen: '0.31.0' },
     }
@@ -205,7 +219,7 @@ describe('tui.json', () => {
   it('falls back field by field on a damaged file instead of refusing to start', () => {
     expect(parseTuiState('{not json')).toEqual(DEFAULT_TUI_STATE)
     expect(parseTuiState(JSON.stringify({ wizard: { skipped: ['keys', 'nonsense'] }, settings: { exitSummary: 'yes' } }))).toEqual({
-      wizard: { dismissed: false, skipped: ['keys'], confirmed: [] },
+      wizard: { dismissed: false, skipped: ['keys'], confirmed: [], locales: {} },
       settings: { exitSummary: true },
       whatsNew: {},
     })

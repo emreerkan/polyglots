@@ -1,11 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { configuredLocale } from '../config.js'
 import { usableProviders, type AgentStatus } from '../agent/discover.js'
 import { loadLocaleRules } from '../rules/load.js'
 import { configFile, dbFile } from '../paths.js'
 import { allGlossary } from '../storage/glossary.js'
 import type { Manifest } from '../data/manifest.js'
 import type { GlossaryEntry, Locale, PolyglotsConfig, Secrets } from '../types.js'
-import { SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
+import { LOCALE_STEPS, localeWizard, SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
 import { readOnly } from '../storage/read-only.js'
 
 // The six setup steps and whether each is done, worked out in one place so
@@ -51,8 +52,12 @@ export const STEP_LABELS: Record<SetupStep, string> = {
 }
 
 export function setupStatus(f: SetupFacts): SetupStatus {
-  const confirmed = (s: SetupStep) => f.state.wizard.confirmed.includes(s)
-  const skipped = (s: SetupStep) => f.state.wizard.skipped.includes(s)
+  // The glossary, memory and rules answers are the configured locale's own;
+  // reading them from the global lists made a skip for one locale count for all.
+  const own = localeWizard(f.state, configuredLocale(f.config))
+  const lists = (s: SetupStep) => ((LOCALE_STEPS as readonly SetupStep[]).includes(s) ? own : f.state.wizard)
+  const confirmed = (s: SetupStep) => lists(s).confirmed.includes(s)
+  const skipped = (s: SetupStep) => lists(s).skipped.includes(s)
   const steps: Record<SetupStep, StepState> = {
     // Whether the person chose a locale, read off config.json itself. The
     // defaults used to name tr, which made a fresh install read as done; they

@@ -78,7 +78,7 @@ describe('the wizard memory step', () => {
     expect(flat(unlisted.lastFrame())).toContain('Locale rules')
     expect(unlisted.commands.planTmFetch).not.toHaveBeenCalled()
     // Nothing to skip: a locale the vault does not have counts as done on its own.
-    expect(unlisted.state().wizard.skipped).not.toContain('memory')
+    expect(unlisted.state().wizard.locales.tr?.skipped ?? []).not.toContain('memory')
   })
 
   it('reads a wp code in config as its slug, as tm fetch does', async () => {
@@ -99,7 +99,7 @@ describe('the wizard memory step', () => {
     const frame = flat(view.lastFrame())
     expect(frame).toContain('Could not reach polyglots-data; skipped.')
     expect(frame).toContain('Step 6 of 6')
-    expect(view.state().wizard.skipped).toContain('memory')
+    expect(view.state().wizard.locales.tr?.skipped).toContain('memory')
   })
 
   it('draws at once while the manifest is read, and esc skips the step', async () => {
@@ -109,7 +109,7 @@ describe('the wizard memory step', () => {
     view.stdin.write(keys.esc)
     await tick(ESC_DELAY)
     await waitForText(view.lastFrame, 'Step 6 of 6')
-    expect(view.state().wizard.skipped).toContain('memory')
+    expect(view.state().wizard.locales.tr?.skipped).toContain('memory')
   })
 
   it('imports and moves on to the rules step', async () => {
@@ -121,7 +121,7 @@ describe('the wizard memory step', () => {
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, 'Step 6 of 6')
     expect(runTmFetch).toHaveBeenCalledTimes(1)
-    expect(view.state().wizard.confirmed).toContain('memory')
+    expect(view.state().wizard.locales.tr?.confirmed).toContain('memory')
   })
 
   // tui.json is what the header and the launch check read; a failed fetch
@@ -136,7 +136,7 @@ describe('the wizard memory step', () => {
     await waitForText(view.lastFrame, 'Fetch failed: sha512 mismatch')
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, 'Step 6 of 6')
-    expect(view.state().wizard.confirmed).not.toContain('memory')
+    expect(view.state().wizard.locales.tr?.confirmed ?? []).not.toContain('memory')
   })
 })
 
