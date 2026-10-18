@@ -10,6 +10,7 @@ import { resolveLocalTarget, type LocalTarget } from '../../draft/local-chat.js'
 import { headerLocaleOf } from '../../cli/locale.js'
 import { useCommands, useConfig } from '../commands.js'
 import { useProviderCheck } from '../provider-check.js'
+import { ProviderRefusal } from '../../agent/agy-check.js'
 import { poEntryCount } from '../../po/count.js'
 import { BatchRun, type BatchStage } from '../components/BatchRun.js'
 import { MarkedFiles, MarkingPicker, markedItems } from '../components/MarkingPicker.js'
@@ -415,8 +416,10 @@ export function Translate({ cwd, onBack }: TranslateProps) {
               <Hint>p pause · r resume · q stop and keep what is done</Hint>
             </ScrollTarget>
           )}
+          {/* A provider refusal ends the run stopped, not failed: "failed" in
+              red would blame polyglots for the person's own sign-in. */}
           {task.state.status === 'error' &&
-            (task.state.refused ? (
+            (task.state.error instanceof ProviderRefusal ? (
               <Text color="yellow">Stopped: {task.state.message}</Text>
             ) : (
               <Text color="red">Translation failed: {task.state.message}</Text>

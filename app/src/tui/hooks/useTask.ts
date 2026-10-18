@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ProviderRefusal } from '../../agent/agy-check.js'
 import { errorMessage } from '../commands.js'
 import { useActivity } from './activity.js'
 
@@ -7,10 +6,10 @@ export type TaskState<T> =
   | { status: 'idle' }
   | { status: 'running' }
   | { status: 'done'; result: T }
-  // `refused` marks a run the provider check stopped before its first batch.
-  // The run ends stopped, not failed, and a screen that printed it as
-  // "Review failed" in red would blame polyglots for the person's sign-in.
-  | { status: 'error'; message: string; refused: boolean }
+  // `error` is what the work threw, for a screen that words some errors
+  // apart: a provider refusal ends a run stopped, not failed. The hook runs
+  // any task and knows no kind of error itself.
+  | { status: 'error'; message: string; error: unknown }
 
 export interface Task<T> {
   state: TaskState<T>
@@ -42,7 +41,7 @@ export function useTask<T>(): Task<T> {
         },
         (err: unknown) => {
           release()
-          if (mounted.current) setState({ status: 'error', message: errorMessage(err), refused: err instanceof ProviderRefusal })
+          if (mounted.current) setState({ status: 'error', message: errorMessage(err), error: err })
         },
       )
     },
