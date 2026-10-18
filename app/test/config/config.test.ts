@@ -436,7 +436,7 @@ describe('codex settings', () => {
   })
 
   it('keeps a model and an effort, and rejects an effort outside the list', () => {
-    expect(CODEX_EFFORTS).toEqual(['minimal', 'low', 'medium', 'high', 'xhigh'])
+    expect(CODEX_EFFORTS).toEqual(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
     expect(saveConfig({ codex: { model: 'gpt-5.5', effort: 'low' } }).codex).toEqual({ model: 'gpt-5.5', effort: 'low' })
     expect(() => saveConfig({ codex: { effort: 'fast' as never } })).toThrow(/codex\.effort/)
     expect(() => saveConfig({ codex: { model: '  ' } })).toThrow(/codex\.model/)

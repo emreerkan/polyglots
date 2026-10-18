@@ -221,7 +221,7 @@ export interface ConsistencyEntry {
  *
  * A setting rather than a per-run choice: it is a standing preference about
  * which subscription to spend. Each run still records the one it used, because
- * verdicts are cached per engine and the two providers do not agree.
+ * verdicts are cached per engine and no two providers agree.
  */
 export type ReviewProvider = 'claude' | 'antigravity' | 'codex'
 

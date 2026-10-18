@@ -211,6 +211,7 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
     let stderr = ''
     let settled = false
     let killTimer: NodeJS.Timeout | undefined
+    let answeredTimer: NodeJS.Timeout | undefined
     // Close writes again with whatever arrived after a flush, so the files
     // always end with the most the call printed.
     const flushDebug = (): void => {
@@ -263,13 +264,26 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
       stdout += chunk
       // An agent that has printed its whole answer is done, whether or not it
       // ever exits (see answerComplete). It is killed outright: the one that
-      // needs this ignores SIGTERM while it hangs.
+      // needs this ignores SIGTERM while it hangs. A provider with a grace is
+      // left that long to exit first, so a normal exit is logged as one; the
+      // answer is returned now either way, and close clears the timer.
       if (settled || !spec.answerComplete || !chunk.endsWith('\n') || !spec.answerComplete(stdout)) return
       settled = true
       clearTimeout(timer)
-      killed = 'answered'
-      if (plan.shell) killTree(child.pid)
-      else child.kill('SIGKILL')
+      const endAnswered = (): void => {
+        killed = 'answered'
+        if (plan.shell) killTree(child.pid)
+        else child.kill('SIGKILL')
+      }
+      if (spec.answerExitGraceMs === undefined) endAnswered()
+      else {
+        // Unref'd: a CLI that is otherwise finished should not sit out the
+        // grace, and trackAgent ends the child when this process exits.
+        answeredTimer = setTimeout(() => {
+          if (child.exitCode === null && child.signalCode === null) endAnswered()
+        }, spec.answerExitGraceMs)
+        answeredTimer.unref()
+      }
       resolve({ stdout, stderr })
     })
     child.stderr.setEncoding('utf8').on('data', (chunk: string) => (stderr += chunk))
@@ -312,6 +326,7 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
       debugFlushers.delete(flushDebug)
       flushDebug()
       if (killTimer) clearTimeout(killTimer)
+      if (answeredTimer) clearTimeout(answeredTimer)
       if (settled) return
       settled = true
       clearTimeout(timer)

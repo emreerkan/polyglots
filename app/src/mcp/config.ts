@@ -53,7 +53,10 @@ export function resolveServerOptions(env: NodeJS.ProcessEnv, config: PolyglotsCo
   }
 }
 
-// mcp.json is owner-only because opts.env is copied verbatim; still, never pass secrets through opts.env.
+// mcp.json is owner-only because opts.env is copied verbatim. env must still
+// never hold a secret: codex takes the server as -c overrides
+// (mcp_servers.polyglots.env.*, see codexMcpArgs), so every value here ends up
+// on its command line, readable by anyone on the machine through ps.
 export async function writeMcpConfig(opts: McpConfigOptions = {}): Promise<string> {
   const dir = resolve(opts.dir ?? dataDir())
   await mkdir(dir, { recursive: true })

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   CODEX_DISABLED_FEATURES,
+  CODEX_FAILED_PREFIX,
   codexAnswerComplete,
   codexMcpArgs,
   codexProbeArgs,
@@ -85,6 +86,40 @@ describe('readCodexStream', () => {
     const s = head + line({ type: 'error', message: 'stream broke' })
     expect(() => readCodexStream(s)).toThrow(/stream broke/)
   })
+  // codex writes its retry notices as error events and can still finish the
+  // turn; a recovered batch is an answer, not a failure.
+  it('returns the answer when an error event came before a completed turn', () => {
+    const s =
+      head +
+      line({ type: 'error', message: 'Reconnecting... 1/5 (stream disconnected before completion)' }) +
+      msg(ANSWER) +
+      line({ type: 'turn.completed', usage })
+    expect(readCodexStream(s)).toEqual({ results: [{ id: 1, problem: false, categories: [], reason: '' }] })
+  })
+  it('still throws an error event when the turn never completed, even after a message', () => {
+    const s = head + msg(ANSWER) + line({ type: 'error', message: 'stream broke' })
+    expect(() => readCodexStream(s)).toThrow(/stream broke/)
+  })
+  it('throws turn.failed even when an error event came first', () => {
+    const s = head + line({ type: 'error', message: 'Reconnecting... 1/5' }) + line({ type: 'turn.failed', error: { message: 'gave up' } })
+    expect(() => readCodexStream(s)).toThrow(/gave up/)
+  })
+  // The live wording from codex-cli 0.155.1 on a ChatGPT plan: the message is
+  // the server's JSON body, and only its inner message is worth showing.
+  it('reads the inner message when the error message is a JSON body', () => {
+    const body =
+      '{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The \'gpt-5.3-codex\' model is not supported when using Codex with a ChatGPT account."}}'
+    const s = head + line({ type: 'error', message: body }) + line({ type: 'turn.failed', error: { message: body } })
+    let thrown: unknown
+    try {
+      readCodexStream(s)
+    } catch (err) {
+      thrown = err
+    }
+    expect((thrown as Error).message).toBe(
+      `${CODEX_FAILED_PREFIX}The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account.`,
+    )
+  })
   it('throws naming the missing answer when no agent message came', () => {
     expect(() => readCodexStream(head)).toThrow(/no answer/)
   })
@@ -103,6 +138,10 @@ describe('codexAnswerComplete', () => {
     expect(codexAnswerComplete(head + msg(ANSWER))).toBe(false)
     expect(codexAnswerComplete(good)).toBe(true)
     expect(codexAnswerComplete(head + line({ type: 'turn.failed', error: { message: 'x' } }))).toBe(true)
+  })
+  it('reads only the last complete line', () => {
+    expect(codexAnswerComplete(good + line({ type: 'item.started' }))).toBe(false)
+    expect(codexAnswerComplete(good + JSON.stringify({ type: 'item.st'}))).toBe(true)
   })
   it('is false for a turn.completed line with no trailing newline', () => {
     expect(codexAnswerComplete(head + JSON.stringify({ type: 'turn.completed', usage }))).toBe(false)
@@ -154,6 +193,12 @@ describe('codexSettings', () => {
     expect(codexSettings({}, unreadable)).toEqual({})
     expect(codexSettings({}, homeWith('[a]\nmodel = "b"\n'))).toEqual({})
   })
+  // A profile chooses its own model and effort from a table this reader does
+  // not follow, so the top-level keys are not what codex would use.
+  it('reads a top-level profile as both values unset', () => {
+    const home = homeWith('model = "a"\nmodel_reasoning_effort = "low"\nprofile = "work"\n[profiles.work]\nmodel = "b"\n')
+    expect(codexSettings({}, home)).toEqual({})
+  })
   it('ignores comments and single-quoted values the same way', () => {
     const home = homeWith("# model = \"no\"\nmodel = 'a' # note\nmodel_reasoning_effort = \"high\" # hi\n")
     expect(codexSettings({}, home)).toEqual({ model: 'a', effort: 'high' })
@@ -200,7 +245,7 @@ describe('codexProbeArgs', () => {
     expect(a.slice(0, 7)).toEqual([
       'exec', '--ignore-user-config', '--ephemeral', '--skip-git-repo-check', '--json', '--sandbox', 'read-only',
     ])
-    expect(a.slice(7, 11)).toEqual(['-m', 'm', '-c', 'model_reasoning_effort="low"'])
+    expect(a.slice(7, 13)).toEqual(['-m', 'm', '-c', 'model_reasoning_effort="low"', '-c', 'project_doc_max_bytes=0'])
     expect(a.slice(-3)).toEqual(['-c', 'web_search="disabled"', '-'])
     expect(a.filter((x) => x === '--disable')).toHaveLength(CODEX_DISABLED_FEATURES.length)
     expect(CODEX_DISABLED_FEATURES).toEqual([
@@ -212,7 +257,8 @@ describe('codexProbeArgs', () => {
     const a = codexProbeArgs({})
     expect(a).not.toContain('-m')
     expect(a.join(' ')).not.toContain('model_reasoning_effort')
-    expect(a[7]).toBe('--disable')
+    expect(a.slice(7, 9)).toEqual(['-c', 'project_doc_max_bytes=0'])
+    expect(a[9]).toBe('--disable')
   })
 })
 
@@ -222,6 +268,17 @@ describe('readLoginStatus', () => {
   it('reads signed in from either stream', () => {
     expect(r({ stderr: 'Logged in using ChatGPT\n' })).toEqual({ state: 'signed-in', detail: 'ChatGPT' })
     expect(r({ stdout: 'Logged in using an API key' })).toEqual({ state: 'signed-in', detail: 'an API key' })
+  })
+  // The detail reaches the run log, doctor and problem reports, so the key's
+  // masked tail is cut and only the method kept.
+  it('keeps only the method of an API-key login', () => {
+    expect(r({ stderr: 'Logged in using an API key - sk-proj-***XXXXX\n' })).toEqual({
+      state: 'signed-in',
+      detail: 'an API key',
+    })
+  })
+  it('reads Logged in on a non-zero exit as unknown', () => {
+    expect(r({ code: 1, stderr: 'Logged in using ChatGPT' }).state).toBe('unknown')
   })
   it('reads signed out', () => {
     expect(r({ code: 1, stderr: 'Not logged in' })).toEqual({

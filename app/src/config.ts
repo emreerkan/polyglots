@@ -14,9 +14,12 @@ import { resolveLocale } from './wporg/locales.js'
 export const DEFAULT_OPENAI_COMPATIBLE_BASE_URL = 'http://localhost:1234'
 
 // The reasoning efforts codex exec accepts through its model_reasoning_effort
-// setting. Listed here rather than read from codex, so a typo is refused at
-// config set instead of surfacing as a rejected run.
-export const CODEX_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const
+// setting: codex-cli 0.155.1's ReasoningEffort enum, in its order. Listed here
+// rather than read from codex, so a typo is refused at config set instead of
+// surfacing as a rejected run. Not every model takes every value; the model
+// check reports one it refuses. An effort in codex's own config.toml is not
+// held to this list (see agentModel).
+export const CODEX_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const
 export type CodexEffort = (typeof CODEX_EFFORTS)[number]
 
 // No defaultLocale: there is no locale that is a safe guess for a stranger.

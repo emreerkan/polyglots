@@ -160,7 +160,7 @@ describe('the steps', () => {
     await waitForText(lastFrame, 'Step 3 of 6')
     expect(config.saved).toContainEqual({ reviewProvider: 'codex' })
     expect(flat(lastFrame())).toContain(
-      'codex will use its default model (codex default), effort its default effort (codex default). To choose another model: polyglots config set codex.model <name>',
+      "codex will use codex's default model, effort codex's default effort. To choose another model: polyglots config set codex.model <name>",
     )
   })
 

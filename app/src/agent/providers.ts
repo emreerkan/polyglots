@@ -3,11 +3,11 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { docsUrl } from '../docs-links.js'
-import { CODEX_EFFORTS, type CodexEffort } from '../config.js'
 import type { PolyglotsConfig, ReviewChoice, ReviewProvider } from '../types.js'
 import { excerpt } from '../logs/excerpt.js'
 import {
   CODEX_DISABLED_FEATURES,
+  CODEX_NO_PROJECT_DOC,
   codexAnswerComplete,
   codexAnswerText,
   codexMcpArgs,
@@ -72,7 +72,8 @@ export interface AgentRunOptions {
   model?: string
   // codex only. The others take effort inside the model name (antigravity) or
   // not at all from us (claude), so a value here is ignored by their argv.
-  effort?: CodexEffort
+  // A string because a config.toml effort reaches it unchecked (agentModel).
+  effort?: string
   cwd?: string
   timeoutMs?: number
   killGraceMs?: number
@@ -173,6 +174,13 @@ export interface ProviderSpec {
    */
   answerComplete?(stdout: string): boolean
   /**
+   * How long an answered agent is left to exit by itself before it is killed.
+   * Absent means at once, which antigravity needs: the build that hangs never
+   * exits, so waiting would only delay the kill. The answer is returned when
+   * it is complete either way; this decides only when the process is ended.
+   */
+  answerExitGraceMs?: number
+  /**
    * The schema as this CLI will accept it, applied before it is written or
    * passed. Absent means the schema as given. codex wants OpenAI's strict form
    * (see strictSchema), which the other two would accept but do not need, and
@@ -196,9 +204,10 @@ function envelopeOf(stdout: string, provider: string): Record<string, unknown> {
   return parsed as Record<string, unknown>
 }
 
-// Both providers put the schema-validated object here, under the same name.
-// It is preferred over the assistant's text in both cases because it is the
-// only field either one guarantees has been checked against the schema.
+// claude and antigravity both put the schema-validated object here, under the
+// same name; codex has no envelope and is read by readCodexStream instead. It
+// is preferred over the assistant's text because it is the only field either
+// one guarantees has been checked against the schema.
 function structuredOutput(env: Record<string, unknown>): unknown | undefined {
   const value = env.structured_output
   return typeof value === 'object' && value !== null ? value : undefined
@@ -423,17 +432,17 @@ const codex: ProviderSpec = {
     return readLoginStatus(await ctx.exec(ctx.bin, ['login', 'status'], { timeoutMs: ctx.timeoutMs, env: ctx.env }))
   },
   // No MCP and the shell disabled: one model turn, nothing else. Without a
-  // model or effort, so it asks whatever codex itself would use.
+  // model or effort, and --ignore-user-config keeps codex from reading its own
+  // config.toml, so this asks codex's built-in default, not what a run would
+  // resolve; the run's own model is checked by the provider check instead.
   liveProbe: {
     args: () => codexProbeArgs({}),
     read(stdout) {
       codexAnswerText(stdout)
     },
   },
-  // Wrapped rather than assigned: codex.ts imports AgentError from this
-  // module, and a plain reference read while that cycle is still loading
-  // would be undefined.
-  prepareSchema: (schema) => strictSchema(schema),
+  // Safe across the codex.ts import cycle: a function declaration is hoisted.
+  prepareSchema: strictSchema,
   /**
    * --ignore-user-config is not optional. The person's ~/.codex/config.toml
    * loads plugins and other MCP servers, any of which is a tool a .po string
@@ -463,6 +472,7 @@ const codex: ProviderSpec = {
       schema,
       ...(opts.model ? ['-m', opts.model] : []),
       ...(opts.effort === undefined ? [] : ['-c', `model_reasoning_effort="${opts.effort}"`]),
+      ...CODEX_NO_PROJECT_DOC,
       ...codexMcpArgs(readMcpConfig(opts.mcpConfigPath)),
       ...CODEX_DISABLED_FEATURES.flatMap((feature) => ['--disable', feature]),
       '-c',
@@ -474,6 +484,11 @@ const codex: ProviderSpec = {
   // No hang was seen in the spike. This is the antigravity contract kept as
   // cheap insurance: a codex that answers and stays costs nothing.
   answerComplete: (stdout) => codexAnswerComplete(stdout),
+  // codex does exit by itself, a moment after turn.completed. Killed at once,
+  // every answered call was logged as killed by SIGKILL, which read as a hang
+  // in every run log, and codex lost its own shutdown. Two seconds is far past
+  // the exit seen in practice and still ends one that stays.
+  answerExitGraceMs: 2_000,
   usage: (stdout) => codexUsage(stdout),
 }
 
@@ -687,7 +702,9 @@ export type EffortSource = Exclude<ModelSource, 'flag'>
 
 export interface AgentModel {
   model?: string
-  effort?: CodexEffort
+  // A string, not CodexEffort: one from codex's own config.toml is passed
+  // through unchecked, since codex is the one that knows its values.
+  effort?: string
   modelFrom?: ModelSource
   effortFrom?: EffortSource
 }
@@ -700,9 +717,12 @@ export interface AgentModel {
  * ChatGPT plan, so a model chosen here would fail every batch for anyone
  * whose plan lacks it. Each value is resolved on its own, so a polyglots
  * effort can sit beside codex's own model. config.toml is read by us because
- * --ignore-user-config stops codex reading it; an effort there outside the
- * five this build knows is read as unset rather than passed, since codex would
- * refuse a value polyglots config would have refused too. Nothing resolved is
+ * --ignore-user-config stops codex reading it. An effort there is passed as
+ * it stands, even one outside CODEX_EFFORTS: it is codex's file, a newer codex
+ * may accept a value this build cannot name, and codex validates it, so the
+ * model check catches one it refuses. Reading an unknown value as unset would
+ * have run at codex's default while the person's file asked for another.
+ * Nothing resolved is
  * 'codex default': no flag, and codex picks.
  *
  * antigravity's model is its settings file's, read only for the engine id;
@@ -723,9 +743,7 @@ export function agentModel(
   }
   const own = config.codex ?? {}
   const theirs = codexSettings(env, home)
-  const theirEffort = (CODEX_EFFORTS as readonly string[]).includes(theirs.effort ?? '')
-    ? (theirs.effort as CodexEffort)
-    : undefined
+  const theirEffort = theirs.effort === '' ? undefined : theirs.effort
   const model: Pick<AgentModel, 'model' | 'modelFrom'> =
     flagModel !== undefined
       ? { model: flagModel, modelFrom: 'flag' }
@@ -766,6 +784,12 @@ export function codexBelowMinimum(versionLine: string | undefined): boolean {
   return false
 }
 
+// What an unresolved value is called wherever it is named. "its default
+// model (codex default)" said the same thing twice, and "its" had no clear
+// owner in a sentence that began with codex. One spelling for every surface.
+export const CODEX_DEFAULT_MODEL = "codex's default model"
+export const CODEX_DEFAULT_EFFORT = "codex's default effort"
+
 /**
  * What codex will use, as the words every surface shares: the hint when codex
  * becomes the provider, doctor, and the AI agents screen. A value that did not
@@ -773,8 +797,8 @@ export function codexBelowMinimum(versionLine: string | undefined): boolean {
  */
 export function codexChoiceText(resolved: AgentModel): { model: string; effort: string } {
   return {
-    model: `${resolved.model ?? 'its default model'} (${resolved.modelFrom ?? 'codex default'})`,
-    effort: `${resolved.effort ?? 'its default effort'} (${resolved.effortFrom ?? 'codex default'})`,
+    model: resolved.model === undefined ? CODEX_DEFAULT_MODEL : `${resolved.model} (${resolved.modelFrom ?? 'codex default'})`,
+    effort: resolved.effort === undefined ? CODEX_DEFAULT_EFFORT : `${resolved.effort} (${resolved.effortFrom ?? 'codex default'})`,
   }
 }
 

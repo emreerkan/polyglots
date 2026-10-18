@@ -74,7 +74,7 @@ export function Agents({ agents, checking, error, onRecheck, onBack }: AgentsPro
         }
       },
       effort: () => {
-        // The five values in order, then the key is removed, which hands the
+        // The eight values in order, then the key is removed, which hands the
         // choice back to codex's own config. Cycled from what polyglots config
         // holds, not from what resolved: a press must move this setting, and
         // an effort codex's config.toml supplies is not ours to step from.

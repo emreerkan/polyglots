@@ -270,6 +270,8 @@ describe('codex arguments', () => {
       'gpt-5.6-luna',
       '-c',
       'model_reasoning_effort="low"',
+      '-c',
+      'project_doc_max_bytes=0',
       ...mcp,
       ...disabled,
       '-c',
@@ -285,7 +287,9 @@ describe('codex arguments', () => {
     const args = buildAgentArgs(SCHEMA, { mcpConfigPath, provider: 'codex' })
     expect(args).not.toContain('-m')
     expect(args.some((a) => a.startsWith('model_reasoning_effort'))).toBe(false)
-    expect(args.slice(args.indexOf('--output-schema') + 2, args.indexOf('--output-schema') + 2 + mcp.length)).toEqual(mcp)
+    const at = args.indexOf('--output-schema') + 2
+    expect(args.slice(at, at + 2)).toEqual(['-c', 'project_doc_max_bytes=0'])
+    expect(args.slice(at + 2, at + 2 + mcp.length)).toEqual(mcp)
   })
 
   it('writes the strict form of the schema, and leaves claude its own', () => {
@@ -412,10 +416,15 @@ describe('the model and effort codex will run', () => {
   })
 
   // config refuses an unknown effort, but config.toml is codex's file and
-  // may hold a value a newer codex accepts and this one cannot name.
-  it('reads an effort outside the five as unset', () => {
+  // may hold a value a newer codex accepts and this one cannot name. codex
+  // validates it, and the model check catches one it refuses.
+  it('passes an effort outside the list through as it stands', () => {
     toml('model_reasoning_effort = "extreme"\n')
-    expect(agentModel('codex', none, undefined, env)).toEqual({ modelFrom: 'codex default', effortFrom: 'codex default' })
+    expect(agentModel('codex', none, undefined, env)).toEqual({
+      modelFrom: 'codex default',
+      effort: 'extreme',
+      effortFrom: 'codex config',
+    })
   })
 
   it('gives claude the flag and antigravity its own settings', () => {

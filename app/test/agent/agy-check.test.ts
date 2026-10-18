@@ -274,6 +274,32 @@ describe('checkCodex', () => {
     }
   })
 
+  // The exact stream codex-cli 0.155.1 wrote for a model a ChatGPT plan
+  // lacks: the message is the server's JSON body, both as an error event and
+  // as the failed turn. The stop names the inner sentence only.
+  it('stops on the live refusal with its inner message, not the JSON body', async () => {
+    const body =
+      '{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The \'gpt-5.3-codex\' model is not supported when using Codex with a ChatGPT account."}}'
+    const live: ProbeResult = {
+      code: 1,
+      stdout: ev({ type: 'thread.started', thread_id: 't' }) + ev({ type: 'turn.started' }) + ev({ type: 'error', message: body }) + ev({ type: 'turn.failed', error: { message: body } }),
+      stderr: '',
+      timedOut: false,
+    }
+    const check = await checkCodex(fakeCodex({ login: LOGGED_IN, exec: live }), { bin: 'codex', model: 'gpt-5.3-codex' })
+    expect(check.model?.state).toBe('refused')
+    expect(judge(check, 'gpt-5.3-codex').stop).toBe(
+      "codex cannot use the model gpt-5.3-codex: The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account. Choose one your plan has: polyglots config set codex.model <name>",
+    )
+  })
+
+  // A bare 429 inside a longer number (a request id, a token count) is not
+  // a rate limit.
+  it('does not read 429 inside another number as a rate limit', async () => {
+    const c = await checkCodex(fakeCodex({ login: LOGGED_IN, exec: turnFailed('request 14290 failed: stream closed') }), { bin: 'codex' })
+    expect(c.model?.state).toBe('unknown')
+  })
+
   it('reads a rate limit as rate-limited', async () => {
     for (const m of ['Rate limit reached for requests', "You've hit your usage limit.", 'unexpected status 429 Too Many Requests']) {
       const c = await checkCodex(fakeCodex({ login: LOGGED_IN, exec: turnFailed(m) }), { bin: 'codex' })
@@ -361,7 +387,17 @@ describe('judge for codex', () => {
     })
     const none = codexCheck({ asked: {}, model: { state: 'refused', detail: 'no access', ms: 1 } })
     expect(judge(none, undefined).stop).toBe(
-      'codex cannot use the model its default model: no access. Choose one your plan has: polyglots config set codex.model <name>',
+      "codex cannot use codex's default model: no access. Choose one your plan has: polyglots config set codex.model <name>",
+    )
+  })
+
+  // A model that refuses the effort is fixed by the effort, not by another
+  // model; pointing at codex.model sent people to change the wrong setting.
+  it('points a refused reasoning effort at codex.effort', () => {
+    const detail = "Reasoning effort 'ultra' is not supported for this model. Supported reasoning efforts: low, medium, high."
+    const check = codexCheck({ asked: { model: 'gpt-x', effort: 'ultra' }, model: { state: 'refused', detail, ms: 1 } })
+    expect(judge(check, 'gpt-x', 'ultra').stop).toBe(
+      `codex cannot use the effort ultra with the model gpt-x: Reasoning effort 'ultra' is not supported for this model. Supported reasoning efforts: low, medium, high. Choose one it supports: polyglots config set codex.effort <level>`,
     )
   })
 

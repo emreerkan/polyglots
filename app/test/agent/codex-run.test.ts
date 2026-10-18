@@ -55,6 +55,32 @@ function fakeCodex(output: string, hang = false): string {
   return bin
 }
 
+// The agent-exit line of a run log, polled for: close follows the answer and
+// the log write follows close, and a fixed sleep failed on a loaded machine.
+async function exitLine(path: string, waitMs = 5_000): Promise<Record<string, unknown> | undefined> {
+  const read = (): Record<string, unknown> | undefined =>
+    readFileSync(path, 'utf8')
+      .trim()
+      .split('\n')
+      .filter((l) => l !== '')
+      // The writer may be part way through the last line when this reads.
+      .flatMap((l) => {
+        try {
+          return [JSON.parse(l) as Record<string, unknown>]
+        } catch {
+          return []
+        }
+      })
+      .find((l) => l.kind === 'agent-exit')
+  const deadline = Date.now() + waitMs
+  let exit = read()
+  while (exit === undefined && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 25))
+    exit = read()
+  }
+  return exit
+}
+
 describe('codex through runAgent', () => {
   it('returns the parsed answer, with prompt on stdin and the exec argv', async () => {
     const bin = fakeCodex(SUCCESS)
@@ -80,6 +106,23 @@ describe('codex through runAgent', () => {
     await expect(runAgent('p', { type: 'object' }, { provider: 'codex', bin, mcpConfigPath, cwd: dir, timeoutMs: 30_000 })).rejects.toThrow(
       /usage limit reached/,
     )
+  }, 40_000)
+
+  // codex exits by itself once the turn is done. Killing it the moment
+  // turn.completed arrived logged every answered call as killed by SIGKILL,
+  // which read as a hang in every run log, and cut codex's own shutdown short.
+  it('logs a codex that exits right after its turn as an exit, not a kill', async () => {
+    const bin = fakeCodex(SUCCESS)
+    const log = openRunLog({ runId: 1, startedAt: 0, debug: false })
+    await withRunLog(log, () => runAgent('p', { type: 'object' }, { provider: 'codex', bin, mcpConfigPath, cwd: dir, timeoutMs: 30_000 }))
+    expect(await exitLine(log.path)).toMatchObject({ code: 0, signal: null, killed: null })
+  }, 40_000)
+
+  it('still ends a codex that hangs after its turn, once the grace has run out', async () => {
+    const bin = fakeCodex(SUCCESS, true)
+    const log = openRunLog({ runId: 1, startedAt: 0, debug: false })
+    await withRunLog(log, () => runAgent('p', { type: 'object' }, { provider: 'codex', bin, mcpConfigPath, cwd: dir, timeoutMs: 30_000 }))
+    expect(await exitLine(log.path, 10_000)).toMatchObject({ killed: 'answered', signal: 'SIGKILL' })
   }, 40_000)
 
   // The token counts are the one cost signal codex gives.

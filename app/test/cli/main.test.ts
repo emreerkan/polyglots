@@ -1081,7 +1081,7 @@ describe('usage errors through injected streams', () => {
     const h = harness()
     expect(await h.run(['config', 'set', 'reviewProvider', 'codex'])).toBe(0)
     expect(h.stdout.text + h.stderr.text).toContain(
-      'codex will use its default model (codex default), effort its default effort (codex default). To choose another model: polyglots config set codex.model <name>',
+      "codex will use codex's default model, effort codex's default effort. To choose another model: polyglots config set codex.model <name>",
     )
   })
 
@@ -1133,7 +1133,7 @@ describe('doctor', () => {
       const h = harness()
       await h.run(['doctor'], { discoverAgents: fakeDiscover([agent('claude'), codexRow('codex-cli 0.155.1')]).fn })
       expect(h.stdout.text).toContain(
-        'codex will use its default model (codex default), effort its default effort (codex default). To choose another model: polyglots config set codex.model <name>',
+        "codex will use codex's default model, effort codex's default effort. To choose another model: polyglots config set codex.model <name>",
       )
     })
   })
@@ -1529,10 +1529,10 @@ describe('local models', () => {
       expect((await configJson()).codex).toEqual({})
     })
 
-    it('refuses a codex.effort that is not one of the five, naming them', async () => {
+    it('refuses a codex.effort codex does not list, naming the eight', async () => {
       const h = harness()
       expect(await h.run(['config', 'set', 'codex.effort', 'fast'])).toBe(2)
-      expect(h.stderr.text).toContain('minimal, low, medium, high, xhigh')
+      expect(h.stderr.text).toContain('none, minimal, low, medium, high, xhigh, max, ultra')
     })
 
     it('refuses a codex.model with a space in it', async () => {

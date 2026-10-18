@@ -1,9 +1,9 @@
 import type { ProbeExec, ProbeResult } from './providers.js'
-import { agentModel, resolveAgentBin } from './providers.js'
+import { agentModel, CODEX_DEFAULT_EFFORT, CODEX_DEFAULT_MODEL, resolveAgentBin } from './providers.js'
 import { childEnv } from './run.js'
-import { codexAnswerText, codexProbeArgs, readLoginStatus } from './codex.js'
+import { CODEX_FAILED_PREFIX, codexAnswerText, codexProbeArgs, readLoginStatus } from './codex.js'
 import { excerpt as cut } from '../logs/excerpt.js'
-import { loadConfig, type CodexEffort } from '../config.js'
+import { loadConfig } from '../config.js'
 import type { PolyglotsConfig, ReviewChoice } from '../types.js'
 
 /**
@@ -243,12 +243,16 @@ export async function checkAgy(exec: ProbeExec, opts: { bin?: string; timeoutMs?
 // which is the server's wording and so can change: a message this does not
 // match reads as unknown, which never blocks.
 const MODEL_REFUSED = /not supported|not available|does not exist|unknown model|no access/i
-const RATE_LIMITED = /rate limit|usage limit|429/i
+// A model that refuses the effort rather than the plan. codex relays the
+// server's sentence ("Reasoning effort ... Supported reasoning efforts ..."),
+// which may not say "not supported", so it is a refusal on its own.
+const REFUSED_EFFORT = /reasoning effort/i
+// 429 as a word: inside a request id or a token count it is not a status.
+const RATE_LIMITED = /rate limit|usage limit|\b429\b/i
 const CODEX_PROMPT = 'Reply with OK.'
 // The model step is a real turn: seconds when healthy, slower on a busy
 // server. Past this the gate has stopped waiting anyway.
 const CODEX_MODEL_TIMEOUT_MS = 25_000
-const CODEX_FAILED = /^codex failed: /
 
 function defaultCodexBin(): string {
   return resolveAgentBin('codex', process.env).bin
@@ -288,15 +292,15 @@ async function codexModel(
     // answer at all (garbage, a refused argument, a crash) is read as
     // unknown, with whatever stderr said, rather than matched: a word like
     // "not available" in a crash report is not a verdict on the model.
-    if (!CODEX_FAILED.test(message)) {
+    if (!message.startsWith(CODEX_FAILED_PREFIX)) {
       const detail = excerpt(result.stderr) ?? message
       return { state: 'unknown', detail, ms }
     }
-    const detail = message.replace(CODEX_FAILED, '')
+    const detail = message.slice(CODEX_FAILED_PREFIX.length)
     // Rate limit first: a usage-limit message that happens to say a model is
     // not available until the reset is a wait, not a model the plan lacks.
     if (RATE_LIMITED.test(detail)) return { state: 'rate-limited', detail, ms }
-    if (MODEL_REFUSED.test(detail)) return { state: 'refused', detail, ms }
+    if (MODEL_REFUSED.test(detail) || REFUSED_EFFORT.test(detail)) return { state: 'refused', detail, ms }
     return { state: 'unknown', detail, ms }
   }
 }
@@ -304,7 +308,7 @@ async function codexModel(
 /** Never runs the model step unless codex said signed in. Never reads a quota. */
 export async function checkCodex(
   exec: ProbeExec,
-  opts: { bin?: string; model?: string; effort?: CodexEffort; timeoutMs?: number; env?: NodeJS.ProcessEnv } = {},
+  opts: { bin?: string; model?: string; effort?: string; timeoutMs?: number; env?: NodeJS.ProcessEnv } = {},
 ): Promise<ProviderCheck> {
   const bin = opts.bin ?? defaultCodexBin()
   const asked = {
@@ -397,9 +401,17 @@ function judgeCodex(check: ProviderCheck, model: string | undefined, effort: str
   // codex's message usually ends in a full stop, and the sentence after it
   // brings its own; two in a row would read as a typo in ours.
   const said = (check.model.detail ?? '').trim().replace(/\.+$/, '')
+  const which = model === undefined ? CODEX_DEFAULT_MODEL : `the model ${model}`
+  if (check.model.state === 'refused' && REFUSED_EFFORT.test(said)) {
+    // A model that takes no such effort is fixed by the effort; naming
+    // codex.model here sent people to change the setting that was fine.
+    return {
+      stop: `codex cannot use the effort ${effort ?? CODEX_DEFAULT_EFFORT} with ${which}: ${said}. Choose one it supports: polyglots config set codex.effort <level>`,
+    }
+  }
   if (check.model.state === 'refused') {
     return {
-      stop: `codex cannot use the model ${model ?? 'its default model'}: ${said}. Choose one your plan has: polyglots config set codex.model <name>`,
+      stop: `codex cannot use ${which}: ${said}. Choose one your plan has: polyglots config set codex.model <name>`,
     }
   }
   if (check.model.state === 'rate-limited') return { warn: `codex is rate limited: ${check.model.detail ?? 'rate limit reached'}` }

@@ -551,6 +551,19 @@ describe('translateFile: codex model and effort', () => {
     expect(review.calls[0]!.opts.effort).toBeUndefined()
   })
 
+  // The engine id names the model, so a translate's --model opens its own
+  // review cache: the same entries reviewed by another model are asked again
+  // rather than served the first model's verdicts.
+  it('serves cached reviews until --model changes, then asks again', async () => {
+    toml('model = "gpt-5.6-luna"\nmodel_reasoning_effort = "low"\n')
+    expect((await runCodex()).calls.length).toBeGreaterThan(0)
+    expect((await runCodex()).calls).toEqual([])
+    const again = await runCodex({ model: 'gpt-5.5' })
+    expect(again.calls.length).toBeGreaterThan(0)
+    expect(again.calls[0]!.opts.model).toBe('gpt-5.5')
+    expect((await runCodex({ model: 'gpt-5.5' })).calls).toEqual([])
+  })
+
   it('serves cached reviews until the effort changes, then asks again', async () => {
     const { saveConfig } = await import('../../../src/config.js')
     toml('model = "gpt-5.6-luna"\nmodel_reasoning_effort = "low"\n')

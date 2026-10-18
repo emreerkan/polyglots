@@ -166,24 +166,27 @@ describe('Check AI agents', () => {
       expect(frame).toContain('r re-check · d debug mode · e codex effort · esc/q back to menu')
     })
 
-    it('cycles codex.effort with e through the five values, then removes it', async () => {
+    it('cycles codex.effort with e through the eight values, then removes it', async () => {
       const store = codexConfig({ codex: { model: 'gpt-5.6-luna' } })
       const { lastFrame, stdin } = render(
         <App commands={fakeCommands({ ...store, discoverAgents: async () => [agentStatus('codex')] })} />,
       )
       await openAgents(stdin, lastFrame)
-      for (const effort of ['minimal', 'low', 'medium', 'high', 'xhigh']) {
+      for (const effort of ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']) {
         stdin.write('e')
         await waitForText(() => flat(lastFrame()), `effort ${effort} (polyglots config)`)
       }
       stdin.write('e')
-      await waitForText(() => flat(lastFrame()), 'effort its default effort (codex default)')
+      await waitForText(() => flat(lastFrame()), "effort codex's default effort")
       expect(store.saved.map((p) => p.codex)).toEqual([
+        { model: 'gpt-5.6-luna', effort: 'none' },
         { model: 'gpt-5.6-luna', effort: 'minimal' },
         { model: 'gpt-5.6-luna', effort: 'low' },
         { model: 'gpt-5.6-luna', effort: 'medium' },
         { model: 'gpt-5.6-luna', effort: 'high' },
         { model: 'gpt-5.6-luna', effort: 'xhigh' },
+        { model: 'gpt-5.6-luna', effort: 'max' },
+        { model: 'gpt-5.6-luna', effort: 'ultra' },
         { model: 'gpt-5.6-luna' },
       ])
     })

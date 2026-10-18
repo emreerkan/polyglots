@@ -589,11 +589,11 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
       opts.engine?.name ?? (memoryOnly ? 'none' : localDraft ? localModelId(localDraft) : draftEngineId(opts.draftEngine))
     // Without --model, antigravity runs whatever its own settings file names,
     // so the bare provider let a switch from Flash to Pro serve Flash's
-    // verdicts as Pro's on every entry already seen. The same fallback review
-    // uses, for the same reason. Only the key learns the model: the spawn
-    // below still passes opts.model alone, and antigravity keeps choosing.
-    // codex is the exception: it is given what resolved, model and effort,
-    // and both name its engine.
+    // verdicts as Pro's on every entry already seen. So the engine id is
+    // built from what resolved (agentModel, the same reading review does),
+    // while the spawn takes what agentSpawnModel gives: the flag alone for
+    // claude and antigravity, which keep choosing for themselves, and for
+    // codex the resolved model and effort, both of which name its engine.
     const reviewAgent = provider === 'local' || provider === 'none' ? undefined : provider
     const reviewResolved: AgentModel = reviewAgent ? agentModel(reviewAgent, settings, opts.model) : {}
     const reviewSpawn = reviewAgent ? agentSpawnModel(reviewAgent, reviewResolved, opts.model) : {}
