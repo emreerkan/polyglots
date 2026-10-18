@@ -1,8 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '../../src/config.js'
 import { App } from '../../src/tui/App.js'
-import { matchLocales, offeredProviders } from '../../src/tui/screens/Wizard.js'
-import { DEFAULT_TUI_STATE, type TuiState } from '../../src/tui/state.js'
+import { CommandsProvider } from '../../src/tui/commands.js'
+import { matchLocales, offeredProviders, USAGE_QUESTION, Wizard } from '../../src/tui/screens/Wizard.js'
+import type { SetupStatus } from '../../src/tui/setup.js'
+import { DEFAULT_TUI_STATE, LOCALE_STEPS, type TuiState } from '../../src/tui/state.js'
 import type { PolyglotsConfig } from '../../src/types.js'
 import {
   agentStatus,
@@ -362,6 +364,45 @@ describe('the usage statistics question', () => {
     await waitForText(lastFrame, 'Translate a .po file')
     expect(flat(lastFrame())).not.toContain('Share anonymous totals')
     expect(config.saved.some((p) => 'usageStats' in p)).toBe(false)
+  })
+})
+
+describe('a walk over some of the steps', () => {
+  // The offer made on a change of locale walks only that locale's steps. It
+  // is not the whole setup, so reaching its end says nothing about whether
+  // the wizard should keep opening at launch, and the usage question, which
+  // belongs to the first walk, has no place in it.
+  it('walks only the given steps, without the usage question or a dismissal', async () => {
+    const commands = fakeCommands({
+      ...configStore({ defaultLocale: 'nl' }),
+      // Never answers, so the memory step waits for esc rather than passing
+      // by itself as an unlisted locale would.
+      dataClient: { manifest: () => new Promise(() => {}), download: vi.fn(async () => {
+        throw new Error('a TUI test does not download')
+      }) },
+    })
+    const patches: ((s: TuiState) => TuiState)[] = []
+    const onDone = vi.fn()
+    const status: SetupStatus = {
+      steps: { locale: 'done', provider: 'done', keys: 'done', glossary: 'missing', memory: 'missing', rules: 'missing' },
+      done: 3,
+      total: 6,
+    }
+    const { lastFrame, stdin } = render(
+      <CommandsProvider value={commands}>
+        <Wizard start="glossary" steps={LOCALE_STEPS} status={status} onRecord={(p) => patches.push(p)} onDone={onDone} />
+      </CommandsProvider>,
+    )
+    for (const title of ['Glossary sync', 'Translation memory', 'Locale rules']) {
+      await waitForText(lastFrame, title)
+      stdin.write(keys.esc)
+      await tick(ESC_DELAY)
+    }
+    await tick(20)
+    expect(onDone).toHaveBeenCalledTimes(1)
+    expect(flat(lastFrame())).not.toContain(USAGE_QUESTION.slice(0, 20))
+    const final = patches.reduce((s, p) => p(s), fresh())
+    expect(final.wizard.dismissed).toBe(false)
   })
 })
 

@@ -32,6 +32,10 @@ const dismissed = (patch: Partial<TuiState> = {}): TuiState => ({
   ...patch,
 })
 
+// A locale with a glossary and rules, so a change to it offers no setup and
+// the picker's own behaviour is what a test sees.
+const setUp = { glossaryCount: () => 5, hasLocaleRules: () => true }
+
 async function type(stdin: { write(data: string): void }, text: string) {
   for (const ch of text) {
     stdin.write(ch)
@@ -84,7 +88,7 @@ describe('the locale picker', () => {
   })
 
   it('offers the locale left behind after a switch', async () => {
-    const view = render(<App commands={fakeCommands()} cwd={cwd} />)
+    const view = render(<App commands={fakeCommands(setUp)} cwd={cwd} />)
     await openPicker(view)
     await type(view.stdin, 'nl')
     view.stdin.write(keys.enter)
@@ -156,7 +160,7 @@ describe('the locale picker', () => {
   })
 
   it('remounts the current screen in the new locale', async () => {
-    const view = render(<App commands={fakeCommands()} cwd={cwd} />)
+    const view = render(<App commands={fakeCommands(setUp)} cwd={cwd} />)
     await openFromHome(view.stdin, 'import-tm')
     await waitForText(view.lastFrame, 'Import Translation Memory · locale tr')
     await openPicker(view)
@@ -188,5 +192,107 @@ describe('the locale picker', () => {
     view.stdin.write(keys.enter)
     await waitForText(view.lastFrame, 'Search:')
     expect(flat(view.lastFrame())).not.toContain('Go to')
+  })
+})
+
+describe('the setup offer on a change of locale', () => {
+  async function change(view: ReturnType<typeof render>, id: string) {
+    await openPicker(view)
+    await type(view.stdin, id)
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, `locale ${id}`)
+  }
+
+  it('the first change to an unconfigured locale offers setup once', async () => {
+    const tui = memoryTuiState(dismissed())
+    const view = render(<App commands={fakeCommands(tui)} cwd={cwd} />)
+    await change(view, 'nl')
+    await waitForText(view.lastFrame, 'nl has no glossary or locale rules yet.')
+    expect(flat(view.lastFrame())).toContain('Without them polyglots runs only the mechanical checks.')
+    expect(flat(view.lastFrame())).toContain('Set them up now? y set up · n not now')
+    view.stdin.write('n')
+    await tick()
+    expect(flat(view.lastFrame())).not.toContain('Set them up now?')
+    expect(tui.loadTuiState().wizard.locales.nl?.asked).toBe(true)
+    await change(view, 'tr')
+    await tick(20)
+    expect(flat(view.lastFrame())).not.toContain('Set them up now?')
+    await change(view, 'nl')
+    await tick(20)
+    expect(flat(view.lastFrame())).not.toContain('Set them up now?')
+  })
+
+  it('y opens setup on the missing steps and returns to the screen', async () => {
+    const tui = memoryTuiState(dismissed())
+    const view = render(<App commands={fakeCommands(tui)} cwd={cwd} />)
+    await openFromHome(view.stdin, 'import-tm')
+    await waitForText(view.lastFrame, 'Import Translation Memory · locale tr')
+    await change(view, 'nl')
+    await waitForText(view.lastFrame, 'Set them up now?')
+    view.stdin.write('y')
+    await waitForText(view.lastFrame, 'Glossary sync')
+    // The glossary is skipped, the memory step passes by itself since the
+    // fake manifest lists none, and the rules step is skipped too.
+    view.stdin.write(keys.esc)
+    await tick(ESC_DELAY)
+    await waitForText(view.lastFrame, 'Locale rules')
+    view.stdin.write(keys.esc)
+    await tick(ESC_DELAY)
+    await waitForText(view.lastFrame, 'Import Translation Memory · locale nl')
+    expect(flat(view.lastFrame())).not.toContain('Setup ·')
+  })
+
+  it('a configured locale gets no offer', async () => {
+    const tui = memoryTuiState(dismissed())
+    const view = render(<App commands={fakeCommands({ ...tui, ...setUp })} cwd={cwd} />)
+    await change(view, 'nl')
+    await tick(20)
+    expect(flat(view.lastFrame())).not.toContain('Set them up now?')
+    expect(tui.loadTuiState().wizard.locales.nl?.asked).toBe(true)
+  })
+
+  // Offline, whether polyglots-data has a memory for the locale is unknown,
+  // and that alone is no reason to interrupt a change of locale.
+  it('an unknown memory listing alone gets no offer', async () => {
+    const view = render(
+      <App
+        commands={fakeCommands({
+          ...memoryTuiState(dismissed()),
+          ...setUp,
+          memoryCount: () => 0,
+          dataClient: {
+            manifest: async () => {
+              throw new Error('offline')
+            },
+            download: async () => {
+              throw new Error('offline')
+            },
+          },
+        })}
+        cwd={cwd}
+      />,
+    )
+    await change(view, 'nl')
+    await tick(20)
+    expect(flat(view.lastFrame())).not.toContain('Set them up now?')
+  })
+
+  it('choosing a locale in setup marks it asked', async () => {
+    const tui = memoryTuiState(dismissed())
+    const view = render(<App commands={fakeCommands(tui)} cwd={cwd} />)
+    await tick()
+    view.stdin.write('c')
+    await waitForText(view.lastFrame, 'Setup wizard')
+    view.stdin.write('w')
+    await waitForText(view.lastFrame, 'Search:')
+    view.stdin.write(keys.backspace)
+    await tick()
+    view.stdin.write(keys.backspace)
+    await tick()
+    await type(view.stdin, 'de_DE')
+    await waitForText(view.lastFrame, 'de_DE')
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, 'Step 2 of 6')
+    expect(tui.loadTuiState().wizard.locales.de?.asked).toBe(true)
   })
 })

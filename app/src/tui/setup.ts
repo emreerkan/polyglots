@@ -102,6 +102,27 @@ export function setupStatus(f: SetupFacts): SetupStatus {
   return { steps, done, total: SETUP_STEPS.length }
 }
 
+/**
+ * The locale steps a newly chosen locale still lacks, in the wizard's order,
+ * which decide whether a change of locale offers setup. Stricter than
+ * setupStatus on the memory: there an unknown listing is merely not done,
+ * here it is no reason to ask, since a change of locale made offline would
+ * otherwise always be interrupted for a step that may have nothing to offer.
+ */
+export function missingLocaleSteps(f: {
+  glossaryCount?: number
+  memoryRows?: number
+  memorySkipped: boolean
+  listed?: boolean
+  hasRules: boolean
+}): SetupStep[] {
+  const missing: SetupStep[] = []
+  if (f.glossaryCount === undefined || f.glossaryCount === 0) missing.push('glossary')
+  if ((f.memoryRows === undefined || f.memoryRows === 0) && !f.memorySkipped && f.listed === true) missing.push('memory')
+  if (!f.hasRules) missing.push('rules')
+  return missing
+}
+
 /** Whether config.json names a locale itself, rather than leaving the default. */
 export function localeConfigured(): boolean {
   try {

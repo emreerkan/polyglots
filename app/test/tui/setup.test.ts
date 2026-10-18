@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '../../src/config.js'
-import { glossaryCount, localeConfigured, memoryCount, memoryState, setupStatus, tmListed, type SetupFacts } from '../../src/tui/setup.js'
+import { glossaryCount, localeConfigured, memoryCount, memoryState, missingLocaleSteps, setupStatus, tmListed, type SetupFacts } from '../../src/tui/setup.js'
 import { DEFAULT_TUI_STATE, loadTuiState, parseTuiState, saveTuiState, tuiStateFile } from '../../src/tui/state.js'
 import { VERSION } from '../../src/version.js'
 import { agentStatus, makeHome, unusableAgent, type Home } from './helpers.js'
@@ -126,6 +126,23 @@ describe('the memory step', () => {
     const config = { ...DEFAULT_CONFIG, defaultLocale: 'tr' }
     expect(setupStatus(facts({ state: skipped, config, memory: 'missing' })).steps.memory).toBe('done')
     expect(setupStatus(facts({ state: skipped, config, memory: 'unknown' })).steps.memory).toBe('done')
+  })
+})
+
+describe('missingLocaleSteps', () => {
+  it('missingLocaleSteps lists glossary and rules when absent', () => expect(missingLocaleSteps({ memorySkipped: false, hasRules: false })).toEqual(['glossary', 'rules']))
+
+  // Unknown is not missing: offline, the vault cannot say whether it has a
+  // memory for the locale, and an offer made on that alone would be noise.
+  it('memory counts only when the vault is known to list it', () => {
+    expect(missingLocaleSteps({ glossaryCount: 5, memorySkipped: false, hasRules: true })).toEqual([])
+    expect(missingLocaleSteps({ glossaryCount: 5, memorySkipped: false, listed: true, hasRules: true })).toEqual(['memory'])
+    expect(missingLocaleSteps({ glossaryCount: 5, memorySkipped: true, listed: true, hasRules: true })).toEqual([])
+  })
+
+  it('keeps the wizard order and counts held rows as done', () => {
+    expect(missingLocaleSteps({ glossaryCount: 0, memoryRows: 0, memorySkipped: false, listed: true, hasRules: false })).toEqual(['glossary', 'memory', 'rules'])
+    expect(missingLocaleSteps({ glossaryCount: 3, memoryRows: 10, memorySkipped: false, listed: true, hasRules: true })).toEqual([])
   })
 })
 

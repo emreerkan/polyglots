@@ -11,7 +11,7 @@ import { useKeys } from '../hooks/useKeys.js'
 import { useTmListing } from '../hooks/useTmListing.js'
 import { DRAFT_ENGINES, REVIEW_PROVIDERS, type DraftEngineOption, type ProviderOption } from '../providers.js'
 import { STEP_LABELS, type SetupStatus } from '../setup.js'
-import { pushRecent, recordStep, SETUP_STEPS, type SetupStep, type TuiState } from '../state.js'
+import { markAsked, pushRecent, recordStep, SETUP_STEPS, type SetupStep, type TuiState } from '../state.js'
 import { useGlyphs } from '../theme.js'
 import { ConfigureKeys } from './ConfigureKeys.js'
 import { TmFetch } from './ImportTm.js'
@@ -58,6 +58,10 @@ const TITLES: Record<WizardStep, string> = {
 
 export interface WizardProps {
   start: SetupStep
+  // The steps to walk, in order. All of setup by default; a change of locale
+  // passes the locale's own, and that walk is a detour rather than setup, so
+  // its end neither asks the usage question nor marks the wizard dismissed.
+  steps?: readonly SetupStep[]
   status: SetupStatus
   agents?: AgentStatus[]
   // Records a step as chosen or skipped in tui.json. The app owns the file.
@@ -229,7 +233,7 @@ function MemoryWait({ onSkip }: { onSkip: () => void }) {
   return <Text {...TOKENS.muted.ink}>Checking polyglots-data…</Text>
 }
 
-export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: WizardProps) {
+export function Wizard({ start, steps, status, agents, onRecord, onAdvance, onDone }: WizardProps) {
   const commands = useCommands()
   const [step, setStep] = useState<WizardStep>(start)
   // Inside the keys step: once an engine is picked, its own screen follows.
@@ -240,7 +244,8 @@ export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: W
   // step that was never there.
   const [note, setNote] = useState<string>()
   const servers = useServers()
-  const index = step === 'usage' ? SETUP_STEPS.length : SETUP_STEPS.indexOf(step)
+  const walk = steps ?? SETUP_STEPS
+  const index = step === 'usage' ? walk.length : walk.indexOf(step)
   // Asked once: an answer either way, from here or from the CLI, means the
   // question is not put again. Configuration › Usage statistics changes it.
   const unanswered = () => {
@@ -256,12 +261,12 @@ export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: W
     setEngine(undefined)
     setError(undefined)
     setNote(undefined)
-    const next = step === 'usage' ? undefined : (SETUP_STEPS[index + 1] ?? (unanswered() ? 'usage' : undefined))
+    const next = step === 'usage' ? undefined : (walk[index + 1] ?? (steps === undefined && unanswered() ? 'usage' : undefined))
     if (next) setStep(next)
     else {
       // Reaching the end, by finishing or by skipping, is what stops the
       // wizard opening at launch. It stays one key away in Configuration.
-      onRecord((s) => ({ ...s, wizard: { ...s.wizard, dismissed: true } }))
+      if (steps === undefined) onRecord((s) => ({ ...s, wizard: { ...s.wizard, dismissed: true } }))
       onDone()
     }
   }
@@ -297,7 +302,10 @@ export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: W
     body = (
       <LocaleStep
         onChosen={(id) => {
-          onRecord((s) => ({ ...s, recentLocales: pushRecent(s.recentLocales, id) }))
+          // Asked as well: the locale chosen here is being set up right now,
+          // and offering its setup again on a later switch back to it would
+          // ask what this walk is already answering.
+          onRecord((s) => markAsked({ ...s, recentLocales: pushRecent(s.recentLocales, id) }, id))
           record('confirmed')
           advance()
         }}
@@ -404,7 +412,7 @@ export function Wizard({ start, status, agents, onRecord, onAdvance, onDone }: W
         </Text>
       ) : (
         <Text>
-          <Text {...TOKENS.heading.ink}>Setup</Text> <Text {...TOKENS.muted.ink}>·</Text> Step {index + 1} of {SETUP_STEPS.length}{' '}
+          <Text {...TOKENS.heading.ink}>Setup</Text> <Text {...TOKENS.muted.ink}>·</Text> Step {index + 1} of {walk.length}{' '}
           <Text {...TOKENS.muted.ink}>·</Text> <Text bold>{TITLES[step]}</Text>
           {'  '}
           <Text {...TOKENS.muted.ink}>

@@ -340,6 +340,11 @@ export const KEYS = {
     quit: { keys: 'y', does: 'quit anyway', match: (input) => input === 'y' || input === 'Y' },
     stay: { keys: 'n  esc', does: 'keep going', match: (input, key) => input === 'n' || input === 'N' || key.escape },
   },
+  // The offer made after a change to a locale with nothing set up yet.
+  localeSetup: {
+    yes: { keys: 'y', does: 'set up the locale', match: (input) => input === 'y' || input === 'Y' },
+    no: { keys: 'n  esc', does: 'not now', match: (input, key) => input === 'n' || input === 'N' || key.escape },
+  },
   // Answered by a text field's submit or a list's select, not by a listener.
   fields: {
     pickAndSplit: widget('enter', 'pick and split'),

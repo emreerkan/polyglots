@@ -8,6 +8,7 @@ import type { Locale, PolyglotsConfig, ReviewChoice, Secrets } from '../types.js
 import { TOKENS } from '../ui/tokens.js'
 import { Footer, Header } from './components/Chrome.js'
 import { LocalePicker } from './components/LocalePicker.js'
+import { LocaleSetupPrompt } from './components/LocaleSetupPrompt.js'
 import { HelpOverlay, Palette, QuitPrompt } from './components/Overlays.js'
 import { Viewport, type PageBy } from './components/Viewport.js'
 import { FooterStageProvider } from './footer-stage.js'
@@ -20,9 +21,9 @@ import { providerLabel } from './local.js'
 import { createProviderCheckCache, providerCheckKey, providerNote, ProviderCheckProvider, withSignIn } from './provider-check.js'
 import { hasProviderCheck, providerOf, type CheckedProvider, type ProviderCheck } from '../agent/agy-check.js'
 import { createServices, ServicesProvider, useServices, useStatsError, useStatsUrl, type Services } from './services.js'
-import { memoryState, setupStatus, tmListed, type SetupStatus } from './setup.js'
+import { memoryState, missingLocaleSteps, setupStatus, tmListed, type SetupStatus } from './setup.js'
 import { frameLayout, frameSize, MIN_SIZE, SizeProvider, useSize } from './size.js'
-import { localeWizard, migrateTuiState, pushRecent, SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
+import { LOCALE_STEPS, localeWizard, markAsked, migrateTuiState, pushRecent, SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
 import { UnsavedContext } from './unsaved.js'
 import { Agents } from './screens/Agents.js'
 import { ConfigureKeys } from './screens/ConfigureKeys.js'
@@ -58,7 +59,7 @@ export interface AppProps {
   whatsNew?: Readonly<Record<string, readonly string[]>>
 }
 
-type Overlay = 'help' | 'palette' | 'quit' | 'locale'
+type Overlay = 'help' | 'palette' | 'quit' | 'locale' | 'locale-setup'
 
 // Why the locale picker refuses a pick. Nothing past the refusal is promised:
 // the run may be stopped or finish, and either frees the picker.
@@ -327,6 +328,11 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   }, [screen])
   const [wizardStart, setWizardStart] = useState<SetupStep>(() => SETUP_STEPS.find((s) => status.steps[s] === 'missing') ?? 'locale')
   const [wizardReturn, setWizardReturn] = useState<ScreenId>('home')
+  // Set only for the walk the locale offer starts, over that locale's steps;
+  // every other way into setup walks all of it.
+  const [wizardSteps, setWizardSteps] = useState<readonly SetupStep[] | undefined>()
+  // What the offer names, worked out when the locale changed.
+  const [localeMissing, setLocaleMissing] = useState<readonly SetupStep[]>([])
   const [statusFocus, setStatusFocus] = useState<SetupStep | undefined>(undefined)
   const [overlay, setOverlay] = useState<Overlay | undefined>(undefined)
 
@@ -341,6 +347,9 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
 
   const go = (next: ScreenId) => {
     if (screen === 'setup') syncLocale()
+    // Left or entered again, setup is the whole of it from here on: a walk
+    // over one locale's steps ends when it is left.
+    if (screen === 'setup' || next === 'setup') setWizardSteps(undefined)
     setSetupEpoch((e) => e + 1)
     if (screen === 'sync-glossary' || screen === 'setup') refreshGlossary()
     if (screen === 'import-tm' || screen === 'setup') refreshMemory()
@@ -356,6 +365,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
   // step, coming back to that screen once it is done or left.
   const openLocaleSetup = () => {
     setSetupEpoch((e) => e + 1)
+    setWizardSteps(undefined)
     setWizardReturn(screen)
     setWizardStart('locale')
     setScreen('setup')
@@ -419,6 +429,41 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
     refreshGlossary()
     refreshMemory()
     closeLocale()
+    offerSetup(id)
+  }
+
+  // Once per locale, on the first change to it: a locale without a glossary or
+  // rules reviews with the mechanical checks alone, and nothing else on screen
+  // would say so. Asked whatever the answer, and whether or not anything is
+  // missing, so a switch back and forth never asks twice. The memory counts
+  // only when the vault is already known to list it for this locale: no fetch
+  // is started for the question, and an unknown answer is no reason to ask.
+  const offerSetup = (id: string) => {
+    // Off the file, as record patches it: the render's copy predates the
+    // recent-list write changeLocale has just made.
+    const own = localeWizard(tryOr(() => commands.loadTuiState(), tuiState), id)
+    if (own.asked) return
+    const glossaryCount = tryOr(() => commands.glossaryCount(id), undefined)
+    const memoryRows = tryOr(() => commands.memoryCount(id), undefined)
+    const listed = listing?.locale === id ? listing.listed : undefined
+    const missing = missingLocaleSteps({
+      ...(glossaryCount === undefined ? {} : { glossaryCount }),
+      ...(memoryRows === undefined ? {} : { memoryRows }),
+      memorySkipped: own.skipped.includes('memory'),
+      ...(listed === undefined ? {} : { listed }),
+      hasRules: tryOr(() => commands.hasLocaleRules(id), false),
+    })
+    record((s) => markAsked(s, id))
+    if (missing.length === 0) return
+    setLocaleMissing(missing)
+    setOverlay('locale-setup')
+  }
+  const startLocaleSetup = () => {
+    setOverlay(undefined)
+    setWizardReturn(screen)
+    setWizardSteps(LOCALE_STEPS)
+    setWizardStart(localeMissing[0] ?? 'glossary')
+    setScreen('setup')
   }
 
   // A second Ctrl+C at the quit prompt answers yes: someone pressing it
@@ -498,6 +543,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
             whatsNew={news}
             onWhatsNewSeen={recordNewsSeen}
             onOpenStep={(step) => {
+              setWizardSteps(undefined)
               setWizardReturn('home')
               setWizardStart(step)
               setStatusFocus(undefined)
@@ -556,8 +602,9 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
       case 'setup':
         return (
           <Wizard
-            key={wizardStart}
+            key={`${wizardStart}:${wizardSteps?.join() ?? ''}`}
             start={wizardStart}
+            {...(wizardSteps === undefined ? {} : { steps: wizardSteps })}
             status={status}
             {...(agents === undefined ? {} : { agents })}
             onRecord={record}
@@ -655,6 +702,9 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
             onPick={changeLocale}
             onClose={closeLocale}
           />
+        )}
+        {layout.fits && overlay === 'locale-setup' && locale !== undefined && (
+          <LocaleSetupPrompt locale={locale} missing={localeMissing} onYes={startLocaleSetup} onNo={() => setOverlay(undefined)} />
         )}
         {overlay === 'quit' && <QuitPrompt onQuit={quit} onCancel={() => setOverlay(undefined)} />}
       </Box>
