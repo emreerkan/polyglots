@@ -278,7 +278,13 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   const rows = broken ? REPAIR_STAGE : maintained ? ['fetch' as Stage, ...SECTION_STAGE.filter((s) => s !== 'fetch')] : SECTION_STAGE
   const current = section !== undefined && rows.includes(section) ? section : rows[0]!
   const cursor = rows.indexOf(current)
-  const setCursor = (index: number) => setSection(rows[Math.min(Math.max(0, index), rows.length - 1)])
+  // Derived inside the updater: two arrow presses can arrive before a render,
+  // and an index read from the render would drop the second.
+  const moveCursor = (by: number) =>
+    setSection((s) => {
+      const from = s !== undefined && rows.includes(s) ? rows.indexOf(s) : 0
+      return rows[Math.min(Math.max(0, from + by), rows.length - 1)]
+    })
 
   const activeRules = (): Set<string> =>
     value.rules
@@ -300,6 +306,10 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
       setDraft(opened)
       setValue(opened.value)
       setError(undefined)
+      // Pinned, not left to default to the first row: the first row changes
+      // when the manifest says the rules are maintained, and an enter pressed
+      // while reading must open what was highlighted, not what moved under it.
+      setSection(SECTION_STAGE[0])
       setStage('overview')
     } catch (err) {
       setError(errorText(err))
@@ -496,7 +506,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
     },
     localeRules: {
       move: on('overview')
-        ? (_ch, key) => setCursor(key.upArrow ? cursor - 1 : cursor + 1)
+        ? (_ch, key) => moveCursor(key.upArrow ? -1 : 1)
         : undefined,
       open: on('overview') ? openSection : undefined,
       save: on('overview') && savable ? () => void save() : undefined,

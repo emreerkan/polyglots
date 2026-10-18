@@ -115,6 +115,26 @@ describe('LocaleRules: opening on the current locale', () => {
   })
 })
 
+describe('LocaleRules: cursor stability', () => {
+  it('keeps the highlight on its section when the answer comes before any move', async () => {
+    let resolve!: (m: ReturnType<typeof manifestWith>) => void
+    const dataClient = { ...fakeCommands().dataClient, manifest: vi.fn(() => new Promise<ReturnType<typeof manifestWith>>((r) => (resolve = r))) }
+    const view = mount(undefined, { dataClient })
+    await waitForText(view.lastFrame, /❯ Built-in rules/)
+    resolve(manifestWith({ rules: [rulesEntry()] }))
+    await waitFor(() => /❯ Built-in rules/.test(view.lastFrame() ?? '') && /Fetch from polyglots-data\s+\S*\s*❯ Built-in rules/.test(flat(view.lastFrame())))
+    expect(view.lastFrame()).not.toMatch(/❯ Fetch from polyglots-data/)
+  })
+
+  it('moves two rows for two arrow presses with no render between them', async () => {
+    const view = mount()
+    await waitForText(view.lastFrame, /❯ Built-in rules/)
+    view.stdin.write(keys.down)
+    view.stdin.write(keys.down)
+    await waitForText(view.lastFrame, /❯ Register/)
+  })
+})
+
 describe('LocaleRules: picking a locale', () => {
   it('opens the configured locale and names its file', async () => {
     const view = mount()
