@@ -13,7 +13,7 @@ import { isNewer } from '../update/index.js'
 // flags, and a patch like "the entry table is no longer written" is right
 // there and noise here.
 export const WHATS_NEW: Readonly<Record<string, readonly string[]>> = {
-  unreleased: [
+  '1.1.0': [
     'Change the locale from any screen: press l',
     'Send a problem report when a run has problems',
     'Review with OpenAI codex: pick it in setup',

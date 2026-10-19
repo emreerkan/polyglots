@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-19
+
 ### Added
 
 - The header shows the current locale, and `l` changes it from any screen.

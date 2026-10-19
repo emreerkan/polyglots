@@ -69,6 +69,35 @@ function writeMcp(lines: object[], day: number = START): void {
   writeFileSync(mcpLogPath(day), lines.map((l) => JSON.stringify(l)).join('\n') + '\n')
 }
 
+// The speed tests used to allow one second, which measured the machine more
+// than the code: a CI runner is about three times slower than a laptop, and
+// a case that took 400 ms on one took 1.3 s on the other and failed the
+// release. A ratio of two text sizes would not do either: the slowdowns these
+// tests were written for read the text once per key, which is still linear
+// in its length. So each compares the redaction with one plain pass over the
+// same text, timed on the same machine, which a slow runner slows as much.
+// Ten keys sharing their start took 48 times that pass before one automaton
+// replaced the scan per key; the code now takes 5 to 12 times it.
+const SLOWER_THAN_A_PASS = 30
+
+function onePassMs(text: string): number {
+  const pass = (): number => {
+    const started = performance.now()
+    JSON.parse(JSON.stringify({ text }))
+    text.replace(/[\\"…]/g, (mark) => mark)
+    return performance.now() - started
+  }
+  pass()
+  return Math.min(pass(), pass())
+}
+
+function expectLinear(build: () => void, text: string, label?: string): void {
+  const pass = onePassMs(text)
+  const started = performance.now()
+  build()
+  expect(performance.now() - started, label).toBeLessThan(SLOWER_THAN_A_PASS * pass)
+}
+
 describe('buildReport', () => {
   it('holds the run row, its failures, its log and only the MCP lines inside its window', () => {
     const runId = seedRun()
@@ -371,10 +400,12 @@ describe('buildReport', () => {
   it('redacts past a long run of backslashes in linear time', () => {
     mkdirSync(join(home, 'config'), { recursive: true })
     writeFileSync(join(home, 'config', '.env'), 'OPENAI_API_KEY=sk-0123456789abcdef\n')
-    const runId = seedRun({ debug: { 'batch-001-attempt-1.stdout.txt': '\\'.repeat(200_000) + 'x \\\\sk-0123456789abcdef' } })
-    const started = performance.now()
-    const text = buildReport(db, [runId], { provider, home }).runs[0]!.debug[0]!.text
-    expect(performance.now() - started).toBeLessThan(1000)
+    const debug = '\\'.repeat(200_000) + 'x \\\\sk-0123456789abcdef'
+    const runId = seedRun({ debug: { 'batch-001-attempt-1.stdout.txt': debug } })
+    let text = ''
+    expectLinear(() => {
+      text = buildReport(db, [runId], { provider, home }).runs[0]!.debug[0]!.text
+    }, debug)
     expect(text.endsWith('x \\\\[redacted]')).toBe(true)
   })
 
@@ -431,7 +462,7 @@ describe('buildReport', () => {
   // Five megabytes of agent output built to make a pattern work hard: a
   // key's prefix and a cut mark over and over, in a run log field, where it
   // is decoded first, and in a debug file. Each must stay linear.
-  it('redacts five megabytes of hostile text in under a second', () => {
+  it('redacts five megabytes of hostile text in linear time', () => {
     const key = '1f2e3d4c-5b6a-4789-8abc-def012345678:fx'
     mkdirSync(join(home, 'config'), { recursive: true })
     writeFileSync(join(home, 'config', '.env'), `DEEPL_API_KEY=${key}\n`)
@@ -441,9 +472,10 @@ describe('buildReport', () => {
       logText: JSON.stringify({ t: START, kind: 'agent-exit', stdout: hostile }) + '\n',
       debug: { 'batch-001-attempt-1.stdout.txt': hostile },
     })
-    const started = performance.now()
-    const [run] = buildReport(db, [runId], { provider, home: 'C:\\Users\\x' }).runs
-    expect(performance.now() - started).toBeLessThan(1000)
+    let run: Report['runs'][number] | undefined
+    expectLinear(() => {
+      run = buildReport(db, [runId], { provider, home: 'C:\\Users\\x' }).runs[0]
+    }, hostile)
     expect(run!.debug[0]!.text).not.toContain(key.slice(0, 8))
     expect(run!.log).not.toContain(key.slice(0, 8))
   })
@@ -453,7 +485,7 @@ describe('buildReport', () => {
   // matched almost all the way at every position: 200 identical characters
   // took five seconds on five megabytes, with the event loop blocked.
   for (const length of [16, 40]) {
-    it(`redacts five megabytes in under a second for a key of ${length} identical characters`, () => {
+    it(`redacts five megabytes in linear time for a key of ${length} identical characters`, () => {
       const key = 'x'.repeat(length)
       mkdirSync(join(home, 'config'), { recursive: true })
       writeFileSync(join(home, 'config', '.env'), `DEEPL_API_KEY=${key}\n`)
@@ -463,9 +495,10 @@ describe('buildReport', () => {
         logText: JSON.stringify({ t: START, kind: 'agent-exit', stdout: hostile }) + '\n',
         debug: { 'batch-001-attempt-1.stdout.txt': hostile },
       })
-      const started = performance.now()
-      const [run] = buildReport(db, [runId], { provider, home }).runs
-      expect(performance.now() - started).toBeLessThan(1000)
+      let run: Report['runs'][number] | undefined
+      expectLinear(() => {
+        run = buildReport(db, [runId], { provider, home }).runs[0]
+      }, hostile)
       expect(run!.debug[0]!.text.endsWith('b[redacted]…')).toBe(true)
     })
   }
@@ -473,7 +506,7 @@ describe('buildReport', () => {
   // Several placeholders, or several keys at once: the scan reads the text
   // once per key, and with a cut mark every few characters every key took
   // the full pass. Three placeholders took more than a second here.
-  it('redacts five megabytes in under a second with several placeholder or random keys', () => {
+  it('redacts five megabytes in linear time with several placeholder or random keys', () => {
     mkdirSync(join(home, 'config'), { recursive: true })
     const cases: Array<{ env: string[]; unit: string }> = [
       { env: [16, 24, 32, 40].map((n, i) => `${['DEEPL_API_KEY', 'OPENAI_API_KEY', 'A_TOKEN', 'B_TOKEN'][i]}=${'x'.repeat(n)}`), unit: 'xxxx…' },
@@ -488,9 +521,7 @@ describe('buildReport', () => {
         logText: JSON.stringify({ t: START, kind: 'agent-exit', stdout: hostile }) + '\n',
         debug: { 'batch-001-attempt-1.stdout.txt': hostile },
       })
-      const started = performance.now()
-      buildReport(db, [runId], { provider, home })
-      expect(performance.now() - started, unit).toBeLessThan(1000)
+      expectLinear(() => buildReport(db, [runId], { provider, home }), hostile, unit)
     }
   })
 
@@ -498,7 +529,7 @@ describe('buildReport', () => {
   // shares sk-proj-, found the head of each in the text, and the scan read
   // the text once for each of them: ten such keys took 1.6 seconds on five
   // megabytes of their common start before a quote.
-  it('redacts five megabytes in under a second with ten keys that share their start', () => {
+  it('redacts five megabytes in linear time with ten keys that share their start', () => {
     mkdirSync(join(home, 'config'), { recursive: true })
     const keys = Array.from({ length: 10 }, (_, i) => `sk-proj-${String(i).repeat(4)}Ab3dEf6hIj9kLm2nOp5q`)
     writeFileSync(join(home, 'config', '.env'), keys.map((k, i) => `KEY_${i}=${k}`).join('\n') + '\n')
@@ -508,9 +539,10 @@ describe('buildReport', () => {
       logText: JSON.stringify({ t: START, kind: 'agent-exit', stdout: hostile }) + '\n',
       debug: { 'batch-001-attempt-1.stdout.txt': hostile },
     })
-    const started = performance.now()
-    const [run] = buildReport(db, [runId], { provider, home }).runs
-    expect(performance.now() - started).toBeLessThan(1000)
+    let run: Report['runs'][number] | undefined
+    expectLinear(() => {
+      run = buildReport(db, [runId], { provider, home }).runs[0]
+    }, hostile)
     expect(run!.debug[0]!.text).not.toContain('sk-proj-0"')
   })
 
