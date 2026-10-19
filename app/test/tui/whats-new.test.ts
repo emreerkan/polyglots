@@ -79,7 +79,7 @@ describe('WHATS_NEW', () => {
   // problem report is offered for more than a failed run (a batch given up, a
   // breaker stop), which is why that line says "has problems".
   it('carries the lines the maintainer chose, in order', () => {
-    expect(WHATS_NEW.unreleased).toEqual([
+    expect(WHATS_NEW['1.1.0']).toEqual([
       'Change the locale from any screen: press l',
       'Send a problem report when a run has problems',
       'Review with OpenAI codex: pick it in setup',
