@@ -104,6 +104,15 @@ try {
   const whatsNew = cutWhatsNew(whatsNewBefore, version)
   if (whatsNew.cut) writeFileSync(whatsNewPath, whatsNew.text)
 
+  // Again, on the tree the commit will hold. The run above saw the version
+  // and "What's new" before the cut, so a test pinning the lines under
+  // `unreleased` passed here and failed CI on the pushed 1.1.0 commit, which
+  // then had to be amended and force-pushed. A failure here restores the
+  // files like any other, before anything is committed or pushed.
+  console.log('==> Typecheck and tests on the cut')
+  run('npm', ['run', 'typecheck'])
+  run('npm', ['test'])
+
   console.log('==> Building')
   run('npm', ['run', 'build'])
 

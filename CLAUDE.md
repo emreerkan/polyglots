@@ -167,7 +167,8 @@ it cuts, as it moves the changelog's heading. Most patches have none.
 
 `npm run release -- <patch|minor|major>` is the whole release: it refuses on a dirty
 tree or a running job, typechecks, tests, runs the website's demo snapshot,
-bumps, cuts the changelog and "What's new", builds and commits, then ships through
+bumps, cuts the changelog and "What's new", typechecks and tests the cut tree
+again, builds and commits, then ships through
 `scripts/ship.mjs`. Shipping asks once, then pushes main, waits for CI, tags,
 pushes the tag (`.github/workflows/release.yml` publishes to npm with trusted
 publishing and makes the GitHub Release) and runs `deploy.sh`. It resumes from
