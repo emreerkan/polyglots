@@ -10,6 +10,10 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Fixed
+
+- A rules mistake or text pattern written without a nukta or an accent no longer matches the letter that has one.
+
 ## [1.1.0] - 2026-10-19
 
 ### Added
