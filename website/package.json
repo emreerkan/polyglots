@@ -19,11 +19,11 @@
     "font": "sh scripts/subset-font.sh"
   },
   "dependencies": {
-    "astro": "^7.3.6"
+    "astro": "^7.3.8"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
-    "puppeteer-core": "^25.12.0",
+    "puppeteer-core": "^25.13.0",
     "typescript": "^6.0.3"
   }
 }
