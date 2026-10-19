@@ -127,6 +127,36 @@ describe('text in either encoding', () => {
     expect(customFindings(entry('Link', 'कडी'), [hint(COMPOSED)], 'hi')).toHaveLength(0)
   })
 
+  // The reverse holds too: a pattern for ड is not one for ड़. NFC never
+  // composes ड़, फ़ or ज़ (composition exclusions), so the nukta follows its
+  // letter as a code point of its own, and a pattern that ends on the bare
+  // letter found the word that carries the nukta.
+  it('does not find a letter with a mark the pattern does not spell', () => {
+    const SAAF = 'सा\u092B'
+    const CORRECT = 'कैश सा\u092B\u093C करें'
+    expect(customFindings(entry('Clear the cache', CORRECT), [mistake(SAAF, `${SAAF}\u093C`)], 'hi')).toHaveLength(0)
+    expect(customFindings(entry('Clear', `${SAAF} करें`), [mistake(SAAF, `${SAAF}\u093C`)], 'hi')).toHaveLength(1)
+  })
+
+  it('does not take a decomposed accented letter for the plain one', () => {
+    expect(customFindings(entry('Coffee', 'cafe\u0301'), [mistake('cafe')], 'es')).toHaveLength(0)
+    expect(customFindings(entry('Coffee', 'cafe'), [mistake('cafe')], 'es')).toHaveLength(1)
+  })
+
+  // Vowel signs and the virama do not make another letter, so a Hindi
+  // pattern still finds the inflected and the conjunct forms of its word.
+  it('still finds a word followed by a vowel sign or a virama', () => {
+    expect(customFindings(entry('Files', '\u092B\u093E\u0907\u0932\u0947\u0902'), [mistake('\u092B\u093E\u0907\u0932')], 'hi')).toHaveLength(1)
+    expect(customFindings(entry('Files', '\u092B\u093E\u0907\u0932\u094D\u0938'), [mistake('\u092B\u093E\u0907\u0932')], 'hi')).toHaveLength(1)
+  })
+
+  // A fix made from such a pattern added a second nukta to a correct word.
+  it('does not repair a correct word into a double nukta', () => {
+    const p: CustomPattern = { kind: 'pattern', text: 'सा\u092B', replace: 'सा\u092B\u093C', level: 'fix', ignoreCase: true }
+    expect(applyFixPatterns(entry('Clear the cache', 'कैश सा\u092B\u093C करें'), [p], 'hi')).toBeUndefined()
+    expect(applyFixPatterns(entry('Clear', 'सा\u092B करें'), [p], 'hi')?.forms).toEqual(['सा\u092B\u093C करें'])
+  })
+
   // A regular expression is compared on normalised text for a finding, which
   // needs no position in the original.
   it('finds a regular expression in either encoding', () => {

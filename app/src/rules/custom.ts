@@ -16,10 +16,10 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\
 // (U+0A36) are composition exclusions, so NFC decomposes them and a literal
 // normalised either way never contains them. One scan of the code points that
 // can decompose at all, nothing above U+2FA1D does, costs tens of
-// milliseconds once per process, and only a pattern with a mark in it asks.
+// milliseconds once per process. Every literal asks, through lettersAfter.
 let precomposed: Map<string, string[]> | undefined
 
-function precomposedOf(decomposed: string): readonly string[] {
+function precomposedTable(): Map<string, string[]> {
   if (!precomposed) {
     precomposed = new Map()
     for (let cp = 0; cp <= 0x2fa1f; cp++) {
@@ -32,7 +32,37 @@ function precomposedOf(decomposed: string): readonly string[] {
       else precomposed.set(nfd, [ch])
     }
   }
-  return precomposed.get(decomposed) ?? []
+  return precomposed
+}
+
+function precomposedOf(decomposed: string): readonly string[] {
+  return precomposedTable().get(decomposed) ?? []
+}
+
+// For each base character, the marks that make a letter of their own with it:
+// a nukta after ड is ड़ (U+095C), an acute after e is é. A literal
+// letter written bare must not match a base one of these follows, or a pattern
+// for साफ finds साफ़, which NFC always stores as फ plus a nukta, and
+// a fix made from it adds a second nukta to a correct word. Not every mark: a
+// vowel sign or a virama after a Hindi consonant makes no new letter, and a
+// pattern for फाइल has to keep finding फाइलें and the conjunct फाइल्स. A
+// precomposed character is how Unicode says a base and a mark are one letter,
+// so the table above already holds the answer.
+let lettersAfter: Map<string, string[]> | undefined
+
+function marksMakingLetters(base: string): readonly string[] {
+  if (!lettersAfter) {
+    const marks = new Map<string, Set<string>>()
+    for (const nfd of precomposedTable().keys()) {
+      const [first, second] = [...nfd]
+      if (first === undefined || second === undefined || !/^\p{M}$/u.test(second)) continue
+      const set = marks.get(first)
+      if (set) set.add(second)
+      else marks.set(first, new Set([second]))
+    }
+    lettersAfter = new Map([...marks].map(([b, set]) => [b, [...set]]))
+  }
+  return lettersAfter.get(base) ?? []
 }
 
 // Each way the text can spell one letter and its marks: composed, decomposed,
@@ -86,8 +116,9 @@ function literalSource(text: string, locale: Locale): string {
       const forms = new Set(
         [letter, letter.toLocaleLowerCase(tag), letter.toLocaleUpperCase(tag)].flatMap(spellings),
       )
-      if (forms.size === 1) return escapeRegExp(letter)
-      return `(?:${[...forms].map(escapeRegExp).join('|')})`
+      const body = forms.size === 1 ? escapeRegExp(letter) : `(?:${[...forms].map(escapeRegExp).join('|')})`
+      const marks = [...new Set([...forms].filter((form) => [...form].length === 1).flatMap(marksMakingLetters))]
+      return marks.length === 0 ? body : `${body}(?!${marks.map(escapeRegExp).join('|')})`
     })
     .join('')
 }
