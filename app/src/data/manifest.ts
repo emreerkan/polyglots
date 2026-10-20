@@ -187,12 +187,34 @@ export interface RulesReader {
  * the error the single-row lookup gave.
  */
 export function findRulesEntry(manifest: Manifest, slug: Locale, reader: RulesReader = { maxSchema: MAX_SCHEMA, version: VERSION }): RulesManifestEntry {
-  const judged = rowsFor(manifest.rules, slug).map((row) => validate(row, slug, 'rules', rulesEntry))
+  return findRulesEntryWithNotes(manifest, slug, reader).entry
+}
+
+/**
+ * findRulesEntry, with a note for each row passed over as not valid whose
+ * schema is above the chosen one. Without it, a typo in the newer row would
+ * hand the person the older rules with nothing to say why, and the only
+ * trace in the fetch summary would be the sections that went missing.
+ */
+export function findRulesEntryWithNotes(
+  manifest: Manifest,
+  slug: Locale,
+  reader: RulesReader = { maxSchema: MAX_SCHEMA, version: VERSION },
+): { entry: RulesManifestEntry; notes: string[] } {
+  const rows = rowsFor(manifest.rules, slug)
+  const judged = rows.map((row) => validate(row, slug, 'rules', rulesEntry))
   const valid = judged.flatMap((j) => ('entry' in j ? [j.entry] : []))
   if (valid.length === 0) throw (judged[0] as { error: DataError }).error
   const readable = valid.filter((e) => e.schema <= reader.maxSchema && compareVersions(reader.version, e.minPolyglots) >= 0)
   const highest = (list: RulesManifestEntry[]) => list.reduce((best, e) => (e.schema > best.schema ? e : best))
-  return highest(readable.length > 0 ? readable : valid)
+  const entry = highest(readable.length > 0 ? readable : valid)
+  const notes = judged.flatMap((j, i) => {
+    if (!('error' in j)) return []
+    const schema = (rows[i] as { schema?: unknown }).schema
+    if (typeof schema !== 'number' || schema <= entry.schema || schema > reader.maxSchema) return []
+    return [`The schema ${schema} rules entry was passed over: ${j.error.message.replace(/; refusing it\.$/, '')}. Fetched the schema ${entry.schema} entry instead.`]
+  })
+  return { entry, notes }
 }
 
 // The lookup reads only `slug` from each row, defensively, so a row with no

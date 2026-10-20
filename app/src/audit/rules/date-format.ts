@@ -29,9 +29,18 @@ export interface DateFormatProblem {
 // Every letter PHP's date() reads. Anything else must be escaped.
 const FORMAT_LETTERS = new Set('dDjlNSwzWFmMntLoXxYyaABgGhHisuveIOPpTZcrU')
 // The letters that make a string recognisably a date or a time.
-const CORE_LETTERS = new Set('YFMjdgGhHi')
+const CORE_LETTERS = new Set('YyFMjdgGhHi')
+// Two of them must be found, and one must be from here: M and F alone are a
+// weekday range ("M-F"), not a date.
+const ANCHOR_LETTERS = new Set('YyjdgGhHi')
+// Letters a format writes side by side: the ordinal after the day (jS), am or
+// pm against the time (g:ia), and a timezone after the seconds (sP). Any other
+// pair of letters is a word, even one made of PHP letters only: every letter
+// of "Hide all" is one.
 const MAX_LENGTH = 40
 const CONTEXT = /(date|time)[ -]?format/i
+
+const ADJACENT = /[dj]S|[gGhHis][aA]|s[PpOTeZ]/g
 
 const PARTS: { name: string; letters: string; severity: Severity }[] = [
   { name: 'year', letters: 'YyoXx', severity: 'error' },
@@ -79,11 +88,13 @@ const has = (found: readonly string[], set: string) => found.some((c) => set.inc
 export function isDateFormat(source: string, context?: string): boolean {
   const s = normaliseFormat(source)
   if (s.length > MAX_LENGTH || /[%0-9'"]/.test(s)) return false
-  if (/\p{L}{2}/u.test(s.replace(/\\./g, ''))) return false
+  // An escaped letter is text and parts the letters around it, as a space would.
+  if (/\p{L}{2}/u.test(s.replace(/\\./g, ' ').replace(ADJACENT, (pair) => `${pair[0]} ${pair[1]}`))) return false
   const found = letters(s)
   if (found.length === 0 || found.some((c) => !FORMAT_LETTERS.has(c))) return false
   if (context !== undefined && CONTEXT.test(context)) return true
-  return new Set(found.filter((c) => CORE_LETTERS.has(c))).size >= 2 && /[^\p{L}\\]/u.test(s)
+  const core = new Set(found.filter((c) => CORE_LETTERS.has(c)))
+  return core.size >= 2 && [...core].some((c) => ANCHOR_LETTERS.has(c)) && /[^\p{L}\\]/u.test(s)
 }
 
 const TIME_COLON_SPACE = /[gGhHi]: /
@@ -106,7 +117,18 @@ export function dateFormatProblems(source: string, translation: string, rules?: 
   const to = letters(t)
   const problems: DateFormatProblem[] = []
 
-  const unknown = [...new Set(to.filter((c) => !FORMAT_LETTERS.has(c)))]
+  // A word left in the format, such as Turkish "yılı" after the year: its
+  // PHP letters print a year and a weekday, so naming only the ı would leave
+  // the person fixing it with a format that still prints nonsense.
+  const words = [...new Set(t.replace(/\\./g, ' ').match(/\p{L}{2,}/gu) ?? [])].filter((w) => [...w].some((c) => !FORMAT_LETTERS.has(c)))
+  for (const word of words) {
+    problems.push({
+      severity: 'error',
+      message: `"${word}" is text, so each of its letters needs a backslash (${[...word].map((c) => `\\${c}`).join('')}); unescaped, PHP prints the format letters in it`,
+    })
+  }
+  const inWords = new Set(words.flatMap((w) => [...w]))
+  const unknown = [...new Set(to.filter((c) => !FORMAT_LETTERS.has(c) && !inWords.has(c)))]
   if (unknown.length > 0) {
     problems.push({
       severity: 'error',
@@ -132,7 +154,7 @@ function localeProblems(s: string, t: string, to: string[], rules: DateTimeRules
   // A copy of a format the file lists gets the locale's wording and nothing
   // else: the clock and the order would only say the same thing less usefully.
   const suggested = rules.formats?.[s.trim()]
-  if (suggested !== undefined && t.trim() === s.trim() && suggested !== s.trim()) {
+  if (suggested !== undefined && t.trim() === s.trim() && normaliseFormat(suggested).trim() !== s.trim()) {
     return [{ severity: 'suspect', message: `"${s.trim()}" is the English format; ${language} writes it "${suggested}"` }]
   }
   const out: DateFormatProblem[] = []

@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname } from 'node:path'
 import type { DataClient } from '../data/download.js'
-import { compareVersions, DataError, findRulesEntry, type RulesManifestEntry } from '../data/manifest.js'
+import { compareVersions, DataError, findRulesEntryWithNotes, type RulesManifestEntry } from '../data/manifest.js'
 import { visible } from '../data/visible.js'
 import { localeRulesFile, parseLocaleRules, RulesFileError } from '../rules/load.js'
 import { MAX_SCHEMA, type CustomPattern, type LocaleRules } from '../rules/schema.js'
@@ -49,7 +49,7 @@ const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
  */
 export async function planRulesFetch(locale: Locale, client: DataClient): Promise<RulesFetchPlan> {
   const manifest = await client.manifest()
-  const entry = findRulesEntry(manifest, locale)
+  const { entry, notes: passedOver } = findRulesEntryWithNotes(manifest, locale)
   if (entry.schema > MAX_SCHEMA) {
     throw new DataError(`needs rules schema ${entry.schema}; this polyglots reads up to ${MAX_SCHEMA}. Update polyglots.`)
   }
@@ -79,7 +79,7 @@ export async function planRulesFetch(locale: Locale, client: DataClient): Promis
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
   }
   const status = `status: ${entry.status} · maintainers (wordpress.org): ${entry.maintainers.length > 0 ? entry.maintainers.join(', ') : 'none listed'}`
-  if (local === undefined) return { locale, path, entry, text, state: 'new', summary: visible([...diffRules(undefined, after), status]) }
+  if (local === undefined) return { locale, path, entry, text, state: 'new', summary: visible([...passedOver, ...diffRules(undefined, after), status]) }
   if (local.equals(downloaded)) return { locale, path, entry, text, local, state: 'same', summary: [] }
 
   // A local file that no longer parses is the case fetching most often
@@ -87,7 +87,7 @@ export async function planRulesFetch(locale: Locale, client: DataClient): Promis
   // and the summary says so, so a list of "changed" lines for keys the person
   // knows they had is not mistaken for a file that dropped none of them.
   let before: LocaleRules | undefined
-  const notes: string[] = []
+  const notes: string[] = [...passedOver]
   try {
     before = parseLocaleRules(local.toString('utf8'), path)
   } catch (err) {

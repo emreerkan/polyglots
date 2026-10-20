@@ -60,6 +60,18 @@ describe('isDateFormat', () => {
     expect(isDateFormat(source, context)).toBe(false)
   })
 
+  // Found in review, not in the memories: PHP's ordinal suffix and am/pm
+  // written against the time.
+  it.each(['jS F Y', 'F jS, Y', 'l, F jS, Y h:i:s A', 'g:ia', 'Y-m-d\\TH:i:sP', 'y/m/d'])('takes %j', (source) => {
+    expect(isDateFormat(source)).toBe(true)
+  })
+
+  // Every letter of these is a PHP letter, which is why adjacency is allowed
+  // only for the pairs a format writes.
+  it.each(['Hide all', 'M-F', 'M - F', 'S M T W T F S', 'y/n', 'Y/N', 'm/s'])('leaves the label %j alone', (source) => {
+    expect(isDateFormat(source)).toBe(false)
+  })
+
   it('takes a single letter when the context names a date format', () => {
     expect(isDateFormat('Y', 'yearly archives date format')).toBe(true)
     expect(isDateFormat('g a', 'time-format')).toBe(true)
@@ -106,6 +118,10 @@ describe('dateFormatProblems', () => {
     expect(only('l, F j, Y', 'j F Y')).toEqual([['suspect', expect.stringContaining('weekday')]])
   })
 
+  it('names a word left unescaped, not only its unknown letter', () => {
+    expect(only('j F Y', 'j F Y yılı')).toContainEqual(['error', expect.stringContaining('"yılı"')])
+  })
+
   it('takes escaped text as text', () => {
     expect(only('j F Y \\a\\t G:i', 'j F Y \\o\\m G:i')).toEqual([])
   })
@@ -146,6 +162,12 @@ describe('dateFormatProblems', () => {
     it('reads the order for a year-first locale', () => {
       expect(only('F j, Y', 'j F Y', { order: 'ymd' })).toEqual([['suspect', expect.stringContaining('year first')]])
       expect(only('F j, Y', 'Y. F j.', { order: 'ymd' })).toEqual([])
+    })
+
+    // Core writes U+00A0 before am and pm, and a 12-hour locale may list
+    // that format as its own.
+    it('stays quiet on a listed format that is the source itself', () => {
+      expect(only('g:i\u00a0a', 'g:i\u00a0a', { formats: { 'g:i a': 'g:i\u00a0a' } })).toEqual([])
     })
 
     it('says nothing about a 12-hour locale’s am and pm', () => {

@@ -7,6 +7,7 @@ import {
   DEFAULT_MANIFEST_URL,
   findEntry,
   findRulesEntry,
+  findRulesEntryWithNotes,
   findTmEntry,
   manifestUrl,
   parseManifest,
@@ -168,6 +169,14 @@ describe('findRulesEntry with a row per schema', () => {
     expect(() => findRulesEntry(manifest([{ ...v2, sha512: 'short' }, { ...v3, status: 'retired' }]), 'tr', reader)).toThrow(
       /rules entry for tr is not valid: sha512/,
     )
+  })
+
+  // Otherwise a typo in the newer row downgrades the fetch without a word.
+  it('says when it passed over a newer row that is not valid', () => {
+    const { entry, notes } = findRulesEntryWithNotes(manifest([v2, { ...v3, sha512: 'short' }]), 'tr', reader)
+    expect(entry.schema).toBe(2)
+    expect(notes).toEqual([expect.stringMatching(/schema 3 .*not valid: sha512/)])
+    expect(findRulesEntryWithNotes(manifest([v2, v3]), 'tr', reader).notes).toEqual([])
   })
 
   it('keeps the first of two rows with the same schema', () => {
