@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import type { Locale } from '../types.js'
+import { MAX_SCHEMA } from '../rules/schema.js'
+import { VERSION } from '../version.js'
 import { localeOfWpCode, wpCodeOf } from '../wporg/locales.js'
 
 // The index polyglots-data publishes with every build, read by rules fetch
@@ -162,31 +164,76 @@ export function findTmEntry(manifest: Manifest, slug: Locale): TmManifestEntry {
   return judge(manifest.tm, slug, 'tm', tmEntry)
 }
 
-/** The rules entry for a locale, its whole shape validated. */
-export function findRulesEntry(manifest: Manifest, slug: Locale): RulesManifestEntry {
-  return judge(manifest.rules, slug, 'rules', rulesEntry)
+/** What this client can read, for choosing among a locale's rules rows. */
+export interface RulesReader {
+  maxSchema: number
+  version: string
+}
+
+/**
+ * The rules entry for a locale, its whole shape validated.
+ *
+ * A locale may have one row per rules schema. Every client up to 1.1 takes
+ * the first row with the slug, so polyglots-data lists the oldest schema
+ * first, and those clients keep receiving updates written for them. This one
+ * takes the newest row it can read: the highest schema at or below its own,
+ * whose minPolyglots it meets. When none qualifies it returns the highest
+ * row, and rules fetch refuses that with "Update polyglots", which then
+ * names the newest version the person could have.
+ *
+ * Every row is judged, and a row that is not valid is passed over rather
+ * than refused, so a typo in one schema's row does not cut the locale off
+ * from the other. Only when no row is valid is the first one's error shown,
+ * the error the single-row lookup gave.
+ */
+export function findRulesEntry(manifest: Manifest, slug: Locale, reader: RulesReader = { maxSchema: MAX_SCHEMA, version: VERSION }): RulesManifestEntry {
+  const judged = rowsFor(manifest.rules, slug).map((row) => validate(row, slug, 'rules', rulesEntry))
+  const valid = judged.flatMap((j) => ('entry' in j ? [j.entry] : []))
+  if (valid.length === 0) throw (judged[0] as { error: DataError }).error
+  const readable = valid.filter((e) => e.schema <= reader.maxSchema && compareVersions(reader.version, e.minPolyglots) >= 0)
+  const highest = (list: RulesManifestEntry[]) => list.reduce((best, e) => (e.schema > best.schema ? e : best))
+  return highest(readable.length > 0 ? readable : valid)
 }
 
 // The lookup reads only `slug` from each row, defensively, so a row with no
 // readable slug is passed over rather than refusing the lookup for everyone:
-// it cannot be the entry asked for by name. The chosen row is then validated
-// in full before the registry cross-check, so the cross-check reads a
-// `locale` that is known to be a string.
-function judge<T extends { slug: string; locale: string }>(rows: readonly unknown[], slug: Locale, kind: 'tm' | 'rules', shape: z.ZodType<T>): T {
+// it cannot be the entry asked for by name.
+function rowsFor(rows: readonly unknown[], slug: Locale): unknown[] {
   const slugOf = (row: unknown): string | undefined => {
     const value = typeof row === 'object' && row !== null ? (row as { slug?: unknown }).slug : undefined
     return typeof value === 'string' ? value : undefined
   }
-  const row = rows.find((r) => slugOf(r) === slug)
-  if (row === undefined) throw missingEntry(rows.map(slugOf).filter((s) => s !== undefined), slug)
+  const found = rows.filter((r) => slugOf(r) === slug)
+  if (found.length === 0) throw missingEntry(rows.map(slugOf).filter((s) => s !== undefined), slug)
+  return found
+}
+
+// A row is validated in full before the registry cross-check, so the
+// cross-check reads a `locale` that is known to be a string. Both failures
+// are returned rather than thrown, for findRulesEntry to weigh against the
+// locale's other rows.
+function validate<T extends { slug: string; locale: string }>(row: unknown, slug: Locale, kind: 'tm' | 'rules', shape: z.ZodType<T>): { entry: T } | { error: DataError } {
   const parsed = shape.safeParse(row)
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
     const where = issue && issue.path.length > 0 ? `${issue.path.join('.')}: ` : ''
-    throw new DataError(`The polyglots-data ${kind} entry for ${slug} is not valid: ${where}${issue?.message ?? 'unreadable'}; refusing it.`)
+    return { error: new DataError(`The polyglots-data ${kind} entry for ${slug} is not valid: ${where}${issue?.message ?? 'unreadable'}; refusing it.`) }
   }
-  checkWpCode(parsed.data.locale, slug)
-  return parsed.data
+  try {
+    checkWpCode(parsed.data.locale, slug)
+  } catch (err) {
+    if (err instanceof DataError) return { error: err }
+    throw err
+  }
+  return { entry: parsed.data }
+}
+
+// The tm list keeps the first row with the slug, as every released client
+// reads it: polyglots-data publishes one memory per locale.
+function judge<T extends { slug: string; locale: string }>(rows: readonly unknown[], slug: Locale, kind: 'tm' | 'rules', shape: z.ZodType<T>): T {
+  const result = validate(rowsFor(rows, slug)[0], slug, kind, shape)
+  if ('error' in result) throw result.error
+  return result.entry
 }
 
 // Named by the WordPress code people type, with the slug beside it the way

@@ -132,6 +132,49 @@ describe('findRulesEntry and findTmEntry', () => {
   })
 })
 
+// polyglots-data publishes one rules row per schema for a locale, oldest
+// first, because every released client takes the first row with the slug.
+// This client takes the newest it can read.
+describe('findRulesEntry with a row per schema', () => {
+  const manifest = (rules: unknown[]) => parseManifest({ schema: 1, generated: '', tm: [], rules })
+  const v2 = { ...rulesEntry, schema: 2, minPolyglots: '1.0.0', url: 'https://example.test/tr_TR.rules.schema2.yaml' }
+  const v3 = { ...rulesEntry, schema: 3, minPolyglots: '1.2.0', url: 'https://example.test/tr_TR.rules.yaml' }
+  const reader = { maxSchema: 3, version: '1.2.0' }
+
+  it('takes the highest schema this client reads, wherever it is listed', () => {
+    expect(findRulesEntry(manifest([v2, v3]), 'tr', reader).schema).toBe(3)
+    expect(findRulesEntry(manifest([v3, v2]), 'tr', reader).schema).toBe(3)
+  })
+
+  it('passes over a schema it cannot read', () => {
+    expect(findRulesEntry(manifest([v2, v3]), 'tr', { maxSchema: 2, version: '1.2.0' }).schema).toBe(2)
+  })
+
+  it('passes over a row whose minPolyglots is newer than this client', () => {
+    expect(findRulesEntry(manifest([v2, v3]), 'tr', { maxSchema: 3, version: '1.1.0' }).schema).toBe(2)
+  })
+
+  // The caller refuses it with "Update polyglots", naming what is needed.
+  it('returns the highest row when none is readable', () => {
+    expect(findRulesEntry(manifest([v2, v3]), 'tr', { maxSchema: 1, version: '1.2.0' }).schema).toBe(3)
+  })
+
+  it('does not let a malformed row hide a good one', () => {
+    expect(findRulesEntry(manifest([{ ...v3, sha512: 'short' }, v2]), 'tr', reader).schema).toBe(2)
+    expect(findRulesEntry(manifest([{ ...v3, locale: 'az_AZ' }, v2]), 'tr', reader).schema).toBe(2)
+  })
+
+  it('refuses with the first row’s error when no row is valid', () => {
+    expect(() => findRulesEntry(manifest([{ ...v2, sha512: 'short' }, { ...v3, status: 'retired' }]), 'tr', reader)).toThrow(
+      /rules entry for tr is not valid: sha512/,
+    )
+  })
+
+  it('keeps the first of two rows with the same schema', () => {
+    expect(findRulesEntry(manifest([v3, { ...v3, url: 'https://example.test/other.yaml' }]), 'tr', reader).url).toBe(v3.url)
+  })
+})
+
 describe('findEntry', () => {
   it('finds by slug and checks the WP code', () => {
     const e = { slug: 'tr', locale: 'tr_TR' }
