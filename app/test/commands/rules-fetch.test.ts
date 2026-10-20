@@ -90,7 +90,7 @@ describe('planRulesFetch', () => {
   })
 
   it.each([
-    ['file schema', { schema: 3 }, 'needs rules schema 3; this polyglots reads up to 2. Update polyglots.'],
+    ['file schema', { schema: 4 }, 'needs rules schema 4; this polyglots reads up to 3. Update polyglots.'],
     ['minPolyglots', { minPolyglots: '99.0.0' }, 'tr_TR rules need polyglots 99.0.0 or later; this is'],
     ['sha512', { sha512: '0'.repeat(128) }, 'does not match the sha512'],
   ])('refuses on %s and writes nothing', async (_name, patch, message) => {
@@ -218,6 +218,15 @@ describe('planRulesFetch', () => {
 
 describe('diffRules', () => {
   const parse = (text: string) => parseLocaleRules(text, 'test.yaml')
+
+  // It reaches the prompts, so a change is shown in full.
+  it('shows a dateTime that changed, and says nothing when it did not', () => {
+    const before = parse("schema: 3\ndateTime:\n  clock: 24h\n  formats:\n    'g:i a': 'H:i'\n")
+    const after = parse("schema: 3\ndateTime:\n  clock: 24h\n  order: dmy\n  formats:\n    'g:i a': 'G:i'\n")
+    expect(diffRules(before, after)).toContain('dateTime changed: clock 24h, order dmy, "g:i a" → "G:i"')
+    expect(diffRules(before, before).join('\n')).not.toContain('dateTime')
+    expect(diffRules(before, parse('schema: 3\n'))).toContain('dateTime removed')
+  })
 
   it('lists every key against nothing, in the order of the spec', () => {
     const after = parse(

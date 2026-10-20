@@ -69,6 +69,25 @@ describe('emitRulesYaml', () => {
     expect(again).toEqual(before)
   })
 
+  // Polyglots 1.1 refuses schema 3, so a file is declared 3 only when it
+  // uses something from it.
+  it('declares schema 3 only for a dateTime or the date-format rule', () => {
+    expect(emitRulesYaml(full())).toMatch(/^schema: 2$/m)
+    expect(emitRulesYaml({ ...emptyBuilderState(''), disable: ['date-format'] })).toMatch(/^schema: 3$/m)
+    const yaml = emitRulesYaml({
+      ...emptyBuilderState('tr_TR'),
+      dateTime: { clock: '24h', order: 'dmy', formats: [{ source: 'F j, Y', target: 'j F Y' }, { source: 'g:i a', target: 'H:i' }, { source: ' ', target: 'x' }] },
+    })
+    expect(yaml).toMatch(/^schema: 3$/m)
+    expect(yaml).toContain("'g:i a': 'H:i'")
+    expect(parse(yaml).dateTime).toEqual({ clock: '24h', order: 'dmy', formats: { 'F j, Y': 'j F Y', 'g:i a': 'H:i' } })
+  })
+
+  it('keeps the dateTime of the rules it started from', () => {
+    const before = parse("schema: 3\ndateTime:\n  clock: 24h\n  formats:\n    'M j': 'j M'\n")
+    expect(parse(emitRulesYaml(stateFromRules(before, 'tr_TR')))).toEqual(before)
+  })
+
   it('writes an empty builder as a valid file that sets nothing', () => {
     const yaml = emitRulesYaml(emptyBuilderState('tr_TR'))
     expect(parse(yaml)).toEqual({ schema: 2, patterns: [] })

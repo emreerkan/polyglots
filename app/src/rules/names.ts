@@ -22,6 +22,7 @@ export const BUILT_IN_RULES = [
   'inconsistent',
   'tm-conflict',
   'control',
+  'date-format',
 ] as const
 
 // These depend on nothing about a particular language: a dropped placeholder, a
@@ -47,6 +48,10 @@ export const UNIVERSAL_RULES: readonly string[] = [
   'tm-conflict',
   // A setting the code reads ("on" for a font switch) is one in every locale.
   'control',
+  // A PHP date letter is the same letter in every language. What a locale's
+  // dates should look like comes from its rules file's dateTime, not from
+  // turning this on or off.
+  'date-format',
 ] satisfies BuiltInRule[]
 
 // Mistakes and patterns from a locale file. Never switched on by name: it runs
@@ -128,6 +133,10 @@ const RULE_LABELS: Record<BuiltInRule | typeof CUSTOM_RULE | 'repaired', Label> 
   control: {
     name: 'Setting translated as text',
     description: 'A value WordPress reads as a setting, such as “on” or “ltr”, was translated as if it were text.',
+  },
+  'date-format': {
+    name: 'Date or time format',
+    description: 'A PHP date format such as “F j, Y” is broken in the translation, or written the English way where the locale has its own.',
   },
   custom: {
     name: 'Locale rule',

@@ -520,6 +520,16 @@ msgctxt "rule:control:desc"
 msgid "A value WordPress reads as a setting, such as “on” or “ltr”, was translated as if it were text."
 msgstr ""
 
+#. The name of a check ("date-format") in the legend of "What gets flagged". Sentence case.
+msgctxt "rule:date-format"
+msgid "Date or time format"
+msgstr ""
+
+#. One line explaining the check "date-format", shown in a tooltip.
+msgctxt "rule:date-format:desc"
+msgid "A PHP date format such as “F j, Y” is broken in the translation, or written the English way where the locale has its own."
+msgstr ""
+
 #. The name of a check ("custom") in the legend of "What gets flagged". Sentence case.
 msgctxt "rule:custom"
 msgid "Locale rule"

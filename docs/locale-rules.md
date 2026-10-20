@@ -38,9 +38,9 @@ Before it writes, it checks the file and shows what it changes:
   would reject. Nothing is written, and the command exits 1.
 - It prints, in full, any guidance, capitalization or register text that
   differs from your file, every note and suggested wording that is new, and
-  every fix pattern added or removed. It says whether `sentenceEnd`
-  changed, and gives one line for the switches, proper nouns and other
-  patterns.
+  every fix pattern added or removed, and a `dateTime` that changed. It
+  says whether `sentenceEnd` changed, and gives one line for the switches,
+  proper nouns and other patterns.
 - It names the file's status (`maintained` or `draft`) and its maintainers,
   by their WordPress.org usernames.
 
@@ -70,7 +70,8 @@ it works over SSH too. The app's Locale rules screen has the same link.
 
 - **Start from the published rules** loads your locale's file from
   polyglots-data, so you change your team's rules rather than start over.
-  Its comments are not carried over.
+  Its comments are not carried over. The builder has no fields for
+  `dateTime` yet, but a `dateTime` in the file you start from is kept.
 - **Paste a rules file** loads a file from anywhere: one you have, or your
   AI agent's answer. A code block in the answer is found by itself, and a
   file polyglots would refuse is not loaded.
@@ -102,8 +103,9 @@ creating it first if needed. The new file spells out what the code already
 does for that locale, commented out, with an example of every section. A file
 that sets nothing changes nothing.
 
-The app's **Locale rules** screen edits every section too, in the rules
-builder's order, and keeps the comments you wrote in the file.
+The app's **Locale rules** screen edits every section too except `dateTime`,
+in the rules builder's order, and keeps the comments you wrote in the file
+and the `dateTime` it does not edit.
 
 ```yaml
 # The rules format version. polyglots refuses a file newer than it reads.
@@ -151,9 +153,12 @@ Every section is optional.
 
 - **`schema`** is the version of the file format. Leave it out and the file
   is read as schema 1, which has every section here except the last four.
-  Those need `schema: 2` at the top of the file. A file with a schema newer
-  than your polyglots reads is refused with a request to update polyglots,
-  rather than reviewed on half-understood rules.
+  Those need `schema: 2` at the top of the file. `dateTime`, and naming
+  `date-format` in `rules`, need `schema: 3`, which polyglots 1.2 and later
+  read. A file with a schema newer than your polyglots reads is refused with
+  a request to update polyglots, rather than reviewed on half-understood
+  rules. Declare the lowest schema the file needs, so older versions of
+  polyglots can still read it.
 - **`rules`** turns built-in checks on or off by name. The names are in
   [Reviewing submissions](review.md#what-the-checks-look-for).
 - **`properNouns`** are names `title-case` leaves alone: `always` everywhere,
@@ -205,6 +210,30 @@ Every section is optional.
   mark. `answers` lists regular expressions for a final mark that answers the
   source's (`text`, and optionally the `source` it answers). `notEnding` is a
   regular expression for a mark that looks like a full stop and is not one.
+- **`dateTime`** says how your language writes dates and times, for the
+  `date-format` check and for the AI prompts. `clock` is `24h` or `12h`.
+  `order` is `dmy`, `mdy` or `ymd`; a year-first date such as `Y-m-d` is
+  accepted for every order. `formats` lists what common English PHP date
+  formats become. Write the keys with an ordinary space where WordPress
+  core uses a no-break space (`g:i a`). Each suggested format must pass the
+  `date-format` check itself, and agree with `clock` and `order`, or
+  `rules check` refuses the file. Needs `schema: 3`.
+
+  ```yaml
+  schema: 3
+  dateTime:
+    clock: 24h
+    order: dmy
+    formats:
+      'F j, Y': 'j F Y'
+      'g:i a': 'H:i'
+  ```
+
+  With it, a translation that keeps 12-hour time, puts the month before the
+  day, or copies a listed format is a hint, and the copied format's hint
+  names your wording. The prompts get one line with the clock, the order and
+  the formats, so the AI rearranges a longer format, such as
+  `M j, Y @ g:i a`, the same way.
 
 Check a file after editing it:
 

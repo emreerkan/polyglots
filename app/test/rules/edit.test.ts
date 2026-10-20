@@ -185,6 +185,26 @@ describe('saveRulesDraft', () => {
     expect(openRulesDraft('tr').value.formality).toBe('formal')
   })
 
+  // The editor turns rules on and off by name, and date-format is a name
+  // only schema 3 knows.
+  it('declares schema 3 when date-format is turned off', async () => {
+    await writeRules('schema: 2\nformality: formal\n')
+    const draft = openRulesDraft('tr')
+    await saveRulesDraft(draft, { ...draft.value, rules: { enable: [], disable: ['date-format'] } })
+    const text = await readFile(localeRulesFile('tr'), 'utf8')
+    expect(text.match(/^schema:.*$/gm)).toEqual(['schema: 3'])
+    expect(loadLocaleRules('tr')?.rules?.disable).toEqual(['date-format'])
+  })
+
+  // The editor has no dateTime fields; a save of something else keeps it.
+  it('keeps a dateTime it has no fields for', async () => {
+    await writeRules("schema: 3\ndateTime:\n  clock: 24h\n  formats:\n    'M j': 'j M'\n")
+    const draft = openRulesDraft('tr')
+    await saveRulesDraft(draft, { ...draft.value, guidance: 'Short.' })
+    expect(loadLocaleRules('tr')?.dateTime).toEqual({ clock: '24h', formats: { 'M j': 'j M' } })
+    expect((await readFile(localeRulesFile('tr'), 'utf8')).match(/^schema:.*$/gm)).toEqual(['schema: 3'])
+  })
+
   it('removes a schema-2 section that was cleared', async () => {
     await writeRules('schema: 2\nformality: informal\nregister: Use sen.\n')
     const draft = openRulesDraft('tr')

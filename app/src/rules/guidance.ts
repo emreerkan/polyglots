@@ -1,3 +1,4 @@
+import { dateTimeInstruction } from '../audit/rules/date-format.js'
 import type { Locale } from '../types.js'
 import { loadLocaleRules } from './load.js'
 
@@ -13,4 +14,9 @@ import { loadLocaleRules } from './load.js'
 export function guidanceSection(locale: Locale): string {
   const guidance = loadLocaleRules(locale)?.guidance
   return guidance ? `\nThe locale team's own guidance:\n${guidance}\n` : ''
+}
+
+/** The locale file's dateTime as a prompt line; see dateTimeInstruction. */
+export function dateTimeLine(locale: Locale, language: string): string {
+  return dateTimeInstruction(loadLocaleRules(locale)?.dateTime, language)
 }

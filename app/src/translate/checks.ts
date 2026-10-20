@@ -24,6 +24,7 @@ const DRAFT_RULES = new Set([
   'glossary',
   'apostrophe',
   'control',
+  'date-format',
   CUSTOM_RULE,
 ])
 

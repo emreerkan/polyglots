@@ -8,7 +8,7 @@
 # The rules format version. polyglots refuses a file newer than it reads.
 schema: 2
 
-# Rules that always run unless disabled: placeholder, html, plural-count, whitespace, untranslated, escaping, line-breaks, punctuation, glossary, inconsistent, tm-conflict, control
+# Rules that always run unless disabled: placeholder, html, plural-count, whitespace, untranslated, escaping, line-breaks, punctuation, glossary, inconsistent, tm-conflict, control, date-format
 # rules:
 #   enable: []
 #   disable: []

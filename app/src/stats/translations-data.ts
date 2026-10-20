@@ -122,6 +122,8 @@ export const STATS_TRANSLATIONS: readonly StatsLanguage[] = [
       "rule:tm-conflict:desc": "Çeviri belleğinde aynı dizgenin farklı bir onaylı çevirisi var.",
       "rule:control": "Ayar metin olarak çevrilmiş",
       "rule:control:desc": "WordPress’in ayar olarak okuduğu “on” ya da “ltr” gibi bir değer metinmiş gibi çevrilmiş.",
+      "rule:date-format": "Tarih ya da saat biçimi",
+      "rule:date-format:desc": "“F j, Y” gibi bir PHP tarih biçimi çeviride bozulmuş ya da yerelin kendi biçimi varken İngilizcedeki gibi yazılmış.",
       "rule:custom": "Yerel kural",
       "rule:custom:desc": "Yerelin kendi kurallar dosyasındaki bir hata ya da kalıp.",
       "rule:repaired": "Otomatik düzeltilmiş",

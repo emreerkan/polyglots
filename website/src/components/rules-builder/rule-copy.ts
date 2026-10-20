@@ -22,4 +22,5 @@ export const RULE_EXAMPLES: Record<BuiltInRule, string> = {
   inconsistent: '“Save” translated “Kaydet” in one entry and “Sakla” in another of the same file.',
   'tm-conflict': 'Your approved translations say “Ayarlar” for “Settings”; this file says “Seçenekler”.',
   control: '“ltr” (a text direction the code reads) translated as words.',
+  'date-format': 'The date format “M d, Y” translated as “M d, J”: PHP has no J, so the year is gone and a letter J shows instead.',
 };

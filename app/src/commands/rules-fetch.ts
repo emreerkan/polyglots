@@ -193,6 +193,20 @@ export function diffRules(before: LocaleRules | undefined, after: LocaleRules): 
   if (before?.formality !== after.formality) {
     lines.push(after.formality === undefined ? 'formality removed' : `formality changed: ${after.formality}`)
   }
+  // Printed whole where it differs, as prompt text is: it is one line of the
+  // prompts, and the suggested formats are what a contributor will be told.
+  if (JSON.stringify(before?.dateTime) !== JSON.stringify(after.dateTime)) {
+    const d = after.dateTime
+    lines.push(
+      d === undefined
+        ? 'dateTime removed'
+        : `dateTime changed: ${[
+            ...(d.clock === undefined ? [] : [`clock ${d.clock}`]),
+            ...(d.order === undefined ? [] : [`order ${d.order}`]),
+            ...Object.entries(d.formats ?? {}).map(([from, to]) => `"${from}" → "${to}"`),
+          ].join(', ')}`,
+    )
+  }
 
   // A note or a suggested wording is shown when the other file had no such
   // text anywhere, so moving a pattern does not repeat its note. Both ways:

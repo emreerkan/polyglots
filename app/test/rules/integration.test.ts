@@ -10,6 +10,7 @@ import { configHash, translateConfigHash } from '../../src/jobs/hash.js'
 import { buildReviewPrompt } from '../../src/review/prompt.js'
 import { localeRulesFile } from '../../src/rules/load.js'
 import { BUILT_IN_RULES } from '../../src/rules/names.js'
+import { draftSystemPrompt } from '../../src/draft/prompt.js'
 
 let home: string
 let saved: string | undefined
@@ -54,13 +55,17 @@ const hashTr = () => configHash({ locale: 'tr', glossary: [], properNouns: [] })
 // review stopped sending agents to glossary_lookup for every term and handed
 // them each entry's glossary terms instead: every agent draft review is asked
 // again once.
+//
+// The four review hashes moved once more, on purpose, when date-format joined
+// the universal rules: a verdict cached before it ran never saw a broken date
+// format, so every locale re-reviews once. The translate hashes did not move.
 const BEFORE = {
-  trEmpty: '2469b167cd1da5ec',
-  trGloss: '804c433f876e3ffc',
-  de: '10f66eb75c48e8a4',
+  trEmpty: '258589bbfbb38a37',
+  trGloss: '39a20f1f70224c63',
+  de: '9899ccd1d0cafbfb',
   deTranslate: 'd8f22a79e6376085',
   trTranslate: '0024447086e462a4',
-  sv: 'ecc27fd9393c755c',
+  sv: '0388950fc4fa589a',
   svTranslate: '769201ccf76bc57b',
 }
 
@@ -161,6 +166,59 @@ describe('with a rules file', () => {
     const first = hashTr()
     await writeRules('tr', 'mistakes:\n  - wrong: önizlem\n')
     expect(hashTr()).not.toBe(first)
+  })
+})
+
+// polyglots-data's tr_TR values, as the date-format rule and the prompts read them.
+const DATE_TIME = "schema: 3\ndateTime:\n  clock: 24h\n  order: dmy\n  formats:\n    'F j, Y': 'j F Y'\n    'g:i a': 'H:i'\n"
+
+describe('date-format', () => {
+  const entry = (msgid: string, msgstr: string, msgctxt?: string) => ({
+    key: msgid,
+    msgid,
+    msgstr: [msgstr],
+    comments: [],
+    references: [],
+    fuzzy: false,
+    ...(msgctxt === undefined ? {} : { msgctxt }),
+  })
+  const run = (e: ReturnType<typeof entry>) => runRules(e, buildRuleContext({ locale: 'tr', glossary: [], nplurals: 2, entries: [e] })).filter((f) => f.rule === 'date-format')
+
+  it('runs without a rules file, on the universal checks', () => {
+    expect(run(entry('Y', 'J', 'yearly archives date format'))).toEqual([
+      { rule: 'date-format', severity: 'error', message: expect.stringContaining('"J" is not a PHP date letter') },
+    ])
+    expect(run(entry('F j, Y', 'F j, Y'))).toEqual([])
+    expect(run(entry('N/A', 'Yok'))).toEqual([])
+  })
+
+  it('reads the locale’s dateTime from its rules file', async () => {
+    await writeRules('tr', DATE_TIME)
+    expect(run(entry('F j, Y', 'F j, Y'))).toEqual([
+      { rule: 'date-format', severity: 'suspect', message: 'date format: "F j, Y" is the English format; Turkish writes it "j F Y"' },
+    ])
+  })
+
+  it('is switched off by name', async () => {
+    await writeRules('tr', 'schema: 3\nrules: { disable: [date-format] }\n')
+    expect(run(entry('Y', 'J', 'yearly archives date format'))).toEqual([])
+  })
+
+  it('reaches all three prompts as one line when the file has a dateTime', async () => {
+    await writeRules('tr', DATE_TIME)
+    for (const prompt of [buildAuditPrompt([], 'tr', 2), buildReviewPrompt([], 'tr', 2), draftSystemPrompt('tr', 2)]) {
+      expect(prompt).toContain('- Dates and times:')
+      expect(prompt).toContain('24-hour time')
+      expect(prompt).toContain('"F j, Y" → "j F Y"')
+    }
+    expect(translateConfigHash('tr')).not.toBe(BEFORE.trTranslate)
+  })
+
+  it('stays out of the prompts without one', async () => {
+    await writeRules('tr', 'schema: 3\nguidance: Be brief.\n')
+    for (const prompt of [buildAuditPrompt([], 'tr', 2), buildReviewPrompt([], 'tr', 2), draftSystemPrompt('tr', 2)]) {
+      expect(prompt).not.toContain('Dates and times')
+    }
   })
 })
 

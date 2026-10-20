@@ -11,12 +11,12 @@ describe('schema', () => {
   it('reads an absent schema as 1', () => expect(parse('guidance: x').schema).toBe(1))
   it('accepts schema 2', () => expect(parse('schema: 2\nguidance: x').schema).toBe(2))
   it('refuses a higher schema before anything else, on its line', () => {
-    const e = error('guidance: 5\nschema: 3\nbogus: true')
-    expect(e.message).toContain('needs rules schema 3; this polyglots reads up to 2. Update polyglots.')
+    const e = error('guidance: 5\nschema: 4\nbogus: true')
+    expect(e.message).toContain('needs rules schema 4; this polyglots reads up to 3. Update polyglots.')
     expect(e.line).toBe(2)
   })
   it.each(['0', '1.5', '"2"', '-1'])('refuses schema %s', (v) => {
-    expect(error(`schema: ${v}`).message).toContain('schema must be a whole number from 1 to 2')
+    expect(error(`schema: ${v}`).message).toContain('schema must be a whole number from 1 to 3')
   })
   it.each(['capitalization: x', "register: x", 'formality: formal', 'sentenceEnd: { unmarked: true }'])(
     'refuses %s without schema: 2',

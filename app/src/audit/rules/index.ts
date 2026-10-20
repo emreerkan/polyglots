@@ -5,7 +5,8 @@ import { customFindings, skipFinding } from '../../rules/custom.js'
 import { loadLocaleRules } from '../../rules/load.js'
 import { CUSTOM_RULE } from '../../rules/names.js'
 import { runRegexOps, skippedFor, type RegexOp } from '../../rules/sandbox.js'
-import type { CustomPattern, SentenceEndRules } from '../../rules/schema.js'
+import type { CustomPattern, DateTimeRules, SentenceEndRules } from '../../rules/schema.js'
+import { dateFormatProblems, isDateFormat } from './date-format.js'
 import { missingPlaceholders } from '../../draft/placeholders.js'
 import {
   acronymStem,
@@ -52,6 +53,9 @@ export interface RuleContext {
   // the same reason. Absent when the file says nothing about it, which leaves
   // the generic Unicode check alone.
   sentenceEnd?: CompiledSentenceEnd
+  // The locale's clock, date order and usual formats, from the same file.
+  // Absent leaves the date-format rule to its universal checks.
+  dateTime?: DateTimeRules
 }
 
 export interface BuildRuleContextOptions {
@@ -175,6 +179,7 @@ export function buildRuleContext(opts: BuildRuleContextOptions): RuleContext {
     translationsByMsgid,
     ...(customPatterns && customPatterns.length > 0 ? { customPatterns } : {}),
     ...(sentenceEnd ? { sentenceEnd } : {}),
+    ...(file?.dateTime ? { dateTime: file.dateTime } : {}),
   }
 }
 
@@ -871,6 +876,27 @@ const inconsistent: Rule = (entry, ctx) => {
   ]
 }
 
+/**
+ * A PHP date format whose translation prints a wrong date, or an English one
+ * where the locale's rules file says how it writes dates. The detail is in
+ * date-format.ts. Every problem goes into one finding, so a translation that
+ * lost the year and gained a "J" counts once, as one entry with one rule.
+ */
+const dateFormat: Rule = (entry, ctx) => {
+  if (!isDateFormat(entry.msgid, entry.msgctxt)) return []
+  const text = entry.msgstr.find(Boolean)
+  if (!text) return []
+  const problems = dateFormatProblems(entry.msgid, text, ctx.dateTime, languageName(ctx.locale))
+  if (problems.length === 0) return []
+  return [
+    {
+      rule: 'date-format',
+      severity: problems.some((p) => p.severity === 'error') ? 'error' : 'suspect',
+      message: `date format: ${problems.map((p) => p.message).join('; ')}`,
+    },
+  ]
+}
+
 const RULES: Array<{ name: string; run: Rule }> = [
   { name: 'placeholder', run: placeholder },
   { name: 'html', run: html },
@@ -888,6 +914,7 @@ const RULES: Array<{ name: string; run: Rule }> = [
   { name: 'apostrophe', run: apostrophe },
   { name: 'inconsistent', run: inconsistent },
   { name: 'tm-conflict', run: tmConflict },
+  { name: 'date-format', run: dateFormat },
   { name: 'control', run: (entry) => {
     const spec = controlSpec(entry)
     return spec ? controlFindings(entry, spec) : []

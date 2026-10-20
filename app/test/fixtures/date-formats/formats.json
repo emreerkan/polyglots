@@ -1,0 +1,2199 @@
+{
+ "tr_TR": [
+  {
+   "path": "meta/forums",
+   "source": "M j, Y @ G:i",
+   "context": "",
+   "translation": "d.m.Y @ H:i",
+   "problems": []
+  },
+  {
+   "path": "meta/forums",
+   "source": "F j, Y",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "meta/forums",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "meta/rosetta",
+   "source": "g:i a",
+   "context": "",
+   "translation": "h:i",
+   "problems": [
+    "12-hour time without am/pm",
+    "12-hour clock (locale uses 24-hour)"
+   ]
+  },
+  {
+   "path": "meta/rosetta",
+   "source": "F j, Y",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "meta/rosetta",
+   "source": "Y/m/d g:i:s A",
+   "context": "",
+   "translation": "Y/m/d g:i:s A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "meta/rosetta",
+   "source": "Y-M-d",
+   "context": "",
+   "translation": "d-M-Y",
+   "problems": []
+  },
+  {
+   "path": "meta/themes",
+   "source": "F j, Y",
+   "context": "last update date format",
+   "translation": "d.m.Y",
+   "problems": []
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "F j, Y g:i a",
+   "context": "",
+   "translation": "F j, Y g:i a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "M j, Y @ G:i",
+   "context": "",
+   "translation": "M j, Y @ G:i",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "n/j/Y g:i A",
+   "context": "short date format with time",
+   "translation": "n/j/Y g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "M j, Y g:i A",
+   "context": "medium date format with time",
+   "translation": "M j, Y g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "l g:i A",
+   "context": "long weekday name with time",
+   "translation": "l g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "D g:i A",
+   "context": "short weekday name with time",
+   "translation": "D g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/bbpress/dev",
+   "source": "M j, Y @ G:i",
+   "context": "",
+   "translation": "j M Y @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/buddypress/dev",
+   "source": "M j, Y @ G:i",
+   "context": "",
+   "translation": "j M Y @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/buddypress/dev",
+   "source": "F j, Y",
+   "context": "",
+   "translation": "d F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/contact-form-7/dev",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/contact-form-7/dev",
+   "source": "Y/m/d",
+   "context": "",
+   "translation": "d.m.Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/glotpress/dev",
+   "source": "M j, Y",
+   "context": "",
+   "translation": "j M Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/glotpress/dev",
+   "source": "Y",
+   "context": "copyright date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "l, M j, Y",
+   "context": "",
+   "translation": "l, j M Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "M j, Y g:i a",
+   "context": "",
+   "translation": "j M Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "F j, Y g:i a",
+   "context": "Note date full date format",
+   "translation": "j F Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "M j",
+   "context": "short date format without the year",
+   "translation": "M j",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "F j g:i a",
+   "context": "post schedule date format without year",
+   "translation": "j F H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "g:i a",
+   "context": "post schedule time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "F j, Y g:i a",
+   "context": "post schedule full date format",
+   "translation": "j F Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "F j, Y",
+   "context": "long date format",
+   "translation": "F j, Y",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "M j, Y g:i A",
+   "context": "medium date format with time",
+   "translation": "M j, Y g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "M j, Y",
+   "context": "medium date format",
+   "translation": "M j, Y",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "n/j/Y g:i A",
+   "context": "short date format with time",
+   "translation": "n/j/Y g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "n/j/Y",
+   "context": "short date format",
+   "translation": "n/j/Y",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/loco-translate/dev",
+   "source": "Y/m/d",
+   "context": "",
+   "translation": "d.m.Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/loco-translate/dev",
+   "source": "j M @ H:i",
+   "context": "revision date short format",
+   "translation": "j M @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "M j \\a\\t H:i",
+   "context": "",
+   "translation": "M j \\a\\t H:i",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "F j, Y",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "M j, Y",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "Y/m/d",
+   "context": "",
+   "translation": "d.m.Y - H:i:s",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "M j, Y @ G:i",
+   "context": "",
+   "translation": "d F Y @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "Y/m/d g:i:s a",
+   "context": "list table date hover format",
+   "translation": "Y/m/d g:i:s a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "M d, Y @ h:i A",
+   "context": "Webhook created on date parsed by DateTime::format",
+   "translation": "j M Y @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "M d, Y @ h:i A",
+   "context": "Order date parsed by DateTime::format",
+   "translation": "j M Y @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y g:i a",
+   "context": "",
+   "translation": "j F Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "M j, Y g:i a",
+   "context": "",
+   "translation": "j M Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F, Y",
+   "context": "",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "Y/m/d",
+   "context": "",
+   "translation": "d.m.Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y g:i a",
+   "context": "Note date full date format",
+   "translation": "j F Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j g:i a",
+   "context": "post schedule date format without year",
+   "translation": "j F H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "g:i a",
+   "context": "post schedule time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y g:i a",
+   "context": "post schedule full date format",
+   "translation": "j F Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "M j",
+   "context": "short date format without the year",
+   "translation": "M j",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y",
+   "context": "long date format",
+   "translation": "F j, Y",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp/dev",
+   "source": "M j, Y g:i A",
+   "context": "medium date format with time",
+   "translation": "M j, Y g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp/dev",
+   "source": "M j, Y",
+   "context": "medium date format",
+   "translation": "M j, Y",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp/dev",
+   "source": "n/j/Y g:i A",
+   "context": "short date format with time",
+   "translation": "n/j/Y g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp/dev",
+   "source": "n/j/Y",
+   "context": "short date format",
+   "translation": "n/j/Y",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y @ H:i:s",
+   "context": "revision date format",
+   "translation": "j F Y @ H:i:s",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y",
+   "context": "daily archives date format",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "g:i a T",
+   "context": "",
+   "translation": "H:i T",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "l, M j, Y",
+   "context": "",
+   "translation": "j M Y, l",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "M j, Y @ H:i",
+   "context": "",
+   "translation": "j M Y @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "g:i:s a",
+   "context": "",
+   "translation": "H:i:s",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "H:i",
+   "context": "publish box time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "M j, Y",
+   "context": "publish box date format",
+   "translation": "j M Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "Y-m-d H:i:s",
+   "context": "timezone date format",
+   "translation": "Y-m-d H:i:s",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "j M @ H:i",
+   "context": "revision date short format",
+   "translation": "j M @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "j M Y @ H:i",
+   "context": "revision date short format",
+   "translation": "j M Y @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin/network",
+   "source": "Y/m/d g:i:s a",
+   "context": "",
+   "translation": "Y/m/d H:i:s",
+   "problems": []
+  }
+ ],
+ "nl_NL": [
+  {
+   "path": "meta/forums",
+   "source": "M j, Y @ G:i",
+   "context": "",
+   "translation": "j M Y @ G:i",
+   "problems": []
+  },
+  {
+   "path": "meta/forums",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "meta/forums",
+   "source": "F j, Y",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "meta/rosetta",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "meta/rosetta",
+   "source": "F j, Y",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "meta/rosetta",
+   "source": "Y/m/d g:i:s A",
+   "context": "",
+   "translation": "j F Y H:i:s A",
+   "problems": [
+    "12-hour clock (locale uses 24-hour)"
+   ]
+  },
+  {
+   "path": "meta/rosetta",
+   "source": "Y-M-d",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "meta/themes",
+   "source": "F j, Y",
+   "context": "last update date format",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "F j, Y g:i a",
+   "context": "",
+   "translation": "j F Y H:i",
+   "problems": []
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "M j, Y @ G:i",
+   "context": "",
+   "translation": "j F Y @ H:i",
+   "problems": []
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "D g:i A",
+   "context": "short weekday name with time",
+   "translation": "D g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "l g:i A",
+   "context": "long weekday name with time",
+   "translation": "l g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "M j, Y g:i A",
+   "context": "medium date format with time",
+   "translation": "M j, Y g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "n/j/Y g:i A",
+   "context": "short date format with time",
+   "translation": "n/j/Y g:i A",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "meta/wordcamp",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/bbpress/dev",
+   "source": "M j, Y @ G:i",
+   "context": "",
+   "translation": "j F Y @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/buddypress/dev",
+   "source": "M j, Y @ G:i",
+   "context": "",
+   "translation": "d-m-Y om G:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/buddypress/dev",
+   "source": "F j, Y",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/contact-form-7/dev",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/contact-form-7/dev",
+   "source": "Y/m/d",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/custom-css-js/dev",
+   "source": "Y/m/d",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/custom-css-js/dev",
+   "source": "F j, Y @ H:i:s",
+   "context": "revision date format",
+   "translation": "j F Y H:i:s",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/enable-media-replace/dev",
+   "source": "M j, Y @ H:i",
+   "context": "",
+   "translation": "j F Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/flamingo/dev",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/flamingo/dev",
+   "source": "Y/m/d",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/flamingo/dev",
+   "source": "H:i",
+   "context": "publish box time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/flamingo/dev",
+   "source": "M j, Y",
+   "context": "publish box date format",
+   "translation": "j M Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/glotpress/dev",
+   "source": "M j, Y",
+   "context": "",
+   "translation": "j M Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/glotpress/dev",
+   "source": "Y",
+   "context": "copyright date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "l, M j, Y",
+   "context": "",
+   "translation": "l, j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "M j, Y g:i a",
+   "context": "",
+   "translation": "j M Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "F j, Y g:i a",
+   "context": "Note date full date format",
+   "translation": "F j, Y g:i a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "M j",
+   "context": "short date format without the year",
+   "translation": "M j",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "F j g:i a",
+   "context": "post schedule date format without year",
+   "translation": "j F G:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "g:i a",
+   "context": "post schedule time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "F j, Y g:i a",
+   "context": "post schedule full date format",
+   "translation": "j F Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "F j, Y",
+   "context": "long date format",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "M j, Y g:i A",
+   "context": "medium date format with time",
+   "translation": "j M Y G:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "M j, Y",
+   "context": "medium date format",
+   "translation": "j M Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "n/j/Y g:i A",
+   "context": "short date format with time",
+   "translation": "j/F/Y g:i",
+   "problems": [
+    "12-hour time without am/pm",
+    "12-hour clock (locale uses 24-hour)"
+   ]
+  },
+  {
+   "path": "wp-plugins/gutenberg/dev",
+   "source": "n/j/Y",
+   "context": "short date format",
+   "translation": "j/F/Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/limit-login-attempts-reloaded/dev",
+   "source": "F d, Y H:i",
+   "context": "",
+   "translation": "F d, Y H:i",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/loco-translate/dev",
+   "source": "Y/m/d",
+   "context": "",
+   "translation": "Y/m/d",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/loco-translate/dev",
+   "source": "j M @ H:i",
+   "context": "revision date short format",
+   "translation": "j M @ H: i",
+   "problems": [
+    "space after a time colon"
+   ]
+  },
+  {
+   "path": "wp-plugins/ninja-forms/dev",
+   "source": "Y.m.d",
+   "context": "",
+   "translation": "J.m.d",
+   "problems": [
+    "not a format letter: J",
+    "lost the year",
+    "month before day (locale uses day first)"
+   ]
+  },
+  {
+   "path": "wp-plugins/ninja-forms/dev",
+   "source": "d.m.Y",
+   "context": "",
+   "translation": "d.m.J",
+   "problems": [
+    "not a format letter: J",
+    "lost the year"
+   ]
+  },
+  {
+   "path": "wp-plugins/ninja-forms/dev",
+   "source": "m.d.Y",
+   "context": "",
+   "translation": "m.d.J",
+   "problems": [
+    "not a format letter: J",
+    "lost the year",
+    "month before day (locale uses day first)"
+   ]
+  },
+  {
+   "path": "wp-plugins/ninja-forms/dev",
+   "source": "l, F d Y",
+   "context": "",
+   "translation": "l, F d Y",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/ninja-forms/dev",
+   "source": "Y/m/d",
+   "context": "",
+   "translation": "d-m-Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/ninja-forms/dev",
+   "source": "Y-m-d",
+   "context": "",
+   "translation": "Y-m-d",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/ninja-forms/dev",
+   "source": "m-d-Y",
+   "context": "",
+   "translation": "m-d-Y",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/ninja-forms/dev",
+   "source": "d-m-Y",
+   "context": "",
+   "translation": "d-m-Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/ninja-forms/dev",
+   "source": "m/d/Y",
+   "context": "",
+   "translation": "m/d/Y",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-plugins/pojo-accessibility/dev",
+   "source": "d.m.Y, H:i",
+   "context": "",
+   "translation": "d.m.Y, H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/polylang/dev",
+   "source": "F j, Y",
+   "context": "daily archives date format",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "M j \\a\\t H:i",
+   "context": "",
+   "translation": "j M \\a\\t H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "F j, Y",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "M j, Y",
+   "context": "",
+   "translation": "j M Y",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "Y/m/d",
+   "context": "",
+   "translation": "Y/m/d",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "M j, Y @ G:i",
+   "context": "",
+   "translation": "j F Y @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "Y/m/d g:i:s a",
+   "context": "list table date hover format",
+   "translation": "d-m-Y H:i",
+   "problems": [
+    "lost the second"
+   ]
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "M d, Y @ h:i A",
+   "context": "Order date parsed by DateTime::format",
+   "translation": "M d, J @ u:m",
+   "problems": [
+    "not a format letter: J",
+    "lost the year",
+    "lost the hour",
+    "lost the minute",
+    "month before day (locale uses day first)"
+   ]
+  },
+  {
+   "path": "wp-plugins/woocommerce/dev",
+   "source": "M d, Y @ h:i A",
+   "context": "Webhook created on date parsed by DateTime::format",
+   "translation": "M d, J @ u:m",
+   "problems": [
+    "not a format letter: J",
+    "lost the year",
+    "lost the hour",
+    "lost the minute",
+    "month before day (locale uses day first)"
+   ]
+  },
+  {
+   "path": "wp-plugins/wp-super-cache/dev",
+   "source": "Y-m-d G:i:s",
+   "context": "timezone date format",
+   "translation": "Y-m-d G: i: s",
+   "problems": [
+    "space after a time colon"
+   ]
+  },
+  {
+   "path": "wp-themes/astra",
+   "source": "i",
+   "context": "minute archives time format",
+   "translation": "i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/astra",
+   "source": "g a",
+   "context": "hour archives time format",
+   "translation": "g a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-themes/astra",
+   "source": "F",
+   "context": "monthly archives date format",
+   "translation": "F",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/astra",
+   "source": "j",
+   "context": "daily archives date format",
+   "translation": "j",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/astra",
+   "source": "W",
+   "context": "weekly archives date format",
+   "translation": "W",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/astra",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/astra",
+   "source": "g:i a",
+   "context": "minute and hour archives time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/bloghash",
+   "source": "W",
+   "context": "weekly archives date format",
+   "translation": "W",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/bloghash",
+   "source": "j",
+   "context": "daily archives date format",
+   "translation": "j",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/bloghash",
+   "source": "F",
+   "context": "monthly archives date format",
+   "translation": "F",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/bloghash",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "J",
+   "problems": [
+    "not a format letter: J",
+    "lost the year"
+   ]
+  },
+  {
+   "path": "wp-themes/bloghash",
+   "source": "i",
+   "context": "minute archives time format",
+   "translation": "i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/bloghash",
+   "source": "g:i a",
+   "context": "minute and hour archives time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/bloghash",
+   "source": "g a",
+   "context": "hour archives time format",
+   "translation": "H",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/blogus",
+   "source": "g a",
+   "context": "hour archives time format",
+   "translation": "g a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-themes/blogus",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "J",
+   "problems": [
+    "not a format letter: J",
+    "lost the year"
+   ]
+  },
+  {
+   "path": "wp-themes/blogus",
+   "source": "W",
+   "context": "weekly archives date format",
+   "translation": "W",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/blogus",
+   "source": "j",
+   "context": "daily archives date format",
+   "translation": "j",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/blogus",
+   "source": "F",
+   "context": "monthly archives date format",
+   "translation": "F",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/blogus",
+   "source": "i",
+   "context": "minute archives time format",
+   "translation": "l",
+   "problems": [
+    "lost the minute"
+   ]
+  },
+  {
+   "path": "wp-themes/blogus",
+   "source": "g:i a",
+   "context": "minute and hour archives time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/bosa",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/bosa",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/bosa",
+   "source": "F j, Y",
+   "context": "daily archives date format",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/colormag",
+   "source": "W",
+   "context": "weekly archives date format",
+   "translation": "W",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/colormag",
+   "source": "j",
+   "context": "daily archives date format",
+   "translation": "j",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/colormag",
+   "source": "F",
+   "context": "monthly archives date format",
+   "translation": "F",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/colormag",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "J",
+   "problems": [
+    "not a format letter: J",
+    "lost the year"
+   ]
+  },
+  {
+   "path": "wp-themes/colormag",
+   "source": "g a",
+   "context": "hour archives time format",
+   "translation": "g a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-themes/colormag",
+   "source": "i",
+   "context": "minute archives time format",
+   "translation": "l",
+   "problems": [
+    "lost the minute"
+   ]
+  },
+  {
+   "path": "wp-themes/colormag",
+   "source": "g:i a",
+   "context": "minute and hour archives time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/covernews",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/covernews",
+   "source": "g a",
+   "context": "hour archives time format",
+   "translation": "g a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-themes/covernews",
+   "source": "j",
+   "context": "daily archives date format",
+   "translation": "j",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/covernews",
+   "source": "W",
+   "context": "weekly archives date format",
+   "translation": "W",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/covernews",
+   "source": "i",
+   "context": "minute archives time format",
+   "translation": "i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/covernews",
+   "source": "F",
+   "context": "monthly archives date format",
+   "translation": "F",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/covernews",
+   "source": "g:i a",
+   "context": "minute and hour archives time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/customify",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/customify",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/customify",
+   "source": "F j, Y",
+   "context": "daily archives date format",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/customizr",
+   "source": "F j, Y",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/customizr",
+   "source": "F Y",
+   "context": "",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/customizr",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/customizr",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/customizr",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/graphene",
+   "source": "F Y",
+   "context": "",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/iconic-one",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/iconic-one",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/lightning",
+   "source": "F j, Y",
+   "context": "daily archives date format",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/lightning",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/lightning",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newscard",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newscard",
+   "source": "F",
+   "context": "monthly archives date format",
+   "translation": "F",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newscard",
+   "source": "F j, Y",
+   "context": "daily archives date format",
+   "translation": "F j, Y",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-themes/newscard",
+   "source": "j",
+   "context": "daily archives date format",
+   "translation": "j",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newscard",
+   "source": "i",
+   "context": "minute archives time format",
+   "translation": "i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newscard",
+   "source": "g a",
+   "context": "hour archives time format",
+   "translation": "g a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-themes/newscard",
+   "source": "W",
+   "context": "weekly archives date format",
+   "translation": "W",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newscard",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newscard",
+   "source": "g:i a",
+   "context": "minute and hour archives time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newsmatic",
+   "source": "g a",
+   "context": "hour archives time format",
+   "translation": "g a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-themes/newsmatic",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "J",
+   "problems": [
+    "not a format letter: J",
+    "lost the year"
+   ]
+  },
+  {
+   "path": "wp-themes/newsmatic",
+   "source": "W",
+   "context": "weekly archives date format",
+   "translation": "W",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newsmatic",
+   "source": "i",
+   "context": "minute archives time format",
+   "translation": "i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newsmatic",
+   "source": "F",
+   "context": "monthly archives date format",
+   "translation": "F",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newsmatic",
+   "source": "j",
+   "context": "daily archives date format",
+   "translation": "j",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/newsmatic",
+   "source": "g:i a",
+   "context": "minute and hour archives time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/oceanwp",
+   "source": "Y",
+   "context": "Page title yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/oceanwp",
+   "source": "F Y",
+   "context": "Page title monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/oceanwp",
+   "source": "W",
+   "context": "weekly archives date format",
+   "translation": "W",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/oceanwp",
+   "source": "j",
+   "context": "daily archives date format",
+   "translation": "j",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/oceanwp",
+   "source": "F",
+   "context": "monthly archives date format",
+   "translation": "F",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/oceanwp",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/oceanwp",
+   "source": "g a",
+   "context": "hour archives time format",
+   "translation": "h",
+   "problems": [
+    "12-hour time without am/pm",
+    "12-hour clock (locale uses 24-hour)"
+   ]
+  },
+  {
+   "path": "wp-themes/oceanwp",
+   "source": "i",
+   "context": "minute archives time format",
+   "translation": "i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/oceanwp",
+   "source": "g:i a",
+   "context": "minute and hour archives time format",
+   "translation": "h:i",
+   "problems": [
+    "12-hour time without am/pm",
+    "12-hour clock (locale uses 24-hour)"
+   ]
+  },
+  {
+   "path": "wp-themes/onepress",
+   "source": "F j, Y",
+   "context": "daily archives date format",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/onepress",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/onepress",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/page-builder-framework",
+   "source": "F d, Y",
+   "context": "",
+   "translation": "F d, Y",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-themes/sinatra",
+   "source": "j",
+   "context": "daily archives date format",
+   "translation": "j",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/sinatra",
+   "source": "i",
+   "context": "minute archives time format",
+   "translation": "i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/sinatra",
+   "source": "g a",
+   "context": "hour archives time format",
+   "translation": "g a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-themes/sinatra",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "J",
+   "problems": [
+    "not a format letter: J",
+    "lost the year"
+   ]
+  },
+  {
+   "path": "wp-themes/sinatra",
+   "source": "F",
+   "context": "monthly archives date format",
+   "translation": "F",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/sinatra",
+   "source": "W",
+   "context": "weekly archives date format",
+   "translation": "W",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/sinatra",
+   "source": "g:i a",
+   "context": "minute and hour archives time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/total",
+   "source": "W",
+   "context": "weekly archives date format",
+   "translation": "W",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/total",
+   "source": "j",
+   "context": "daily archives date format",
+   "translation": "j",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/total",
+   "source": "F",
+   "context": "monthly archives date format",
+   "translation": "F",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/total",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/total",
+   "source": "g a",
+   "context": "hour archives time format",
+   "translation": "g a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp-themes/total",
+   "source": "i",
+   "context": "minute archives time format",
+   "translation": "i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/total",
+   "source": "g:i a",
+   "context": "minute and hour archives time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentyeleven",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentyeleven",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentyfourteen",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentyfourteen",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentynineteen",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentynineteen",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentyten",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentyten",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentythirteen",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentythirteen",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentytwelve",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentytwelve",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/twentytwenty",
+   "source": "Y",
+   "context": "copyright date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/woostify",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/woostify",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/zakra",
+   "source": "W",
+   "context": "weekly archives date format",
+   "translation": "W",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/zakra",
+   "source": "j",
+   "context": "daily archives date format",
+   "translation": "j",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/zakra",
+   "source": "F",
+   "context": "monthly archives date format",
+   "translation": "F",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/zakra",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/zakra",
+   "source": "g a",
+   "context": "hour archives time format",
+   "translation": "H",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/zakra",
+   "source": "i",
+   "context": "minute archives time format",
+   "translation": "i",
+   "problems": []
+  },
+  {
+   "path": "wp-themes/zakra",
+   "source": "g:i a",
+   "context": "minute and hour archives time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y g:i a",
+   "context": "",
+   "translation": "j F Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "M j, Y g:i a",
+   "context": "",
+   "translation": "j M Y G:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "g:i a",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F, Y",
+   "context": "",
+   "translation": "F, Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "Y/m/d",
+   "context": "",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y g:i a",
+   "context": "Note date full date format",
+   "translation": "F j, Y g:i a",
+   "problems": [
+    "copied from English"
+   ]
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j g:i a",
+   "context": "post schedule date format without year",
+   "translation": "j F H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "g:i a",
+   "context": "post schedule time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y g:i a",
+   "context": "post schedule full date format",
+   "translation": "j F Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "M j",
+   "context": "short date format without the year",
+   "translation": "j M",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y",
+   "context": "long date format",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "M j, Y g:i A",
+   "context": "medium date format with time",
+   "translation": "j M Y G:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "M j, Y",
+   "context": "medium date format",
+   "translation": "j M Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "n/j/Y g:i A",
+   "context": "short date format with time",
+   "translation": "j/F/Y g:i",
+   "problems": [
+    "12-hour time without am/pm",
+    "12-hour clock (locale uses 24-hour)"
+   ]
+  },
+  {
+   "path": "wp/dev",
+   "source": "n/j/Y",
+   "context": "short date format",
+   "translation": "j/F/Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y @ H:i:s",
+   "context": "revision date format",
+   "translation": "j F Y H:i:s",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F j, Y",
+   "context": "daily archives date format",
+   "translation": "j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "Y",
+   "context": "yearly archives date format",
+   "translation": "Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev",
+   "source": "F Y",
+   "context": "monthly archives date format",
+   "translation": "F Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "g:i a T",
+   "context": "",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "l, M j, Y",
+   "context": "",
+   "translation": "l, j F Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "M j, Y @ H:i",
+   "context": "",
+   "translation": "j F Y H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "g:i:s a",
+   "context": "",
+   "translation": "H:i",
+   "problems": [
+    "lost the second"
+   ]
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "H:i",
+   "context": "publish box time format",
+   "translation": "H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "M j, Y",
+   "context": "publish box date format",
+   "translation": "j M Y",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "Y-m-d H:i:s",
+   "context": "timezone date format",
+   "translation": "d-m-Y H:i:s",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "j M @ H:i",
+   "context": "revision date short format",
+   "translation": "j M @ H:i",
+   "problems": []
+  },
+  {
+   "path": "wp/dev/admin",
+   "source": "j M Y @ H:i",
+   "context": "revision date short format",
+   "translation": "j M Y",
+   "problems": [
+    "lost the hour",
+    "lost the minute"
+   ]
+  },
+  {
+   "path": "wp/dev/admin/network",
+   "source": "Y/m/d g:i:s a",
+   "context": "",
+   "translation": "j F Y H:i",
+   "problems": [
+    "lost the second"
+   ]
+  }
+ ]
+}

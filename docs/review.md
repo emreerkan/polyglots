@@ -84,6 +84,7 @@ Entries with no translation are skipped and counted as "not submitted".
 | `inconsistent` | one source translated several ways in the same file |
 | `tm-conflict` | a wording that differs from the one your memory approved |
 | `control` | a setting the code reads, such as `on` or `ltr`, that was translated |
+| `date-format` | a PHP date format such as `F j, Y` that prints a wrong date: a letter PHP does not know (`J` for `Y`), a lost year, month, day, hour or minute, 12-hour time without am/pm, or a space after a time colon. A lost second or weekday is a hint. With a [`dateTime`](locale-rules.md) in the rules file, it also points out 12-hour time, the wrong date order and copied English formats |
 | `fix-suspect` | a finding in the model's own fix that the submitted text did not have |
 
 `fix-suspect` checks the model, not the contributor. The fix stays in the file,

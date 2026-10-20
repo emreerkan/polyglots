@@ -123,13 +123,13 @@ describe('rules check --file', () => {
   })
 
   it('exits 1 with the error and line for a bad file', async () => {
-    const file = await writeFileIn('new.yaml', 'schema: 3\n')
+    const file = await writeFileIn('new.yaml', 'schema: 4\n')
     const { out, code } = await run(['rules', 'check', '--file', file, '--json'])
     expect(code).toBe(1)
     expect(JSON.parse(out)).toEqual({
       valid: false,
       path: file,
-      error: 'needs rules schema 3; this polyglots reads up to 2. Update polyglots.',
+      error: 'needs rules schema 4; this polyglots reads up to 3. Update polyglots.',
       line: 1,
     })
   })
@@ -172,6 +172,15 @@ describe('rules check --file', () => {
     expect(out).toMatch(/^ {2}capitalization: \d+ of 2500 characters$/m)
     expect(out).toMatch(/^ {2}register: set$/m)
     expect(out).not.toMatch(/formality|sentenceEnd/)
+  })
+
+  it('names the dateTime when set', async () => {
+    const file = await writeFileIn('d.yaml', "schema: 3\ndateTime:\n  clock: 24h\n  order: dmy\n  formats:\n    'F j, Y': 'j F Y'\n    'g:i a': 'H:i'\n")
+    const { out } = await run(['rules', 'check', '--file', file])
+    expect(out).toMatch(/^ {2}schema: 3$/m)
+    expect(out).toMatch(/^ {2}dateTime: clock 24h, order dmy, 2 formats$/m)
+    const json = await run(['rules', 'check', '--json', '--file', file])
+    expect(JSON.parse(json.out)).toMatchObject({ valid: true, schema: 3, dateTime: { clock: '24h', order: 'dmy', formats: 2 } })
   })
 
   it('says register: default when the file sets none, and names formality and sentenceEnd when set', async () => {

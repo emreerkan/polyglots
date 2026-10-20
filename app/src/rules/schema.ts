@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { dateFormatProblems, isDateFormat, normaliseFormat, type DateTimeRules } from '../audit/rules/date-format.js'
 import { BUILT_IN_RULES } from './names.js'
 
 export const GUIDANCE_LIMIT = 1500
@@ -12,7 +13,7 @@ export const GUIDANCE_LIMIT = 1500
 // easy to miss: an older polyglots rejects an unknown rule name without any key
 // changing, so a new rule name is a schema change too, and the number is what
 // lets the older app say why instead of naming the rule as a typo.
-export const MAX_SCHEMA = 2
+export const MAX_SCHEMA = 3
 export const CAPITALIZATION_LIMIT = 2500
 export const REGISTER_LIMIT = 500
 export const SENTENCE_REGEX_LIMIT = 1000
@@ -22,6 +23,12 @@ export const SENTENCE_REGEX_LIMIT = 1000
 // unknown key pass here unannounced, and the person sharing it would never
 // learn that it needs a declaration to travel.
 export const SCHEMA_2_KEYS = ['capitalization', 'register', 'formality', 'sentenceEnd'] as const
+// The same for schema 3, and for the rule names it added: polyglots 1.1
+// refuses date-format in rules.enable or rules.disable as an unknown rule.
+export const SCHEMA_3_KEYS = ['dateTime'] as const
+export const SCHEMA_3_RULES: readonly string[] = ['date-format']
+
+export type { DateTimeRules }
 
 export type PatternLevel = 'hint' | 'error' | 'fix'
 
@@ -76,6 +83,7 @@ export interface LocaleRules {
   register?: { audit?: string; translate?: string }
   formality?: 'formal' | 'informal'
   sentenceEnd?: SentenceEndRules
+  dateTime?: DateTimeRules
 }
 
 const ruleName = z.string().superRefine((name, ctx) => {
@@ -107,6 +115,36 @@ const registerLine = z
   .string()
   .refine(notBlank, { message: 'is empty' })
   .max(REGISTER_LIMIT, { message: `is longer than ${REGISTER_LIMIT} characters` })
+
+// The formats a locale suggests for common English ones. Every key must be a
+// format and every value one the date-format rule passes against its key and
+// against the file's own clock and order: a suggestion the review then reports
+// would teach contributors the wrong answer with the tool's authority.
+const dateTime = z
+  .object({
+    clock: z.enum(['12h', '24h']).optional(),
+    order: z.enum(['dmy', 'mdy', 'ymd']).optional(),
+    formats: z.record(z.string(), z.string()).optional(),
+  })
+  .strict()
+  .superRefine((d, ctx) => {
+    const seen = new Set<string>()
+    for (const [key, value] of Object.entries(d.formats ?? {})) {
+      const at = ['formats', key]
+      const normal = normaliseFormat(key).trim()
+      if (seen.has(normal)) {
+        ctx.addIssue({ code: 'custom', path: at, message: 'is listed twice once a no-break space is read as a space' })
+        continue
+      }
+      seen.add(normal)
+      if (!isDateFormat(key, 'date format')) {
+        ctx.addIssue({ code: 'custom', path: at, message: 'is not a PHP date format' })
+        continue
+      }
+      const problems = dateFormatProblems(key, value, { ...(d.clock ? { clock: d.clock } : {}), ...(d.order ? { order: d.order } : {}) })
+      if (problems.length > 0) ctx.addIssue({ code: 'custom', path: at, message: `suggests "${value}", which the date-format check reports: ${problems[0]!.message}` })
+    }
+  })
 
 const mistake = z
   .object({
@@ -184,10 +222,21 @@ export const localeRulesSchema = z
       })
       .strict()
       .optional(),
+    dateTime: dateTime.optional(),
   })
   .strict()
   .superRefine((raw, ctx) => {
-    if ((raw.schema ?? 1) >= 2) return
+    const declared = raw.schema ?? 1
+    if (declared >= 3) return
+    for (const key of SCHEMA_3_KEYS) {
+      if (raw[key] !== undefined) ctx.addIssue({ code: 'custom', path: [key], message: 'needs schema: 3 at the top of the file' })
+    }
+    for (const list of ['enable', 'disable'] as const) {
+      raw.rules?.[list].forEach((name, i) => {
+        if (SCHEMA_3_RULES.includes(name)) ctx.addIssue({ code: 'custom', path: ['rules', list, i], message: 'needs schema: 3 at the top of the file' })
+      })
+    }
+    if (declared >= 2) return
     for (const key of SCHEMA_2_KEYS) {
       if (raw[key] !== undefined) ctx.addIssue({ code: 'custom', path: [key], message: 'needs schema: 2 at the top of the file' })
     }
@@ -266,6 +315,18 @@ export function normalise(raw: RawLocaleRules): LocaleRules {
           ...(raw.sentenceEnd.unmarked === undefined ? {} : { unmarked: raw.sentenceEnd.unmarked }),
           ...(raw.sentenceEnd.notEnding === undefined ? {} : { notEnding: raw.sentenceEnd.notEnding }),
         })
+  // Keys are stored as the rule matches them, with an ordinary space for
+  // core's no-break one, so the lookup needs no second normalisation.
+  const formats =
+    raw.dateTime?.formats === undefined ? undefined : someKey(Object.fromEntries(Object.entries(raw.dateTime.formats).map(([k, v]) => [normaliseFormat(k).trim(), v])))
+  const dateTimeRules =
+    raw.dateTime === undefined
+      ? undefined
+      : someKey({
+          ...(raw.dateTime.clock === undefined ? {} : { clock: raw.dateTime.clock }),
+          ...(raw.dateTime.order === undefined ? {} : { order: raw.dateTime.order }),
+          ...(formats === undefined ? {} : { formats }),
+        })
   return {
     schema: raw.schema ?? 1,
     ...(raw.rules === undefined ? {} : { rules: raw.rules }),
@@ -277,5 +338,6 @@ export function normalise(raw: RawLocaleRules): LocaleRules {
     ...(register === undefined ? {} : { register }),
     ...(raw.formality === undefined ? {} : { formality: raw.formality }),
     ...(sentenceEnd === undefined ? {} : { sentenceEnd }),
+    ...(dateTimeRules === undefined ? {} : { dateTime: dateTimeRules }),
   }
 }

@@ -52,3 +52,14 @@ describe('the checks a draft checker sends with a draft', () => {
     expect(checker.prepare(u, ['a'.repeat(30) + 'b']).checks).toEqual([])
   })
 })
+
+// A draft engine keeps "F j, Y" as it is, and DeepL does so reliably, so a
+// draft is where an English date format is most often born.
+describe('date formats in a draft', () => {
+  it('checks a draft’s date format against the locale’s dateTime', async () => {
+    await writeFile(localeRulesFile('tr'), "schema: 3\ndateTime:\n  formats:\n    'F j, Y': 'j F Y'\n", 'utf8')
+    const u = unit('F j, Y')
+    const checker = createDraftChecker({ locale: 'tr', nplurals: 2, glossary: [], properNouns: [], units: [u] })
+    expect(checker.prepare(u, ['F j, Y']).checks.join('\n')).toContain('Turkish writes it "j F Y"')
+  })
+})

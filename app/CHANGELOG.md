@@ -10,6 +10,17 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Added
+
+- The `date-format` rule checks PHP date formats for letters PHP does not know, a lost date or time part, 12-hour time without am/pm and a space after a time colon.
+- A rules file's `dateTime` section (`clock`, `order`, `formats`, schema 3) adds hints for the locale's date style and a line in the prompts.
+
+### Changed
+
+- Every locale is re-reviewed once: the new universal rule moves the review configuration hash.
+- `rules fetch` takes the newest rules entry this polyglots can read when polyglots-data lists one per schema.
+- The rules builder declares the lowest schema a file needs instead of the newest.
+
 ## [1.1.0] - 2026-10-19
 
 ### Added

@@ -7,7 +7,7 @@ import { builtInProperNounsFor, type ProperNouns } from '../audit/rules/proper-n
 import type { Locale } from '../types.js'
 import { renderDefaultRules } from './defaults.js'
 import { localeRulesFile, parseLocaleRules } from './load.js'
-import { localeRulesSchema, SCHEMA_2_KEYS, type RawLocaleRules } from './schema.js'
+import { localeRulesSchema, SCHEMA_2_KEYS, SCHEMA_3_KEYS, SCHEMA_3_RULES, type RawLocaleRules } from './schema.js'
 
 // The sections a person edits, in the form they write them: mistakes and
 // patterns kept apart, a regex as its source text, guidance as typed.
@@ -104,12 +104,19 @@ export async function saveRulesDraft(draft: RulesDraft, next: RulesValue): Promi
   // to add one line by hand, so the line is added for them, at the top where
   // the loader's message says it belongs. It is added only when something in
   // the saved value needs it: declaring 2 on a file that does not use it
-  // would make an older polyglots refuse a file it can read.
+  // would make an older polyglots refuse a file it can read. Schema 3 the
+  // same way: the editor has no dateTime fields, but turning date-format off
+  // names a rule only schema 3 knows, and a file opened with a dateTime
+  // keeps it.
+  const needsSchema3 =
+    SCHEMA_3_KEYS.some((key) => next[key] !== undefined) ||
+    [...(next.rules?.enable ?? []), ...(next.rules?.disable ?? [])].some((name) => SCHEMA_3_RULES.includes(name))
   const needsSchema2 =
     SCHEMA_2_KEYS.some((key) => next[key] !== undefined) || next.patterns.some((p) => p.when?.notSource !== undefined)
+  const needed = needsSchema3 ? 3 : needsSchema2 ? 2 : 1
   const declared = doc.get('schema')
-  if (needsSchema2 && !(typeof declared === 'number' && declared >= 2)) {
-    if (doc.has('schema')) doc.set('schema', 2)
+  if (needed > 1 && !(typeof declared === 'number' && declared >= needed)) {
+    if (doc.has('schema')) doc.set('schema', needed)
     else if (isMap(doc.contents)) {
       // A file's opening comment block, when a blank line separates it from
       // the first key's own comment, parses as one comment on that first
@@ -117,7 +124,7 @@ export async function saveRulesDraft(draft: RulesDraft, next: RulesValue): Promi
       // file's title; the part before the last blank line is the file's
       // header, so it moves above the schema line and the rest stays with
       // the key it describes.
-      const pair = doc.createPair('schema', 2)
+      const pair = doc.createPair('schema', needed)
       const first = doc.contents.items[0]?.key
       const comment = isNode(first) ? first.commentBefore : undefined
       const split = comment?.lastIndexOf('\n\n') ?? -1
@@ -127,7 +134,7 @@ export async function saveRulesDraft(draft: RulesDraft, next: RulesValue): Promi
         first.spaceBefore = true
       }
       doc.contents.items.unshift(pair as (typeof doc.contents.items)[number])
-    } else doc.set('schema', 2)
+    } else doc.set('schema', needed)
   }
 
   const text = doc.toString()

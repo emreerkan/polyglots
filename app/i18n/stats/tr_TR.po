@@ -470,6 +470,14 @@ msgctxt "rule:control:desc"
 msgid "A value WordPress reads as a setting, such as “on” or “ltr”, was translated as if it were text."
 msgstr "WordPress’in ayar olarak okuduğu “on” ya da “ltr” gibi bir değer metinmiş gibi çevrilmiş."
 
+msgctxt "rule:date-format"
+msgid "Date or time format"
+msgstr "Tarih ya da saat biçimi"
+
+msgctxt "rule:date-format:desc"
+msgid "A PHP date format such as “F j, Y” is broken in the translation, or written the English way where the locale has its own."
+msgstr "“F j, Y” gibi bir PHP tarih biçimi çeviride bozulmuş ya da yerelin kendi biçimi varken İngilizcedeki gibi yazılmış."
+
 msgctxt "rule:custom"
 msgid "Locale rule"
 msgstr "Yerel kural"

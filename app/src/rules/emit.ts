@@ -1,6 +1,6 @@
 import { Document, isMap, isScalar, isSeq, type Node, type Pair, type Scalar } from 'yaml'
 import { RULES_BUILDER_URL } from './builder-url.js'
-import { MAX_SCHEMA, type LocaleRules, type PatternLevel } from './schema.js'
+import { SCHEMA_3_RULES, type LocaleRules, type PatternLevel } from './schema.js'
 
 // What the website's rules builder holds while someone fills it in, and the
 // rules file it writes from that. Here rather than on the site so that the
@@ -43,6 +43,9 @@ export interface BuilderState {
   mistakes: BuilderMistake[]
   patterns: BuilderPattern[]
   sentenceEnd: { answers: { text: string; source: string }[]; unmarked: boolean; notEnding: string }
+  // The page has no fields for it yet. Carried so that starting from the
+  // published rules and downloading the file keeps the locale's dateTime.
+  dateTime: { clock: '' | '12h' | '24h'; order: '' | 'dmy' | 'mdy' | 'ymd'; formats: { source: string; target: string }[] }
 }
 
 export function emptyBuilderState(locale: string): BuilderState {
@@ -59,6 +62,7 @@ export function emptyBuilderState(locale: string): BuilderState {
     mistakes: [],
     patterns: [],
     sentenceEnd: { answers: [], unmarked: false, notEnding: '' },
+    dateTime: { clock: '', order: '', formats: [] },
   }
 }
 
@@ -96,6 +100,11 @@ export function stateFromRules(rules: LocaleRules, locale: string): BuilderState
       unmarked: rules.sentenceEnd?.unmarked === true,
       notEnding: rules.sentenceEnd?.notEnding ?? '',
     },
+    dateTime: {
+      clock: rules.dateTime?.clock ?? '',
+      order: rules.dateTime?.order ?? '',
+      formats: Object.entries(rules.dateTime?.formats ?? {}).map(([source, target]) => ({ source, target })),
+    },
   }
 }
 
@@ -113,6 +122,7 @@ const SECTION_COMMENTS: Record<string, string> = {
   mistakes: ' Wordings the team rejects, found anywhere in a translation, without regard to case.',
   patterns: ' Literal text or regular expressions: a hint to weigh, an error, or a fix.',
   sentenceEnd: ' How a sentence ends in this script, for the punctuation check.',
+  dateTime: ' The clock, the date order and the usual date formats, for the date-format check.',
 }
 
 const filled = (s: string) => s.trim() !== ''
@@ -121,9 +131,20 @@ const list = (items: string[]) => items.map((s) => s.trim()).filter(filled)
 // The plain object the file holds, in the order a reader meets it: switches
 // first, prompt text in the middle, the long lists last.
 function contents(state: BuilderState): Record<string, unknown> {
-  const out: Record<string, unknown> = { schema: MAX_SCHEMA }
   const enable = list(state.enable)
   const disable = list(state.disable)
+  const formats = state.dateTime.formats.filter((f) => filled(f.source) && filled(f.target))
+  const dateTime = {
+    ...(state.dateTime.clock === '' ? {} : { clock: state.dateTime.clock }),
+    ...(state.dateTime.order === '' ? {} : { order: state.dateTime.order }),
+    ...(formats.length === 0 ? {} : { formats: Object.fromEntries(formats.map((f) => [f.source.trim(), f.target.trim()])) }),
+  }
+  // The lowest schema the file needs, and never below 2, which every
+  // released polyglots reads. Declaring the highest this app knows, as it
+  // once did, would have made polyglots 1.1 refuse every file the builder
+  // wrote from the day schema 3 existed, whatever was in it.
+  const needs3 = Object.keys(dateTime).length > 0 || [...enable, ...disable].some((name) => SCHEMA_3_RULES.includes(name))
+  const out: Record<string, unknown> = { schema: needs3 ? 3 : 2 }
   if (enable.length > 0 || disable.length > 0) out.rules = { enable, disable }
   if (state.glossaryStemRatio !== null) out.glossaryStemRatio = state.glossaryStemRatio
   if (state.formality !== '') out.formality = state.formality
@@ -183,6 +204,7 @@ function contents(state: BuilderState): Record<string, unknown> {
     ...(state.sentenceEnd.notEnding === '' ? {} : { notEnding: state.sentenceEnd.notEnding }),
   }
   if (Object.keys(sentenceEnd).length > 0) out.sentenceEnd = sentenceEnd
+  if (Object.keys(dateTime).length > 0) out.dateTime = dateTime
   return out
 }
 
@@ -195,6 +217,15 @@ const FLOW_KEYS = new Set(['enable', 'disable', 'dateOnly', 'when'])
 function style(node: Node | null | undefined, key?: string, insideAnswers = false): void {
   if (isMap(node)) {
     if (key !== undefined && FLOW_KEYS.has(key)) node.flow = true
+    // A date format on both sides, quoted as polyglots-data writes them: a
+    // bare "g:i a: H:i" is valid YAML that nobody can read with confidence.
+    if (key === 'formats') {
+      for (const pair of node.items as Pair<Scalar, Scalar>[]) {
+        pair.key.type = 'QUOTE_SINGLE'
+        pair.value!.type = 'QUOTE_SINGLE'
+      }
+      return
+    }
     for (const pair of node.items as Pair<Scalar, Node>[]) style(pair.value, String(pair.key.value), insideAnswers || key === 'answers')
   } else if (isSeq(node)) {
     if (key !== undefined && FLOW_KEYS.has(key)) node.flow = true
@@ -205,7 +236,7 @@ function style(node: Node | null | undefined, key?: string, insideAnswers = fals
   }
 }
 
-/** The rules file for a builder state: schema 2, a comment per section, nothing the person left blank. */
+/** The rules file for a builder state: the schema it needs, a comment per section, nothing the person left blank. */
 export function emitRulesYaml(state: BuilderState): string {
   const doc = new Document(contents(state))
   const locale = state.locale.trim()

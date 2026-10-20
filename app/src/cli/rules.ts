@@ -45,6 +45,7 @@ export type RulesReport =
       register: boolean
       formality?: 'formal' | 'informal'
       sentenceEnd: boolean
+      dateTime?: { clock?: '12h' | '24h'; order?: 'dmy' | 'mdy' | 'ymd'; formats: number }
     }
   // column only for a YAML syntax error, the one place the parser knows it.
   | { valid: false; path: string; error: string; line?: number; column?: number }
@@ -74,6 +75,15 @@ export function summariseRules(rules: LocaleRules, path: string): RulesReport & 
     register: rules.register !== undefined,
     ...(rules.formality === undefined ? {} : { formality: rules.formality }),
     sentenceEnd: rules.sentenceEnd !== undefined,
+    ...(rules.dateTime === undefined
+      ? {}
+      : {
+          dateTime: {
+            ...(rules.dateTime.clock === undefined ? {} : { clock: rules.dateTime.clock }),
+            ...(rules.dateTime.order === undefined ? {} : { order: rules.dateTime.order }),
+            formats: Object.keys(rules.dateTime.formats ?? {}).length,
+          },
+        }),
   }
 }
 
@@ -142,6 +152,15 @@ export function renderRulesReport(report: RulesReport, p: Painter = plainPainter
     `  register: ${report.register ? 'set' : 'default'}`,
     ...(report.formality === undefined ? [] : [`  formality: ${report.formality}`]),
     ...(report.sentenceEnd ? ['  sentenceEnd: set'] : []),
+    ...(report.dateTime === undefined
+      ? []
+      : [
+          `  dateTime: ${[
+            ...(report.dateTime.clock === undefined ? [] : [`clock ${report.dateTime.clock}`]),
+            ...(report.dateTime.order === undefined ? [] : [`order ${report.dateTime.order}`]),
+            plural(report.dateTime.formats, 'format'),
+          ].join(', ')}`,
+        ]),
   ]
 }
 
