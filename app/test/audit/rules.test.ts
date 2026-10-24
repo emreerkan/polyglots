@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AuditEntry, GlossaryEntry } from '../../src/types.js'
 import { buildRuleContext, glossaryAlternatives, runRules, tmKey } from '../../src/audit/rules/index.js'
 import { profileFor } from '../../src/audit/rules/profiles.js'
+import { pluralDistribution } from '../../src/po/plural-forms.js'
 import { useLocaleFixture } from '../locale-fixture.js'
 
 // Almost everything here is Turkish, and polyglots ships no locale data: the
@@ -87,6 +88,197 @@ describe('placeholder rule', () => {
 
   it('accepts placeholders that survive, including positional ones', () => {
     expect(rules(entry('%1$s of %2$s', '%2$s içinde %1$s'))).not.toContain('placeholder')
+  })
+})
+
+// A plural form answers to the numbers the catalogue's formula sends it, not to
+// its position: msgstr[0] is "one" in English and German, but also 21 and 31 in
+// Russian, and every number in Japanese. The headers are translate.wordpress.org's.
+describe('placeholder rule on plural forms', () => {
+  const ARABIC =
+    'nplurals=6; plural=(n == 0) ? 0 : ((n == 1) ? 1 : ((n == 2) ? 2 : ((n % 100 >= 3 && n % 100 <= 10) ? 3 : ((n % 100 >= 11 && n % 100 <= 99) ? 4 : 5))));'
+  const RUSSIAN =
+    'nplurals=3; plural=(n % 10 == 1 && n % 100 != 11) ? 0 : ((n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? 1 : 2);'
+  const HEBREW = 'nplurals=2; plural=n != 1;'
+  const JAPANESE = 'nplurals=1; plural=0;'
+
+  // Each placeholder finding as "severity: message", so a test says which of
+  // the two it expects.
+  function placeholderFindings(locale: string, header: string, nplurals: number, e: AuditEntry) {
+    const distribution = pluralDistribution(header, nplurals)
+    const ctx = buildRuleContext({
+      locale,
+      glossary: [],
+      nplurals,
+      entries: [e],
+      ...(distribution === undefined ? {} : { pluralDistribution: distribution }),
+    })
+    return runRules(e, ctx)
+      .filter((f) => f.rule === 'placeholder')
+      .map((f) => `${f.severity}: ${f.message}`)
+  }
+  const glotpress = (placeholders: string, form: number) =>
+    `suspect: translate.wordpress.org warns about placeholder(s) ${placeholders} in msgstr[${form}], though the form is right for the numbers its plural formula serves`
+
+  // WordPress core's approved Arabic: the forms for zero, one and two say the
+  // number in words. That is no error, but translate.wordpress.org warns on it,
+  // so it is left to the model as a suspect rather than called clean.
+  it('lets a form for a single number spell the number out', () => {
+    const e = entry(
+      '%d result found.',
+      [
+        'لم يتم العثور على نتائج.',
+        'تم العثور على نتيجة واحدة.',
+        'تم العثور على نتيجتين.',
+        'تم العثور على %d نتائج.',
+        'تم العثور على %d نتيجة.',
+        'تم العثور على %d نتيجة.',
+      ],
+      { msgidPlural: '%d results found.' },
+    )
+    expect(placeholderFindings('ar', ARABIC, 6, e)).toEqual([glotpress('%d', 0)])
+  })
+
+  it('still requires the number in a form that serves many numbers', () => {
+    const e = entry(
+      '%d item',
+      ['لا عناصر', 'عنصر واحد', 'عنصران', 'عناصر', '%d عنصرًا', '%d عنصر'],
+      { msgidPlural: '%d items' },
+    )
+    expect(placeholderFindings('ar', ARABIC, 6, e)).toEqual([
+      'error: translation is missing placeholder(s) %d',
+    ])
+  })
+
+  it('still refuses a placeholder the source does not have, even in a form for one number', () => {
+    const e = entry(
+      '%d item',
+      ['لا عناصر', 'عنصر %s واحد', 'عنصران', '%d عناصر', '%d عنصرًا', '%d عنصر'],
+      { msgidPlural: '%d items' },
+    )
+    expect(placeholderFindings('ar', ARABIC, 6, e)).toEqual([
+      'error: translation adds placeholder(s) %s the source does not have',
+    ])
+  })
+
+  // Saying the number in words loses one argument, the number. A form for one
+  // number that also lost the name has lost something no formula excuses.
+  it('still requires the other placeholders in a form for one number', () => {
+    const forms = (one: string) => ['لا عناصر لدى %s', one, 'لدى %s عنصران', 'لدى %s %d عناصر', 'لدى %s %d عنصرًا', 'لدى %s %d عنصر']
+    const plural = { msgidPlural: '%s has %d items' }
+    expect(placeholderFindings('ar', ARABIC, 6, entry('%s has %d item', forms('لديه عنصر واحد'), plural))).toEqual([
+      'error: translation is missing placeholder(s) %s, %d',
+    ])
+    expect(placeholderFindings('ar', ARABIC, 6, entry('%s has %d item', forms('لدى %d عنصر'), plural))).toEqual([
+      'error: translation is missing placeholder(s) %s',
+    ])
+    expect(placeholderFindings('ar', ARABIC, 6, entry('%s has %d item', forms('لدى %s عنصر واحد'), plural))).toEqual([glotpress('%d', 0)])
+  })
+
+  it('lets the form for one drop the count and keep the rest', () => {
+    const e = entry('%1$s response to %2$s', ['תגובה אחת על %2$s', '%1$s תגובות על %2$s'], {
+      msgidPlural: '%1$s responses to %2$s',
+    })
+    expect(placeholderFindings('he', HEBREW, 2, e)).toEqual([glotpress('%1$s', 0)])
+  })
+
+  // A placeholder written twice is two arguments: losing both is losing two.
+  it('counts each occurrence a form for one number loses', () => {
+    const e = entry('%d item and %d selected', ['Ausgewählt', '%d Elemente, %d ausgewählt'], {
+      msgidPlural: '%d items and %d selected',
+    })
+    expect(placeholderFindings('de', 'nplurals=2; plural=n != 1;', 2, e)).toEqual([
+      'error: translation is missing placeholder(s) %d',
+    ])
+  })
+
+  it('lets a form for one drop one copy of a positioned number written twice', () => {
+    const e = entry('%1$s: %2$d item (%2$d new)', ['%1$s: ein Element (%2$d neu)', '%1$s: %2$d Elemente (%2$d neu)'], {
+      msgidPlural: '%1$s: %2$d items (%2$d new)',
+    })
+    expect(placeholderFindings('de', 'nplurals=2; plural=n != 1;', 2, e)).toEqual([glotpress('%2$d', 0)])
+  })
+
+  it('takes any numeric conversion as the number, not only %d', () => {
+    const e = entry('%1$s ran %2$.1f mile', ['Gelaufen: %2$.1f Meile', '%1$s lief %2$.1f Meilen'], {
+      msgidPlural: '%1$s ran %2$.1f miles',
+    })
+    expect(placeholderFindings('de', 'nplurals=2; plural=n != 1;', 2, e)).toEqual([
+      'error: translation is missing placeholder(s) %1$s',
+    ])
+  })
+
+  // Placeholders without a position take the arguments in order, so a form
+  // that drops the first leaves the next one printing the number.
+  it('does not let a form for one drop a placeholder the next one would shift into', () => {
+    const e = entry(
+      '%d item in %s',
+      ['لا عناصر في %s', 'عنصر واحد في %s', 'عنصران في %s', '%d عناصر في %s', '%d عنصرًا في %s', '%d عنصر في %s'],
+      { msgidPlural: '%d items in %s' },
+    )
+    expect(placeholderFindings('ar', ARABIC, 6, e)).toEqual([
+      'error: translation is missing placeholder(s) %d',
+    ])
+  })
+
+  it('does not let the form for one drop the title with the count', () => {
+    const e = entry('%1$s response to %2$s', ['תגובה אחת', '%1$s תגובות על %2$s'], {
+      msgidPlural: '%1$s responses to %2$s',
+    })
+    expect(placeholderFindings('he', HEBREW, 2, e)).toEqual([
+      'error: translation is missing placeholder(s) %1$s, %2$s',
+    ])
+  })
+
+  // The GNU gettext manual's example source, in Russian: msgstr[0] also serves
+  // 21 and 31, so it needs the number even though the English singular has none.
+  it('reads a Russian first form as serving 21 and 31 too', () => {
+    const plural = { msgidPlural: '%d files removed' }
+    const right = entry('One file removed', ['%d файл удалён', '%d файла удалено', '%d файлов удалено'], plural)
+    const wrong = entry('One file removed', ['Один файл удалён', '%d файла удалено', '%d файлов удалено'], plural)
+    expect(placeholderFindings('ru', RUSSIAN, 3, right)).toEqual([glotpress('%d', 0)])
+    expect(placeholderFindings('ru', RUSSIAN, 3, wrong)).toEqual([
+      'error: translation is missing placeholder(s) %d',
+    ])
+  })
+
+  // Yoast SEO's Russian translation, shortened: msgstr[0] dropped the number
+  // of instances, which 21 or 31 of them would print.
+  it('finds a placeholder a Russian first form dropped from the plural', () => {
+    const e = entry(
+      'The text contains %3$d consecutive sentences starting with the same word.',
+      [
+        'Ваш текст содержит %3$d предложений подряд, которые начинаются с одного и того же слова.',
+        'Ваш текст содержит %4$d частей, где %3$d предложений подряд начинаются с одного и того же слова.',
+        'Ваш текст содержит %4$d частей, где %3$d предложений подряд начинаются с одного и того же слова.',
+      ],
+      { msgidPlural: 'The text contains %4$d instances where %3$d or more consecutive sentences start with the same word.' },
+    )
+    expect(placeholderFindings('ru', RUSSIAN, 3, e)).toEqual([
+      'error: translation is missing placeholder(s) %4$d',
+    ])
+  })
+
+  it('reads the one Japanese form against the plural', () => {
+    const plural = { msgidPlural: '%d files removed' }
+    expect(placeholderFindings('ja', JAPANESE, 1, entry('One file removed', ['%d 個のファイルを削除しました'], plural))).toEqual([])
+    expect(
+      placeholderFindings('ja', JAPANESE, 1, entry('One file removed', ['1 個のファイルを削除しました'], plural)),
+    ).toEqual(['error: translation is missing placeholder(s) %d'])
+  })
+
+  it('accepts a placeholder the singular has and the plural does not', () => {
+    const e = entry('%s: one file', ['%s: eine Datei', '%d Dateien'], { msgidPlural: '%d files' })
+    expect(placeholderFindings('de', 'nplurals=2; plural=n != 1;', 2, e)).toEqual([])
+  })
+
+  // Without a formula to read, nothing says which numbers a form serves, so the
+  // rule keeps reading msgstr[0] as the singular.
+  it('keeps reading the first form as the singular without a formula', () => {
+    const e = entry('%d item', ['عنصر واحد', '%d عناصر'], { msgidPlural: '%d items' })
+    expect(placeholderFindings('ar', 'nplurals=2;', 2, e)).toEqual([
+      'error: translation is missing placeholder(s) %d',
+    ])
   })
 })
 

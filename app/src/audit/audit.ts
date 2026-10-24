@@ -5,6 +5,7 @@ import { runAgent, type AgentRunOptions } from '../agent/run.js'
 import { auditSrcHash } from '../jobs/hash.js'
 import type { CachedVerdict, VerdictKey } from '../jobs/verdicts.js'
 import type { AuditEntry, Finding, GlossaryEntry, Locale } from '../types.js'
+import type { PluralDistribution } from '../po/plural-forms.js'
 import { automatedChecks, buildAuditPrompt, type AuditCandidate } from './prompt.js'
 import { judgeFix, repairMechanically } from './repair.js'
 import { applyFixPatterns, isSkipFinding } from '../rules/custom.js'
@@ -76,6 +77,10 @@ export interface AuditOptions extends Partial<AgentRunOptions> {
   // The catalogue's Plural-Forms header, set only above two forms, where the
   // prompt carries it and so the verdict key must too.
   pluralForms?: string
+  // How the catalogue's plural formula spreads the numbers over the forms, for
+  // the placeholder rule. Not part of the verdict key: what it changes is a
+  // finding, and the key already covers the rendered findings.
+  pluralDistribution?: PluralDistribution
   glossary: GlossaryEntry[]
   properNouns?: string[]
   // Every wording the memory holds for these sources, resolved by the caller.
@@ -175,6 +180,7 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
     ...(opts.properNouns ? { properNouns: opts.properNouns } : {}),
     ...(opts.tm ? { tm: opts.tm } : {}),
     ...(opts.tmWeak ? { tmWeak: opts.tmWeak } : {}),
+    ...(opts.pluralDistribution ? { pluralDistribution: opts.pluralDistribution } : {}),
   })
 
   const verdicts = new Map<string, Verdict>()

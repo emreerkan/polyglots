@@ -27,9 +27,14 @@ function placeholderPattern(): RegExp {
   return new RegExp(`${PRINTF_PLACEHOLDER}|${BRACE_PLACEHOLDER}`, 'g')
 }
 
+/** Every placeholder in the text, one per occurrence, in the order written. */
+export function placeholdersIn(text: string): string[] {
+  return [...text.replaceAll('%%', '').matchAll(placeholderPattern())].map(([match]) => match)
+}
+
 function countPlaceholders(text: string): Map<string, number> {
   const counts = new Map<string, number>()
-  for (const [match] of text.replaceAll('%%', '').matchAll(placeholderPattern())) {
+  for (const match of placeholdersIn(text)) {
     counts.set(match, (counts.get(match) ?? 0) + 1)
   }
   return counts

@@ -329,6 +329,7 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
   // number of forms is refused, not recorded as one that failed.
   po.requirePluralForms(opts.locale)
   const pluralForms = po.promptPluralForms()
+  const pluralDistribution = po.pluralDistribution()
   const all = po.auditEntries()
   const reviewable = all.filter(submitted)
   // Every event reaches the run log before the caller's handler, so an event
@@ -566,6 +567,7 @@ export async function reviewFile(opts: ReviewOptions): Promise<ReviewSummary> {
         locale: opts.locale,
         nplurals: po.nplurals,
         ...(pluralForms === undefined ? {} : { pluralForms }),
+        ...(pluralDistribution === undefined ? {} : { pluralDistribution }),
         glossary,
         properNouns,
         mcpConfigPath,
