@@ -89,6 +89,86 @@ describe('reviewFile: Plural-Forms', () => {
     expect(seen).toEqual([RU])
   })
 
+  // WordPress core's approved Arabic, where the forms for zero, one and two say
+  // the number in words. The formula is what tells the placeholder rule so; a
+  // header without one leaves msgstr[0] read as the singular, as before.
+  it('reads the placeholders of each plural form by the header\'s formula', async () => {
+    const AR =
+      'nplurals=6; plural=(n == 0) ? 0 : ((n == 1) ? 1 : ((n == 2) ? 2 : ((n % 100 >= 3 && n % 100 <= 10) ? 3 : ((n % 100 >= 11 && n % 100 <= 99) ? 4 : 5))));'
+    const ARABIC = `
+msgid "%d result found."
+msgid_plural "%d results found."
+msgstr[0] "لم يتم العثور على نتائج."
+msgstr[1] "تم العثور على نتيجة واحدة."
+msgstr[2] "تم العثور على نتيجتين."
+msgstr[3] "تم العثور على %d نتائج."
+msgstr[4] "تم العثور على %d نتيجة."
+msgstr[5] "تم العثور على %d نتيجة."
+`
+    replaceGlossary(db, 'ar', [{ locale: 'ar', sourceTerm: 'block', translation: 'مكوّن', partOfSpeech: 'noun' }])
+    const review = async (pluralForms: string) => {
+      await writeFile(file, HEADER.replace('Language: ru', 'Language: ar') + `"Plural-Forms: ${pluralForms}\\n"\n` + ARABIC, 'utf8')
+      return reviewFile({ file, locale: 'ar', db, noAi: true, mcpConfigPath: '' })
+    }
+    // With the formula the spelled-out forms are no error, only a suspect
+    // naming translate.wordpress.org's warning; without it they are an error.
+    const read = await review(AR)
+    expect(read.problems).toBe(0)
+    expect(read.needsReview).toBe(1)
+    const unread = await review('nplurals=6;')
+    expect(unread.problems).toBe(1)
+    expect(unread.byRule).toMatchObject({ placeholder: 1 })
+  })
+
+  // With a model, the same entry is put to it with translate.wordpress.org's
+  // warning as a suspect, and the model may clear it like any other suspect.
+  // Without a formula the old error stands, which no model can clear.
+  it('lets the model weigh the warning translate.wordpress.org would give a spelled-out form', async () => {
+    const AR =
+      'nplurals=6; plural=(n == 0) ? 0 : ((n == 1) ? 1 : ((n == 2) ? 2 : ((n % 100 >= 3 && n % 100 <= 10) ? 3 : ((n % 100 >= 11 && n % 100 <= 99) ? 4 : 5))));'
+    const ARABIC = `
+msgid "%d result found."
+msgid_plural "%d results found."
+msgstr[0] "لم يتم العثور على نتائج."
+msgstr[1] "تم العثور على نتيجة واحدة."
+msgstr[2] "تم العثور على نتيجتين."
+msgstr[3] "تم العثور على %d نتائج."
+msgstr[4] "تم العثور على %d نتيجة."
+msgstr[5] "تم العثور على %d نتيجة."
+`
+    replaceGlossary(db, 'ar', [{ locale: 'ar', sourceTerm: 'block', translation: 'مكوّن', partOfSpeech: 'noun' }])
+    const review = async (pluralForms: string) => {
+      await writeFile(file, HEADER.replace('Language: ru', 'Language: ar') + `"Plural-Forms: ${pluralForms}\\n"\n` + ARABIC, 'utf8')
+      const asked: { severity: string; message: string }[][] = []
+      const summary = await reviewFile({
+        file,
+        locale: 'ar',
+        db,
+        fresh: true,
+        adjudicate: async (batch) => {
+          asked.push(...batch.map((c) => (c as { hints: { severity: string; message: string }[] }).hints))
+          return batch.map((c) => ({ id: c.id, problem: false, categories: [], reason: 'ok' }))
+        },
+      })
+      return { summary, asked }
+    }
+    const read = await review(AR)
+    expect(read.asked).toEqual([
+      [
+        {
+          rule: 'placeholder',
+          severity: 'suspect',
+          message:
+            'translate.wordpress.org warns about placeholder(s) %d in msgstr[0], though the form is right for the numbers its plural formula serves',
+        },
+      ],
+    ])
+    expect(read.summary.problems).toBe(0)
+    expect(read.summary.approvable).toBe(1)
+    const unread = await review('nplurals=6;')
+    expect(unread.summary.problems).toBe(1)
+  })
+
   // The header is in the prompt, so it is in the verdict key. A cache that left
   // it out would serve a verdict reached under one plural expression to a prompt
   // carrying another, and nothing in the output would say so. The control run
