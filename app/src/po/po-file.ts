@@ -4,6 +4,7 @@ import { basename, dirname, join } from 'node:path'
 import { po } from 'gettext-parser'
 import type { GetTextTranslation, GetTextTranslations } from 'gettext-parser'
 import type { AuditEntry, Locale, TranslationUnit } from '../types.js'
+import { pluralDistribution, type PluralDistribution } from './plural-forms.js'
 
 export type UnitMode = 'pending' | 'all'
 
@@ -235,6 +236,11 @@ export class PoFile {
   /** The header as the review prompts render it: only above two forms. */
   promptPluralForms(): string | undefined {
     return this.nplurals > 2 ? this.pluralForms : undefined
+  }
+
+  /** How the header's formula spreads the numbers over the plural forms. */
+  pluralDistribution(): PluralDistribution | undefined {
+    return pluralDistribution(this.pluralForms, this.nplurals)
   }
 
   get headers(): Record<string, string> {

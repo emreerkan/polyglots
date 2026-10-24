@@ -37,14 +37,27 @@ const NUMBERED = /^%\d+\$/
 // written called that correct translation broken. A text that mixes the two
 // forms is compared as written: which argument a bare %s takes after a
 // numbered one is not something to guess at.
-function countPlaceholders(text: string): Map<string, { n: number; shown: string }> {
-  const found = [...text.replaceAll('%%', '').matchAll(placeholderPattern())].map(([match]) => match)
+/** Every placeholder in the text, one per occurrence, in the order written. */
+export function placeholdersIn(text: string): string[] {
+  return [...text.replaceAll('%%', '').matchAll(placeholderPattern())].map(([match]) => match)
+}
+
+/**
+ * Every placeholder in the text as the comparison reads it, one per
+ * occurrence, beside its spelling: in a text whose printf placeholders are all
+ * unnumbered, the k-th is read as %k$.
+ */
+export function placeholderKeys(text: string): Array<{ key: string; shown: string }> {
+  const found = placeholdersIn(text)
   const printf = found.filter((ph) => ph.startsWith('%'))
   const number = printf.length > 0 && !printf.some((ph) => NUMBERED.test(ph))
-  const counts = new Map<string, { n: number; shown: string }>()
   let k = 0
-  for (const ph of found) {
-    const key = number && ph.startsWith('%') ? `%${++k}$${ph.slice(1)}` : ph
+  return found.map((ph) => ({ key: number && ph.startsWith('%') ? `%${++k}$${ph.slice(1)}` : ph, shown: ph }))
+}
+
+function countPlaceholders(text: string): Map<string, { n: number; shown: string }> {
+  const counts = new Map<string, { n: number; shown: string }>()
+  for (const { key, shown: ph } of placeholderKeys(text)) {
     const seen = counts.get(key)
     counts.set(key, { n: (seen?.n ?? 0) + 1, shown: ph })
   }
@@ -59,7 +72,7 @@ function countPlaceholders(text: string): Map<string, { n: number; shown: string
  */
 export function movedPlaceholders(source: string, draft: string): string[] | undefined {
   const printf = (text: string) =>
-    [...text.replaceAll('%%', '').matchAll(placeholderPattern())].map(([match]) => match).filter((ph) => ph.startsWith('%'))
+    placeholdersIn(text).filter((ph) => ph.startsWith('%'))
   const from = printf(source)
   const to = printf(draft)
   if (from.length < 2 || [...from, ...to].some((ph) => NUMBERED.test(ph))) return undefined

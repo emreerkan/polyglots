@@ -13,6 +13,7 @@ Entries say what changed. For why and how, read the commit.
 ### Fixed
 
 - A rules mistake or text pattern written without a nukta or an accent no longer matches the letter that has one.
+- Review's placeholder check reads plural forms by the catalogue's Plural-Forms formula: every form is checked against the plural, and a form for a single number may say that number in words, as a suspect where translate.wordpress.org still warns.
 
 ## [1.2.1] - 2026-10-28
 
