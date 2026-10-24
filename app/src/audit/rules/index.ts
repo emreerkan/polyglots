@@ -6,7 +6,8 @@ import { loadLocaleRules } from '../../rules/load.js'
 import { CUSTOM_RULE } from '../../rules/names.js'
 import { runRegexOps, skippedFor, type RegexOp } from '../../rules/sandbox.js'
 import type { CustomPattern, SentenceEndRules } from '../../rules/schema.js'
-import { missingPlaceholders } from '../../draft/placeholders.js'
+import { missingPlaceholders, placeholdersIn } from '../../draft/placeholders.js'
+import type { PluralDistribution } from '../../po/plural-forms.js'
 import {
   acronymStem,
   capitalizedWords,
@@ -52,6 +53,9 @@ export interface RuleContext {
   // the same reason. Absent when the file says nothing about it, which leaves
   // the generic Unicode check alone.
   sentenceEnd?: CompiledSentenceEnd
+  // How the catalogue's plural formula spreads the numbers over the forms.
+  // Absent when the caller had no formula to read.
+  pluralDistribution?: PluralDistribution
 }
 
 export interface BuildRuleContextOptions {
@@ -64,6 +68,7 @@ export interface BuildRuleContextOptions {
   properNouns?: string[]
   tm?: Map<string, readonly string[]>
   tmWeak?: ReadonlySet<string>
+  pluralDistribution?: PluralDistribution
 }
 
 const DEFAULT_BRANDS = [
@@ -175,6 +180,7 @@ export function buildRuleContext(opts: BuildRuleContextOptions): RuleContext {
     translationsByMsgid,
     ...(customPatterns && customPatterns.length > 0 ? { customPatterns } : {}),
     ...(sentenceEnd ? { sentenceEnd } : {}),
+    ...(opts.pluralDistribution ? { pluralDistribution: opts.pluralDistribution } : {}),
   }
 }
 
@@ -205,16 +211,129 @@ function tagCounts(value: string): Map<string, number> {
   return counts
 }
 
-const placeholder: Rule = (entry) => {
-  const translation = entry.msgstr.filter(Boolean)
-  if (translation.length === 0) return []
-  const sources = entry.msgidPlural ? [entry.msgid, entry.msgidPlural] : [entry.msgid]
+interface PlaceholderCheck {
+  text: string
+  // The wording whose every placeholder the form must carry.
+  source: string
+  // A placeholder only this one has is no addition either: the singular,
+  // formatted with the same arguments as the plural.
+  alsoFrom?: string
+  // The formula sends this form a single number, which it may say in words
+  // in place of its placeholder.
+  mayOmit: boolean
+}
+
+/**
+ * Whether what a form for a single number left out is that number.
+ *
+ * gettext lets such a form drop any placeholder; this lets it drop one. Saying
+ * the number in words loses one argument, the number, and a form that also
+ * lost the name in "%s has %d items" has lost something no formula excuses.
+ * Occurrences are counted, so a form that drops both %d of "%d items and %d
+ * selected" has lost two.
+ *
+ * When the plural formats a number (%d, %u, %f and the other numeric
+ * conversions), the number is one of those, so a form that keeps them and drops
+ * a %s has dropped a name or a title instead. Core passes many counts through
+ * number_format_i18n as %s, so with no numeric conversion in the plural any one
+ * placeholder may go.
+ *
+ * A placeholder without a position takes the next argument in order, so only
+ * the last of those can go: dropping the %d of "%d items in %s" leaves %s
+ * printing the number. Positioned ones (%1$d) can go wherever they stand.
+ *
+ * What it cannot tell apart: two numbers of the same kind, as in "Sold %1$d
+ * items in the last %2$d days", or a count and a title both written %s. Either
+ * one may go there.
+ */
+function spellsOutTheNumber(source: string, text: string): boolean {
+  const written = placeholdersIn(source)
+  const kept = placeholdersIn(text)
+  const lost = written.filter((placeholder) => {
+    const at = kept.indexOf(placeholder)
+    if (at === -1) return true
+    kept.splice(at, 1)
+    return false
+  })
+  if (lost.length !== 1) return false
+  const gone = lost[0]!
+  const isNumber = (placeholder: string) => placeholder.startsWith('%') && /[bdeEfFgGouxX]$/.test(placeholder)
+  if (!isNumber(gone) && written.some(isNumber)) return false
+  const inOrder = written.filter((placeholder) => placeholder.startsWith('%') && !/^%\d+\$/.test(placeholder))
+  return !inOrder.includes(gone) || inOrder.at(-1) === gone
+}
+
+/**
+ * Which source each filled form answers to.
+ *
+ * With the catalogue's formula, the way msgfmt reads it: every form against
+ * msgid_plural, the wording that covers every number, and a form the formula
+ * uses for one number alone free to say that number in words. The position of a
+ * form says nothing about its numbers. Russian msgstr[0] serves 21 and 31 as
+ * well as one, and Japanese has a single form for every number, so reading
+ * msgstr[0] as the English singular passed a Russian form that would print
+ * "one file" for 21 files, and reported the %d a Japanese form needs as an
+ * addition. Arabic says zero, one and two in words, and each of those forms was
+ * an error the model could not clear.
+ *
+ * Without a formula nothing says which numbers a form serves, and msgstr[0] is
+ * read as the singular, as it always was.
+ */
+function placeholderChecks(entry: AuditEntry, ctx: RuleContext): PlaceholderCheck[] {
+  const plural = entry.msgidPlural
+  const single = ctx.pluralDistribution?.singleNumber
+  if (plural && single) {
+    return entry.msgstr.flatMap((text, form) =>
+      text ? [{ text, source: plural, alsoFrom: entry.msgid, mayOmit: single.has(form) }] : [],
+    )
+  }
+  const sources = plural ? [entry.msgid, plural] : [entry.msgid]
+  return entry.msgstr
+    .filter(Boolean)
+    .map((text, i) => ({ text, source: sources[Math.min(i, sources.length - 1)]!, mayOmit: false }))
+}
+
+/**
+ * What translate.wordpress.org will say about a plural entry this rule accepts.
+ *
+ * GlotPress compares the form that serves 1 with the singular and every other
+ * form with the plural, or every form with the plural when the language has only
+ * one (GP_Translation_Warnings::check), and lets no form drop a placeholder. So
+ * it warns on forms gettext's reading accepts: the Arabic forms for zero, one
+ * and two that say their number in words, or a Russian msgstr[0] that keeps the
+ * %d it needs for 21. Calling those errors would reject correct translations
+ * and have the model write the %d back; passing them without a word would have
+ * the model judge them without knowing translate.wordpress.org disagrees. They
+ * are a suspect: the model weighs the warning and may clear it like any other,
+ * and under --no-ai the entry is listed for a person to look at.
+ *
+ * The placeholders are read with this tool's pattern, not GlotPress's, which
+ * skips widths and flags such as %5d; on those rare shapes the warning named
+ * here is this tool's reading of what GlotPress compares.
+ */
+function glotpressWarning(entry: AuditEntry, plural: string, ctx: RuleContext, formForOne: number): Finding | undefined {
+  for (const [form, text] of entry.msgstr.entries()) {
+    if (!text) continue
+    const source = ctx.nplurals > 1 && form === formForOne ? entry.msgid : plural
+    const differ = [...new Set([...missingPlaceholders(source, text), ...missingPlaceholders(text, source)])]
+    if (differ.length === 0) continue
+    return {
+      rule: 'placeholder',
+      severity: 'suspect',
+      message: `translate.wordpress.org warns about placeholder(s) ${differ.join(', ')} in msgstr[${form}], though the form is right for the numbers its plural formula serves`,
+    }
+  }
+  return undefined
+}
+
+const placeholder: Rule = (entry, ctx) => {
   const findings: Finding[] = []
 
-  for (const [i, text] of translation.entries()) {
-    const source = sources[Math.min(i, sources.length - 1)]!
-    const missing = missingPlaceholders(source, text)
-    const added = missingPlaceholders(text, source)
+  for (const { text, source, alsoFrom, mayOmit } of placeholderChecks(entry, ctx)) {
+    const lost = missingPlaceholders(source, text)
+    const missing = mayOmit && spellsOutTheNumber(source, text) ? [] : lost
+    const beyondSingular = alsoFrom === undefined ? undefined : missingPlaceholders(text, alsoFrom)
+    const added = missingPlaceholders(text, source).filter((ph) => beyondSingular?.includes(ph) ?? true)
     if (missing.length > 0) {
       findings.push({
         rule: 'placeholder',
@@ -229,6 +348,11 @@ const placeholder: Rule = (entry) => {
         message: `translation adds placeholder(s) ${added.join(', ')} the source does not have`,
       })
     }
+  }
+  const distribution = ctx.pluralDistribution
+  if (findings.length === 0 && entry.msgidPlural && distribution) {
+    const warning = glotpressWarning(entry, entry.msgidPlural, ctx, distribution.formForOne)
+    if (warning) findings.push(warning)
   }
   return findings.slice(0, 1)
 }
