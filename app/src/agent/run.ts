@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { findOnPath, killTree, spawnPlan, type SpawnPlan } from '../spawn-plan.js'
 import { agyLogsBetween } from '../logs/debug.js'
@@ -94,6 +95,41 @@ export function flushDebugCaptures(): void {
       // ignored: see debugStem
     }
   }
+}
+
+// Where each agent call runs. Not the folder polyglots was started in, which
+// is usually the one holding the .po files under review: an agent whose own
+// settings approve every tool writes its scratch files wherever it is started,
+// and antigravity, told by its prompt that there is no filesystem, left two
+// dozen Python scripts and JSON files there in one morning's reviews. Its
+// flags cannot stop that (--sandbox is bypassed on the model's say-so when
+// always-proceed approves it, and --mode plan still writes), so the files are
+// contained instead: an empty folder per call, removed when the call closes.
+// Per call rather than per run, so two batches never see each other's files.
+//
+// A call this process never sees close, because the process ended first, is
+// removed by the exit hook; one ended by a signal is left in the system's
+// temporary folder, which is where a leftover belongs.
+const workDirs = new Set<string>()
+let workDirsHooked = false
+
+function removeWorkDir(dir: string): void {
+  workDirs.delete(dir)
+  try {
+    rmSync(dir, { recursive: true, force: true })
+  } catch {
+    // A folder Windows still holds open is the system's to clear.
+  }
+}
+
+function makeWorkDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'polyglots-agent-'))
+  workDirs.add(dir)
+  if (!workDirsHooked) {
+    workDirsHooked = true
+    process.on('exit', () => [...workDirs].forEach(removeWorkDir))
+  }
+  return dir
 }
 
 export function buildAgentArgs(jsonSchema: unknown, opts: AgentRunOptions): string[] {
@@ -192,8 +228,10 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
     if (stem) saveDebug(`${stem}.prompt.txt`, (path) => writeFileSync(path, prompt))
     const env = childEnv(process.env)
     const plan = agentSpawnPlan(command, argv, env, process.platform)
+    // A caller's own folder is kept, and is the caller's to clear.
+    const workDir = opts.cwd === undefined ? makeWorkDir() : undefined
     const child = spawn(plan.file, plan.args, {
-      cwd: opts.cwd,
+      cwd: opts.cwd ?? workDir,
       env,
       shell: plan.shell,
       windowsHide: true,
@@ -325,6 +363,7 @@ export function spawnAgent(argv: string[], prompt: string, opts: AgentRunOptions
       // says why it hung.
       debugFlushers.delete(flushDebug)
       flushDebug()
+      if (workDir) removeWorkDir(workDir)
       if (killTimer) clearTimeout(killTimer)
       if (answeredTimer) clearTimeout(answeredTimer)
       if (settled) return

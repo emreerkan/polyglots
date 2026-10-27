@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync, realpathSync } from 'node:fs'
+import { docsUrl } from './docs-links.js'
 import { basename } from 'node:path'
 import { createInterface } from 'node:readline'
 import { Writable } from 'node:stream'
@@ -1090,6 +1091,9 @@ async function runDoctor(cli: Cli, flags: { json?: boolean; live?: boolean }): P
     // about to switch to one.
     for (const q of a.quota?.lines ?? []) cli.out(hintLine(p, `quota: ${q.group} ${q.remaining}% left (${q.limit}, resets ${q.resetsAt})`))
     for (const note of a.notes) cli.out(hintLine(p, `note: ${note}`))
+    if (a.approvesCommands) {
+      cli.out(warnLine(p, `antigravity runs every shell command without asking (toolPermission is always-proceed), so a string in a reviewed file can run one; see ${docsUrl('antigravity')}`))
+    }
     if (a.provider === 'codex' && a.path !== undefined) {
       if (codexBelowMinimum(a.version)) {
         cli.out(warnLine(p, `codex ${a.version?.match(/\d+\.\d+\.\d+/)?.[0]} is older than ${MIN_CODEX_VERSION}; polyglots was built against ${MIN_CODEX_VERSION} or later`))

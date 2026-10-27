@@ -20,6 +20,9 @@ Entries say what changed. For why and how, read the commit.
 - Every locale is re-reviewed once: the new universal rule moves the review configuration hash.
 - `rules fetch` takes the newest rules entry this polyglots can read when polyglots-data lists one per schema.
 - The rules builder declares the lowest schema a file needs instead of the newest.
+- Each agent call runs in an empty temporary folder, removed afterwards, so files an agent writes never reach the folder under review.
+- antigravity runs with `--sandbox`.
+- `doctor` warns when antigravity's `toolPermission` is `always-proceed` without a deny rule for commands.
 
 ### Fixed
 

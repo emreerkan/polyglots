@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { agentSpawnPlan, childEnv } from '../../src/agent/run.js'
+import { agentSpawnPlan, childEnv, spawnAgent } from '../../src/agent/run.js'
 
 describe('childEnv', () => {
   // The values a Claude Code session exported into this shell, as observed on
@@ -76,5 +76,44 @@ describe('agentSpawnPlan', () => {
   })
   it('runs the bin as named elsewhere', () => {
     expect(agentSpawnPlan('claude', ['-p'], { PATH: bin }, 'darwin')).toEqual({ file: 'claude', args: ['-p'], shell: false })
+  })
+})
+
+// A review batch is text from plugin authors, and an agent whose own settings
+// approve every tool will write files wherever it is started: antigravity left
+// two dozen scripts and JSON files beside the .po files under review. Each
+// call gets an empty folder of its own, gone when the call ends.
+describe('spawnAgent working folder', () => {
+  let dir: string
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'polyglots-agent-cwd-'))
+  })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+  function fakeAgent(): string {
+    const bin = join(dir, 'agent')
+    writeFileSync(
+      bin,
+      [
+        '#!/usr/bin/env node',
+        "require('fs').writeFileSync('stray.json', '{}')",
+        "process.stdin.resume(); process.stdin.on('end', () => process.stdout.write(process.cwd()))",
+      ].join('\n'),
+    )
+    chmodSync(bin, 0o755)
+    return bin
+  }
+
+  it('starts the agent in an empty folder of its own and removes it afterwards', async () => {
+    const { stdout } = await spawnAgent([], 'prompt', { provider: 'claude', bin: fakeAgent(), mcpConfigPath: '' })
+    expect(stdout.startsWith(realpathSync(tmpdir()))).toBe(true)
+    expect(existsSync(join(process.cwd(), 'stray.json'))).toBe(false)
+    expect(existsSync(stdout)).toBe(false)
+  })
+
+  it('gives each call a folder of its own', async () => {
+    const bin = fakeAgent()
+    const [a, b] = await Promise.all([1, 2].map(() => spawnAgent([], 'prompt', { provider: 'claude', bin, mcpConfigPath: '' })))
+    expect(a!.stdout).not.toBe(b!.stdout)
   })
 })

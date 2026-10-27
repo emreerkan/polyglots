@@ -94,6 +94,12 @@ describe('antigravity arguments', () => {
     expect(args).not.toContain('--dangerously-skip-permissions')
   })
 
+  // A command the sandbox refuses then needs an approval to bypass it (see
+  // buildArgs).
+  it('runs in its terminal sandbox', () => {
+    expect(args).toContain('--sandbox')
+  })
+
   /**
    * Its limit sits just inside the caller's so that it, not the kill, decides a
    * timeout and gets to explain it. Given the same deadline both fired at once

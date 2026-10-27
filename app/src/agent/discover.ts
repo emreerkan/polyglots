@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { findOnPath, killTree, spawnPlan } from '../spawn-plan.js'
 import type { ReviewProvider } from '../types.js'
 import {
+  antigravityApprovesCommands,
   configuredModel,
   PROVIDERS,
   providerSpec,
@@ -46,6 +47,9 @@ export interface AgentStatus {
   reason?: string
   // Unknown sign-in or setup, and an override in use. Never a reason.
   notes: string[]
+  // antigravity only: its settings run every command unasked (see
+  // antigravityApprovesCommands). Reported by doctor, never a reason.
+  approvesCommands?: true
   // Only with `live`.
   live?: { ok: boolean; ms: number; error?: string }
   // Antigravity's remaining quota by group, only with `account` and only when
@@ -195,7 +199,15 @@ async function probeOne(provider: ReviewProvider, ctx: ProbeCtx, live: boolean):
   if (source !== 'default') notes.push(`binary from ${source}`)
   const setup: SetupStatus = spec.checkSetup ? spec.checkSetup(ctx.home) : { state: 'ok' }
   const model = configuredModel(provider, ctx.home)
-  const base = { provider, bin, binSource: source, setup, notes, ...(model === undefined ? {} : { model }) }
+  const base = {
+    provider,
+    bin,
+    binSource: source,
+    setup,
+    notes,
+    ...(model === undefined ? {} : { model }),
+    ...(provider === 'antigravity' && antigravityApprovesCommands(ctx.home) ? { approvesCommands: true as const } : {}),
+  }
   const notChecked: AuthStatus = { state: 'unknown', detail: 'not checked' }
 
   const path = findOnPath(bin, ctx.env, ctx.platform)

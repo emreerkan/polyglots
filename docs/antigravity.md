@@ -87,6 +87,43 @@ rules to stop the refusals, and do not run antigravity with
 `--dangerously-skip-permissions`: either hands a shell to a process reading
 untrusted text.
 
+### If you use `always-proceed`
+
+The allow rules above only matter while antigravity asks before other tools.
+With `"toolPermission": "always-proceed"` in the same file, it runs commands
+and writes files without asking, during a review too, and a string in the
+file under review can tell it to run one. `polyglots doctor` says so when
+this is the case.
+
+polyglots limits what that can do, but cannot stop it:
+
+- Each call starts in an empty folder of its own, which is removed when the
+  call ends. Files the agent writes there never reach the folder you
+  reviewed in.
+- Antigravity runs in its terminal sandbox (`--sandbox`). A command the
+  sandbox refuses can still be run outside it on the model's request, and
+  `always-proceed` grants that request without asking.
+
+To block it, add deny rules. Deny rules apply in every mode:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp(polyglots/glossary_lookup)",
+      "mcp(polyglots/consistency_lookup)",
+      "mcp(polyglots/tm_lookup)"
+    ],
+    "deny": ["command(*)", "write_file(*)"]
+  }
+}
+```
+
+The file is antigravity's own, not one for polyglots alone, so these rules
+also block commands and file writes in your own antigravity sessions. If
+that is not what you want, set `toolPermission` back to `request-review`,
+the default. A review needs nothing from it beyond the three allow rules.
+
 ## 3. Check it
 
 ```

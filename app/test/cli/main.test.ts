@@ -1113,6 +1113,22 @@ describe('doctor', () => {
     return { fn, calls }
   }
 
+  describe('antigravity approving every command', () => {
+    it('says so, with where to read about it, and leaves the exit code alone', async () => {
+      const h = harness()
+      const code = await h.run(['doctor'], { discoverAgents: fakeDiscover([agent('claude'), agent('antigravity', { approvesCommands: true })]).fn })
+      expect(code).toBe(0)
+      expect(h.stdout.text).toContain('toolPermission is always-proceed')
+      expect(h.stdout.text).toContain('ada.tools/polyglots/docs/antigravity/')
+    })
+
+    it('says nothing when it does not', async () => {
+      const h = harness()
+      await h.run(['doctor'], { discoverAgents: fakeDiscover([agent('claude'), agent('antigravity')]).fn })
+      expect(h.stdout.text).not.toContain('always-proceed')
+    })
+  })
+
   describe('codex', () => {
     const codexRow = (version: string) => agent('codex', { bin: 'codex', path: '/opt/bin/codex', version })
 

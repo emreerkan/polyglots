@@ -362,6 +362,29 @@ describe('antigravity sign-in and setup', () => {
   })
 })
 
+// Said by doctor only. A review batch is text from plugin authors, and with
+// every tool approved a string in it can have the agent run a command.
+describe('antigravity approving every command', () => {
+  it('is reported for always-proceed with no deny rule for commands', async () => {
+    agySettings({ toolPermission: 'always-proceed', permissions: { allow: RULES } })
+    expect(statusOf(await discover(fakeExec()), 'antigravity').approvesCommands).toBe(true)
+  })
+
+  it('is not reported once commands are denied, or under any other mode', async () => {
+    agySettings({ toolPermission: 'always-proceed', permissions: { allow: RULES, deny: ['command(*)'] } })
+    expect(statusOf(await discover(fakeExec()), 'antigravity').approvesCommands).toBeUndefined()
+    agySettings({ toolPermission: 'request-review', permissions: { allow: RULES } })
+    expect(statusOf(await discover(fakeExec()), 'antigravity').approvesCommands).toBeUndefined()
+    agySettings({ permissions: { allow: RULES } })
+    expect(statusOf(await discover(fakeExec()), 'antigravity').approvesCommands).toBeUndefined()
+  })
+
+  it('leaves the provider usable', async () => {
+    agySettings({ toolPermission: 'always-proceed', permissions: { allow: RULES } })
+    expect(statusOf(await discover(fakeExec()), 'antigravity').usable).toBe(true)
+  })
+})
+
 describe('codex', () => {
   const codexExec = (login: Partial<ProbeResult>) =>
     fakeExec({

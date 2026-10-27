@@ -370,6 +370,17 @@ const antigravity: ProviderSpec = {
     // was reported with an empty stderr. Its own default is 0, meaning wait
     // forever, so leaving the flag off would put the whole burden on the kill.
     args.push('--print-timeout', printTimeout(opts.timeoutMs ?? antigravity.defaultTimeoutMs))
+    // A review needs no shell, and the prompt saying so did not stop Gemini
+    // Flash writing and running Python scripts in the folder it was started
+    // in. In the sandbox a command fails with "Operation not permitted", and
+    // the model has to ask to run it outside. Tried on 1.4.8: with
+    // toolPermission always-proceed that request is granted unasked, so this
+    // stops nothing there, and file writes go through either way, which is
+    // what the per-call folder in run.ts is for. Under the default
+    // request-review a bypass needs an approval that print mode has nobody to
+    // give; that is how it reads, not something tried. --mode plan was tried
+    // too and blocked nothing.
+    args.push('--sandbox')
     if (opts.model) args.push('--model', opts.model)
     return args
   },
@@ -531,6 +542,31 @@ function antigravityRuleSetup(home: string): SetupStatus {
   const missing = ANTIGRAVITY_RULES.filter((rule) => !rules.some((given) => antigravityRuleCovers(given, rule)))
   if (missing.length === 0) return { state: 'ok' }
   return { state: 'missing', detail: `missing permission rules: ${missing.join(', ')}` }
+}
+
+/**
+ * Whether antigravity's own settings run every shell command without asking:
+ * toolPermission always-proceed, with no deny rule for commands. A review
+ * batch is text from plugin authors, so a string in one can then have the
+ * agent run a command on the reviewer's machine; --sandbox does not stop it,
+ * because the bypass it asks for is approved the same way. Deny rules apply
+ * in every mode, which is why one for command(*) is the answer, but they live
+ * in the same global file and also bind the person's own agy sessions. So it
+ * is the person's call, said by doctor and in the docs and never before a
+ * run. An unreadable file says nothing: the setup check reports that.
+ */
+export function antigravityApprovesCommands(home: string): boolean {
+  try {
+    const parsed = JSON.parse(readFileSync(join(antigravityDir(home), 'settings.json'), 'utf8')) as {
+      toolPermission?: unknown
+      permissions?: { deny?: unknown }
+    }
+    if (parsed?.toolPermission !== 'always-proceed') return false
+    const deny = parsed.permissions?.deny
+    return !(Array.isArray(deny) && deny.includes('command(*)'))
+  } catch {
+    return false
+  }
 }
 
 /**
