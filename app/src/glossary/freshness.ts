@@ -193,6 +193,19 @@ export async function checkGlossaries(opts: GlossaryCheckOptions = {}): Promise<
   }
 }
 
+/**
+ * The stale glossaries not synced again since the check read their sync
+ * times. The check reads them when a command starts and the notice is said
+ * when it ends, so without this a glossary sync ended by asking for the sync
+ * it had just done, and so did the app after a sync from its menu. A locale
+ * no longer found keeps its notice: a read that failed is not a sync.
+ */
+export function stillStale(stale: StaleGlossary[], synced: () => Array<{ locale: string; syncedAt: number }> = defaultSynced): StaleGlossary[] {
+  if (stale.length === 0) return []
+  const now = new Map(synced().map((s) => [s.locale, s.syncedAt]))
+  return stale.filter((s) => !((now.get(s.locale) ?? s.syncedAt) > s.syncedAt))
+}
+
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10)
 
 /** The line said at the end of a command for one stale glossary. */

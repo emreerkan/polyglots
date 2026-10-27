@@ -8,6 +8,7 @@ import {
   checkGlossaries,
   glossaryCheckFile,
   glossaryNotice,
+  stillStale,
   type GlossaryCheckOptions,
 } from '../../src/glossary/freshness.js'
 import { CHECK_EVERY_MS, RETRY_AFTER_MS } from '../../src/update/index.js'
@@ -147,6 +148,27 @@ describe('checkGlossaries', () => {
   it('asks once when two checks start together', async () => {
     await Promise.all([checkGlossaries(opts(SYNCED + DAY)), checkGlossaries(opts(SYNCED + DAY))])
     expect(paths).toHaveLength(1)
+  })
+})
+
+// The check reads the sync times when a command starts and is said when it
+// ends, so a glossary sync would otherwise end by asking for itself.
+describe('stillStale', () => {
+  const stale = { locale: 'tr', syncedAt: SYNCED, changedAt: CHANGED }
+
+  it('drops a glossary synced again since the check read it', () => {
+    expect(stillStale([stale], () => [{ locale: 'tr', syncedAt: CHANGED + DAY }])).toEqual([])
+  })
+
+  it('keeps one whose sync has not moved, or that is no longer found', () => {
+    expect(stillStale([stale], () => [{ locale: 'tr', syncedAt: SYNCED }])).toEqual([stale])
+    expect(stillStale([stale], () => [])).toEqual([stale])
+  })
+
+  it('reads nothing when nothing is stale', () => {
+    expect(stillStale([], () => {
+      throw new Error('read')
+    })).toEqual([])
   })
 })
 

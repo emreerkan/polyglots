@@ -21,6 +21,10 @@ Entries say what changed. For why and how, read the commit.
 - `rules fetch` takes the newest rules entry this polyglots can read when polyglots-data lists one per schema.
 - The rules builder declares the lowest schema a file needs instead of the newest.
 
+### Fixed
+
+- `glossary sync`, and the app after a sync from its menu, no longer end by asking for the sync just done.
+
 ## [1.1.0] - 2026-10-19
 
 ### Added

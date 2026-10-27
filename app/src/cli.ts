@@ -84,7 +84,7 @@ import { VERSION } from './version.js'
 import { previewUsagePayload, resetUsageState, sendUsageInBackground, usageStatus, usageStateFile } from './usage/index.js'
 import { checkForUpdate, updateCheckEnabled, updateNotice } from './update/index.js'
 import { debugEnabled } from './logs/debug.js'
-import { checkGlossaries, glossaryNotice, type StaleGlossary } from './glossary/freshness.js'
+import { checkGlossaries, glossaryNotice, stillStale, type StaleGlossary } from './glossary/freshness.js'
 import { offerProblemReport, type ReportContext, type SendResult } from './cli/problem-report.js'
 import { providerVersion, reportModel } from './report/offer.js'
 import { DEFAULT_REPORTS_URL, sendReport } from './report/send.js'
@@ -1927,8 +1927,10 @@ interface GlossaryCheck {
 }
 
 function sayGlossary(cli: Cli, check: GlossaryCheck | undefined): void {
-  for (const stale of check?.stale ?? []) {
-    cli.err(cli.ui.err.paint('warn', `${cli.ui.err.glyphs.warn} ${glossaryNotice(stale)}`))
+  // Read again here: a sync during the command, glossary sync itself or the
+  // app's menu, has made the check's answer out of date.
+  for (const glossary of stillStale(check?.stale ?? [])) {
+    cli.err(cli.ui.err.paint('warn', `${cli.ui.err.glyphs.warn} ${glossaryNotice(glossary)}`))
   }
 }
 

@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream'
 import { main, type CliDeps } from '../../src/cli.js'
 import { saveConfig } from '../../src/config.js'
 import type { StaleGlossary } from '../../src/glossary/freshness.js'
+import { openDb, replaceGlossary } from '../../src/storage/index.js'
 
 interface Sink {
   text: string
@@ -77,6 +78,19 @@ describe('the glossary notice', () => {
       },
     })
     expect(thrown.code).toBe(0)
+  })
+
+  // As glossary sync itself does: the check read the old sync time when the
+  // command started, and the copy is current by the time it ends.
+  it('is not printed for a glossary synced while the command ran', async () => {
+    const sync = async () => {
+      const db = openDb()
+      replaceGlossary(db, 'tr', [{ locale: 'tr', sourceTerm: 'plugin', translation: 'eklenti' }])
+      db.close()
+      return writeStats()
+    }
+    const { err } = await run(['stats', '--out', 'x.html'], { writeStats: sync })
+    expect(err).not.toContain('glossary')
   })
 
   it('is printed after the interactive app closes', async () => {
