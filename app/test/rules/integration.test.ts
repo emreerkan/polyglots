@@ -58,15 +58,17 @@ const hashTr = () => configHash({ locale: 'tr', glossary: [], properNouns: [] })
 //
 // The four review hashes moved once more, on purpose, when date-format joined
 // the universal rules: a verdict cached before it ran never saw a broken date
-// format, so every locale re-reviews once. The translate hashes did not move.
+// format, so every locale re-reviews once. The translate hashes did not move
+// for that, but did in the same release, when the agent's rules gained the
+// review prompt's line saying there is no shell and no filesystem.
 const BEFORE = {
   trEmpty: '258589bbfbb38a37',
   trGloss: '39a20f1f70224c63',
   de: '9899ccd1d0cafbfb',
-  deTranslate: 'd8f22a79e6376085',
-  trTranslate: '0024447086e462a4',
+  deTranslate: '8487179fef88c973',
+  trTranslate: '620af8f4cb9c3a8e',
   sv: '0388950fc4fa589a',
-  svTranslate: '769201ccf76bc57b',
+  svTranslate: '98152972e0f05290',
 }
 
 describe('without a rules file', () => {

@@ -11,10 +11,13 @@ import type { Locale, ReviewInput } from '../types.js'
 // 313 made 50 to 86 tool calls a batch this way, against 3 to 8 for a review
 // batch that carries the same terms inline. consistency_lookup is the one
 // that reaches translate.wordpress.org, which answered that run with a 429,
-// so it is kept for the case nothing on the entry settles.
+// so it is kept for the case nothing on the entry settles. The last line is
+// the review prompt's own: Gemini Flash, with antigravity's settings
+// approving every tool, wrote and ran scripts in the folder it was started in.
 const TOOL_RULES = (language: string) => `- The official WordPress ${language} glossary is binding. Every glossary term an entry's source contains is listed on that entry under "glossary", with its approved translation, so do not look those up. Call glossary_lookup only for a term you need that is not listed there.
 - Call tm_lookup only when you are unsure of a wording and want to see how the locale worded similar strings; not for every entry.
 - Call consistency_lookup only when neither the entry's glossary nor the translation memory settles the wording of a UI string WordPress core is likely to have. It reports how WordPress core already translates that exact string, which is authoritative; never call it to confirm a term the glossary already settled.
+- This prompt and the three lookup tools are everything you have. There is no shell and no filesystem: never write a file or run a command.
 `
 
 const NO_TOOL_RULES = (language: string) => `- Follow the official WordPress ${language} glossary. An entry's "glossary" lists the approved translation of every glossary term its source contains; use it. A term that is not listed there is not in the glossary. There are no tools: this prompt is everything you have.

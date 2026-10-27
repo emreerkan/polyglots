@@ -22,6 +22,7 @@ Entries say what changed. For why and how, read the commit.
 - The rules builder declares the lowest schema a file needs instead of the newest.
 - Each agent call runs in an empty temporary folder, removed afterwards, so files an agent writes never reach the folder under review.
 - antigravity runs with `--sandbox`.
+- The translate draft review tells agents there is no shell and no filesystem, so cached agent draft reviews are asked again once.
 - `doctor` warns when antigravity's `toolPermission` is `always-proceed` without a deny rule for commands.
 
 ### Fixed

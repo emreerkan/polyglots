@@ -42,6 +42,13 @@ describe('buildReviewPrompt', () => {
     expect(prompt).toMatch(/exactly one result per input id/i)
   })
 
+  // As the review prompt says it: an agent whose own settings approve every
+  // tool wrote and ran scripts beside the files under review.
+  it('tells an agent it has no shell and no filesystem, and a local model nothing of the kind', () => {
+    expect(prompt).toContain('There is no shell and no filesystem')
+    expect(buildReviewPrompt(inputs, 'tr', 2, undefined, { tools: false })).not.toContain('shell')
+  })
+
   it('names all three MCP tools', () => {
     expect(prompt).toContain('glossary_lookup')
     expect(prompt).toContain('consistency_lookup')
