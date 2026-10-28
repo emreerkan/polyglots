@@ -307,6 +307,25 @@ describe('glossary rule', () => {
   it('matches the term on a word boundary, not inside another word', () => {
     expect(rules(entry('Bookmark this', 'Bunu işaretle'))).not.toContain('glossary')
   })
+  // The source is English whatever the locale. Lowered by Turkish rules,
+  // "Image" became "ımage" and no longer held the term "image", so every term
+  // with an i went unchecked wherever the source capitalized it.
+  it('finds a term in a capitalized English source under Turkish casing', () => {
+    const glossary: GlossaryEntry[] = [
+      { locale: 'tr', sourceTerm: 'image', translation: 'görsel', partOfSpeech: 'noun' },
+      { locale: 'tr', sourceTerm: 'insert', translation: 'ekle', partOfSpeech: 'verb' },
+    ]
+    const found = (msgid: string) => {
+      const e = entry(msgid, 'Resim')
+      return runRules(e, buildRuleContext({ locale: 'tr', glossary, nplurals: 2, entries: [e] })).filter(
+        (f) => f.rule === 'glossary',
+      )
+    }
+    expect(found('Image')).toHaveLength(1)
+    expect(found('IMAGE')).toHaveLength(1)
+    expect(found('Insert row')).toHaveLength(1)
+    expect(found('Image')[0]!.message).toContain('"image"')
+  })
 })
 
 /**

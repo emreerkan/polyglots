@@ -64,6 +64,11 @@ export interface AuditContext {
   // is part of it: the prompt lists them as they come, so a reordering is a
   // different prompt and deserves a different key.
   memory?: readonly string[]
+  // The glossary terms the prompt lists on this entry, as term=translations.
+  // configHash covers the glossary itself but not which rows a source matched,
+  // so a change to the matcher changed the prompt and served the old verdict.
+  // Appended only when present, so an entry with no terms keys as it did.
+  glossary?: readonly string[]
   nplurals: number
   // The catalogue's Plural-Forms header, set only when the prompt renders it,
   // which is above two forms. Appended as a part only when present, so every
@@ -112,6 +117,7 @@ export function auditSrcHash(entry: SourceText, context: AuditContext): string {
     context.repaired ? 'repaired' : '',
     ...(context.pluralForms === undefined ? [] : [context.pluralForms]),
     ...(context.promptVariant === undefined ? [] : [`prompt ${context.promptVariant}`]),
+    ...(context.glossary === undefined || context.glossary.length === 0 ? [] : [`glossary ${context.glossary.join(FIELD)}`]),
   )
 }
 

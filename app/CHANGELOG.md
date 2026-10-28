@@ -10,6 +10,11 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Fixed
+
+- Glossary terms are found in a capitalized source in every locale; in Turkish and Azerbaijani a term with an `i` was missed when the source wrote it `I`.
+- A review verdict is keyed on the glossary terms its prompt listed, so entries with glossary terms are asked again once after the update.
+
 ## [1.2.0] - 2026-10-28
 
 ### Added

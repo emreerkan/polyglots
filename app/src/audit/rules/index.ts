@@ -17,6 +17,7 @@ import {
   isTitleCase,
   isUpperFirst,
   lower,
+  lowerSource,
   scan,
   words,
   type Word,
@@ -641,16 +642,16 @@ export interface GlossaryMatch {
 }
 
 // Each row's term lowered once per glossary rather than once per entry: the
-// matcher runs for every row on every entry, and lowering is locale-aware and
-// not cheap. Keyed on the array, which a context holds for its whole life, and
-// on the locale, which decides how a term lowers.
-const LOWERED = new WeakMap<readonly GlossaryEntry[], { locale: Locale; terms: Array<{ item: GlossaryEntry; term: string }> }>()
+// matcher runs for every row on every entry. Keyed on the array, which a
+// context holds for its whole life. Not on the locale: a source term is
+// English, and lowers by English rules in every locale.
+const LOWERED = new WeakMap<readonly GlossaryEntry[], Array<{ item: GlossaryEntry; term: string }>>()
 
 function loweredTerms(ctx: RuleContext): Array<{ item: GlossaryEntry; term: string }> {
   const cached = LOWERED.get(ctx.glossary)
-  if (cached && cached.locale === ctx.locale) return cached.terms
-  const terms = ctx.glossary.map((item) => ({ item, term: lower(item.sourceTerm, ctx.locale) }))
-  LOWERED.set(ctx.glossary, { locale: ctx.locale, terms })
+  if (cached) return cached
+  const terms = ctx.glossary.map((item) => ({ item, term: lowerSource(item.sourceTerm) }))
+  LOWERED.set(ctx.glossary, terms)
   return terms
 }
 
@@ -666,7 +667,7 @@ function loweredTerms(ctx: RuleContext): Array<{ item: GlossaryEntry; term: stri
  * word, so `list` is not found inside `listen`.
  */
 export function glossaryMatches(msgid: string, ctx: RuleContext): GlossaryMatch[] {
-  const source = lower(msgid, ctx.locale)
+  const source = lowerSource(msgid)
   const byTerm = new Map<string, { term: string; translations: string[] }>()
   for (const { item, term } of loweredTerms(ctx)) {
     if (term.length < 3) continue
@@ -728,7 +729,7 @@ const glossary: Rule = (entry, ctx) => {
     const approved = match.translations.map((t) => comparable(t, ctx.locale))
     const accepted = match.translations.flatMap((t) => glossaryAlternatives(t).map((a) => comparable(a, ctx.locale)))
     if (accepted.some((t) => containsTerm(target, t, ctx.profile.glossaryStemRatio))) continue
-    missed.push(`"${lower(match.term, ctx.locale)}" -> ${approved.map((t) => `"${t}"`).join(' / ')}`)
+    missed.push(`"${lowerSource(match.term)}" -> ${approved.map((t) => `"${t}"`).join(' / ')}`)
   }
   if (missed.length === 0) return []
   return [

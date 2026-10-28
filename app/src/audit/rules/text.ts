@@ -9,6 +9,15 @@ export function lower(value: string, locale: Locale): string {
   return value.toLocaleLowerCase(intlTag(locale))
 }
 
+// The source side of a comparison is English whatever the locale, and English
+// is what a glossary's source terms are written in. Lowered by the target
+// language's rules instead, Turkish turned "Image" into "ımage", which holds no
+// "image", and every glossary term with an i went unchecked wherever the
+// source capitalized it.
+export function lowerSource(value: string): string {
+  return value.toLocaleLowerCase('en')
+}
+
 /**
  * Text as the rules compare it with other text: canonically equivalent
  * spellings made one, then folded by the locale's case.

@@ -133,6 +133,14 @@ describe('auditSrcHash', () => {
     )
   })
 
+  it('changes when the glossary terms the prompt lists change', () => {
+    // The terms come from the matcher, not the glossary alone: a change to how
+    // a source is matched changes the prompt without touching configHash.
+    expect(auditSrcHash(entry(), context())).not.toBe(
+      auditSrcHash(entry(), context({ glossary: ['image=görsel'] })),
+    )
+  })
+
   it('changes when nplurals changes, which the prompt states outright', () => {
     expect(auditSrcHash(entry(), context())).not.toBe(auditSrcHash(entry(), context({ nplurals: 6 })))
   })
