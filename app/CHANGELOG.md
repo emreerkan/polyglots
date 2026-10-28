@@ -34,6 +34,10 @@ Entries say what changed. For why and how, read the commit.
 - The placeholder check accepts a translation that numbers unnumbered placeholders to reorder them (`%s by %s` as `%2$s tarafından %1$s`), and so does the warning about a draft that lost a placeholder.
 - The placeholder check reports unnumbered placeholders of different kinds moved out of order (`%s of %d` as `%d içinden %s`), and says to number them.
 
+### Security
+
+- Dependencies updated past high advisories in `undici`, `follow-redirects`, `zod` and `body-parser`.
+
 ## [1.1.0] - 2026-10-19
 
 ### Added
