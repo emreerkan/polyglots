@@ -43,8 +43,6 @@ export interface BuilderState {
   mistakes: BuilderMistake[]
   patterns: BuilderPattern[]
   sentenceEnd: { answers: { text: string; source: string }[]; unmarked: boolean; notEnding: string }
-  // The page has no fields for it yet. Carried so that starting from the
-  // published rules and downloading the file keeps the locale's dateTime.
   dateTime: { clock: '' | '12h' | '24h'; order: '' | 'dmy' | 'mdy' | 'ymd'; formats: { source: string; target: string }[] }
   names: { order: '' | 'given-first' | 'family-first' }
 }

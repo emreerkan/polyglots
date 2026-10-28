@@ -162,6 +162,35 @@ const initialPrompt = agentPrompt({ wp: '', language: '', ...agentUrls });
           <label for="rb-dateonly">Only inside a date</label>
           <div class="tags" data-tags="dateOnly"><input id="rb-dateonly" data-tag-input placeholder="Pazartesi" /></div>
         </div>
+
+        <h3>Dates and times</h3>
+        <p class="help">How the language writes dates and times, for the date-format check and the AI prompts.</p>
+        <fieldset class="choice">
+          <legend>Clock</legend>
+          <label><input type="radio" name="clock" value="" data-bind="dateTime.clock" checked /> Not set</label>
+          <label><input type="radio" name="clock" value="24h" data-bind="dateTime.clock" /> 24-hour</label>
+          <label><input type="radio" name="clock" value="12h" data-bind="dateTime.clock" /> 12-hour</label>
+        </fieldset>
+        <fieldset class="choice">
+          <legend>Date order</legend>
+          <label><input type="radio" name="date-order" value="" data-bind="dateTime.order" checked /> Not set</label>
+          <label><input type="radio" name="date-order" value="dmy" data-bind="dateTime.order" /> Day, month, year</label>
+          <label><input type="radio" name="date-order" value="mdy" data-bind="dateTime.order" /> Month, day, year</label>
+          <label><input type="radio" name="date-order" value="ymd" data-bind="dateTime.order" /> Year, month, day</label>
+        </fieldset>
+        <p class="label">Usual formats</p>
+        <p class="help"><span>What a common English PHP date format becomes, such as <code>F j, Y</code> → <code>j F Y</code>. Each must pass the date-format check.</span></p>
+        <ol class="rows" data-list="formats"></ol>
+        <button type="button" class="btn" data-add="formats">Add a format</button>
+
+        <h3>Name order</h3>
+        <fieldset class="choice">
+          <legend>Which name the language writes first</legend>
+          <label><input type="radio" name="name-order" value="" data-bind="names.order" checked /> Not set</label>
+          <label><input type="radio" name="name-order" value="given-first" data-bind="names.order" /> Given name first</label>
+          <label><input type="radio" name="name-order" value="family-first" data-bind="names.order" /> Family name first</label>
+        </fieldset>
+        <p class="help"><span>Family name first checks full names such as <code>%1$s %2$s</code> and adds a line to the AI prompts.</span></p>
       </section>
 
       <section data-step="3" aria-labelledby="rb-s3" hidden>

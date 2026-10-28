@@ -71,9 +71,7 @@ it works over SSH too. The app's Locale rules screen has the same link.
 
 - **Start from the published rules** loads your locale's file from
   polyglots-data, so you change your team's rules rather than start over.
-  Its comments are not carried over. The builder has no fields for
-  `dateTime` or `names` yet, but either one in the file you start from is
-  kept.
+  Its comments are not carried over.
 - **Paste a rules file** loads a file from anywhere: one you have, or your
   AI agent's answer. A code block in the answer is found by itself, and a
   file polyglots would refuse is not loaded.

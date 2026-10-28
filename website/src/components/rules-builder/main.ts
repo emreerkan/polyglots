@@ -5,7 +5,7 @@ import type { LocaleRules } from '../../../../app/src/rules/schema.js';
 import { intlTag, localeDisplayName, resolveLocale } from '../../../../app/src/wporg/locales.js';
 import { agentPrompt } from './agent-prompt.js';
 import { debounce } from './debounce.js';
-import { checksFor, compiles, patternProblem, type Check } from './match.js';
+import { checksFor, compiles, formatProblem, patternProblem, type Check } from './match.js';
 import { probeProblem } from './probe.js';
 import { RULE_EXAMPLES } from './rule-copy.js';
 import { stateFromPasted } from './paste.js';
@@ -22,7 +22,7 @@ import { PATTERN_BUDGET_MS, RegexRunner } from './tester.js';
 // not reliably CORS-enabled, so the published file is read from main.
 const PUBLISHED = 'https://raw.githubusercontent.com/emreerkan/polyglots-data/main/locales/';
 
-type ListName = 'mistakes' | 'patterns' | 'answers';
+type ListName = 'mistakes' | 'patterns' | 'answers' | 'formats';
 
 const $ = <T extends Element = HTMLElement>(root: ParentNode, selector: string) => root.querySelector<T & Element>(selector)!;
 const $$ = <T extends Element = HTMLElement>(root: ParentNode, selector: string) => [...root.querySelectorAll<T & Element>(selector)];
@@ -239,6 +239,9 @@ export function start(): void {
         const n = Number(target.value);
         setPath(state, path, target.value.trim() === '' || !Number.isFinite(n) ? null : n);
       } else setPath(state, path, target.value);
+      // The usual formats are checked against the clock and the order, so a
+      // change to either says at once which rows no longer agree.
+      if (path.startsWith('dateTime.')) for (const li of $$(lists.get('formats')!, 'li')) showRowError(li);
       changed();
       return;
     }
@@ -365,8 +368,9 @@ export function start(): void {
     });
   }
 
-  // ---- Lists: mistakes, patterns, sentence-end answers -----------------------
-  const rowsOf = (name: ListName): unknown[] => (name === 'answers' ? state.sentenceEnd.answers : state[name]);
+  // ---- Lists: mistakes, patterns, sentence-end answers, usual formats --------
+  const rowsOf = (name: ListName): unknown[] =>
+    name === 'answers' ? state.sentenceEnd.answers : name === 'formats' ? state.dateTime.formats : state[name];
   const field = (row: number, list: ListName, key: string, label: string, value: string, extra: Record<string, string> = {}, area = false) => {
     const id = `rb-${list}-${row}-${key}`;
     const input = area
@@ -409,6 +413,14 @@ export function start(): void {
         el('p', { class: 'row-error', 'data-row-error': '', 'aria-live': 'polite' }),
       );
       updatePatternRow(li);
+    } else if (list === 'formats') {
+      const f = state.dateTime.formats[i]!;
+      li.append(
+        field(i, list, 'source', 'English format', f.source, { 'data-mono': '' }),
+        field(i, list, 'target', 'Your format', f.target, { 'data-mono': '' }),
+        removeButton(`Remove format ${i + 1}`, { 'data-remove': list, 'data-index': String(i) }),
+        el('p', { class: 'row-error', 'data-row-error': '', 'aria-live': 'polite' }),
+      );
     } else {
       const a = state.sentenceEnd.answers[i]!;
       li.append(
@@ -435,6 +447,9 @@ export function start(): void {
     } else if (li.dataset.list === 'answers') {
       const a = state.sentenceEnd.answers[i];
       if (a && ((a.text !== '' && !compiles(a.text)) || (a.source !== '' && !compiles(a.source)))) problem = 'Not a valid regular expression.';
+    } else if (li.dataset.list === 'formats') {
+      const f = state.dateTime.formats[i];
+      if (f) problem = formatProblem(f, state.dateTime);
     }
     out.textContent = problem;
   }
@@ -461,7 +476,8 @@ export function start(): void {
       if (name === 'mistakes') state.mistakes.push({ wrong: '', right: '', note: '' });
       else if (name === 'patterns') {
         state.patterns.push({ mode: 'text', value: '', level: 'hint', replace: '', ignoreCase: false, whenSource: '', whenNotSource: '', note: '' });
-      } else state.sentenceEnd.answers.push({ text: '', source: '' });
+      } else if (name === 'formats') state.dateTime.formats.push({ source: '', target: '' });
+      else state.sentenceEnd.answers.push({ text: '', source: '' });
       drawList(name);
       const rows = $$(lists.get(name)!, 'li');
       rows[rows.length - 1]?.querySelector<HTMLElement>('input, select, textarea')?.focus();

@@ -1,4 +1,5 @@
 import type { PatternLevel } from '../../../../app/src/rules/schema.js';
+import { dateFormatProblems, isDateFormat } from '../../../../app/src/audit/rules/date-format.js';
 import type { BuilderPattern, BuilderState } from '../../../../app/src/rules/emit.js';
 
 // What the live tester runs for one sample: which mistakes and patterns apply
@@ -114,4 +115,20 @@ export function checksFor(state: BuilderState, source: string, translation: stri
 export function patternProblem(p: BuilderPattern): string {
   if (p.mode === 'find' && p.value !== '' && !compiles(p.value)) return 'Not a valid regular expression.';
   return '';
+}
+
+/**
+ * What a usual-format row would be refused for: the schema's own checks, run
+ * against the clock and the order as they stand on the page, so changing
+ * either shows at once which rows no longer agree. A row with a side still
+ * empty says nothing; the file leaves such a row out.
+ */
+export function formatProblem(f: { source: string; target: string }, d: { clock?: '' | '12h' | '24h'; order?: '' | 'dmy' | 'mdy' | 'ymd' }): string {
+  const source = f.source.trim();
+  const target = f.target.trim();
+  if (source === '' || target === '') return '';
+  if (!isDateFormat(source, 'date format')) return 'Not a PHP date format.';
+  const rules = { ...(d.clock ? { clock: d.clock } : {}), ...(d.order ? { order: d.order } : {}) };
+  const problem = dateFormatProblems(source, target, rules)[0];
+  return problem ? `The date-format check reports: ${problem.message}` : '';
 }

@@ -58,3 +58,18 @@ patterns: []
 # unmarked: the language writes no final mark. Also answers and notEnding.
 # sentenceEnd:
 #   unmarked: true
+
+# The two below need schema: 3 in the line at the top, which polyglots 1.2 and later read.
+
+# How the language writes dates and times, for the date-format check and the AI prompts.
+# clock: 24h or 12h. order: dmy, mdy or ymd. formats: what common English PHP formats become.
+# dateTime:
+#   clock: 24h
+#   order: dmy
+#   formats:
+#     'F j, Y': 'j F Y'
+
+# Which name the language writes first: given-first, as English does, or family-first.
+# family-first checks full names such as "%1$s %2$s" and adds a line to the AI prompts.
+# names:
+#   order: family-first

@@ -41,7 +41,7 @@ export function agentPrompt({ wp, language, templateUrl, builderUrl }: AgentProm
     '3. Write the file.',
     '',
     'Rules for the file:',
-    '- The first line is `schema: 2`.',
+    '- The first line is `schema: 2`, or `schema: 3` when the file uses `dateTime` or `names`, or names `date-format` or `name-order` in `rules`. Schema 3 needs polyglots 1.2 or later.',
     `- Use only these top-level keys: ${code(keys)}.`,
     `- \`rules.enable\` and \`rules.disable\` take only these names: ${code(BUILT_IN_RULES)}. On by default: ${code(UNIVERSAL_RULES)}. Off unless enabled: ${code(optIn)}.`,
     `- \`guidance\` is at most ${n(GUIDANCE_LIMIT)} characters, \`capitalization\` at most ${n(CAPITALIZATION_LIMIT)}, and each of \`register.audit\` and \`register.translate\` at most ${n(REGISTER_LIMIT)}.`,
@@ -51,6 +51,8 @@ export function agentPrompt({ wp, language, templateUrl, builderUrl }: AgentProm
     '- Write `guidance`, `capitalization`, `register` and every `note` in English: a model reads them.',
     '- Regular expressions are JavaScript, compiled with the `u` flag. Keep them simple: polyglots skips a pattern that takes more than about 100 ms on one translation, so avoid nested quantifiers such as `(a+)+`.',
     '- Use `sentenceEnd` only for a script whose sentences do not end with a full stop.',
+    "- `dateTime` has `clock` (`24h` or `12h`), `order` (`dmy`, `mdy` or `ymd`) and `formats`, which maps a common English PHP date format to the locale's, such as `'F j, Y': 'j F Y'`. Each suggested format must keep every part of the date and agree with `clock` and `order`.",
+    '- `names` has one key, `order`: `given-first` or `family-first`, which name the language writes first. Leave it out unless I say.',
     '',
     `Answer with the whole file in one yaml code block, and nothing after it. I will paste it into the rules builder at ${builderUrl}, which checks it, and save it as ${file}.`,
   ].join('\n');

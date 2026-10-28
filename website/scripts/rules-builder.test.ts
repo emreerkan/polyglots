@@ -308,6 +308,11 @@ test('agent prompt: names the locale, the file, the template and every key the s
   assert.match(prompt, /2,500/)
   assert.match(prompt, /1,500/)
   assert.match(prompt, /500/)
+  // A file with dateTime or names is refused under schema 2, so an agent
+  // told only "schema: 2" would write a file the builder then rejects.
+  assert.match(prompt, /`schema: 3` when the file uses `dateTime` or `names`/)
+  assert.match(prompt, /`given-first` or `family-first`/)
+  assert.match(prompt, /`24h` or `12h`/)
 })
 
 test('agent prompt: without a locale it asks the agent to find out which one', async () => {
@@ -320,7 +325,7 @@ test('agent prompt: without a locale it asks the agent to find out which one', a
 test('template: every section of the rules file, for no locale in particular', async () => {
   const { rulesTemplate } = await import('../src/lib/rules-template.js')
   const text = rulesTemplate()
-  for (const key of ['schema: 2', 'rules:', 'glossaryStemRatio', 'properNouns', 'mistakes', 'patterns', 'guidance', 'capitalization', 'register', 'formality', 'sentenceEnd', 'notSource']) {
+  for (const key of ['schema: 2', 'rules:', 'glossaryStemRatio', 'properNouns', 'mistakes', 'patterns', 'guidance', 'capitalization', 'register', 'formality', 'sentenceEnd', 'notSource', 'dateTime:', 'names:']) {
     assert.ok(text.includes(key), `template lacks ${key}`)
   }
   assert.match(text, /^# polyglots rules for <wp_code>$/m)
@@ -355,4 +360,14 @@ test('paste: an invalid or empty file says why and loads nothing', async () => {
   const empty = stateFromPasted('   \n', 'de_DE')
   assert.ok('error' in empty)
   assert.match(empty.error, /empty/i)
+})
+
+test('formats: a row is checked as the schema checks it', async () => {
+  const { formatProblem } = await import('../src/components/rules-builder/match.js')
+  assert.equal(formatProblem({ source: 'F j, Y', target: 'j F Y' }, { clock: '24h', order: 'dmy' }), '')
+  assert.equal(formatProblem({ source: 'Hide all', target: 'x' }, {}), 'Not a PHP date format.')
+  assert.match(formatProblem({ source: 'g:i a', target: 'g:i a' }, { clock: '24h' }), /^The date-format check reports: /)
+  // Half-typed rows say nothing until both sides are there.
+  assert.equal(formatProblem({ source: '', target: '' }, {}), '')
+  assert.equal(formatProblem({ source: 'F j, Y', target: '' }, {}), '')
 })
