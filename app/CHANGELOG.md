@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-28
+
 ### Fixed
 
 - A rules mistake or text pattern written without a nukta or an accent no longer matches the letter that has one.
