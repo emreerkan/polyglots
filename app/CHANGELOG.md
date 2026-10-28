@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-28
+
 ### Added
 
 - The `date-format` rule checks PHP date formats for letters PHP does not know, a lost date or time part, 12-hour time without am/pm and a space after a time colon.

@@ -13,7 +13,7 @@ import { isNewer } from '../update/index.js'
 // flags, and a patch like "the entry table is no longer written" is right
 // there and noise here.
 export const WHATS_NEW: Readonly<Record<string, readonly string[]>> = {
-  unreleased: [
+  '1.2.0': [
     'Reviews check PHP date formats such as “F j, Y”',
     'Set date style and name order in Locale rules',
   ],
