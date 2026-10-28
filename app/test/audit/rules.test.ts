@@ -180,8 +180,10 @@ describe('placeholder rule on plural forms', () => {
     expect(placeholderFindings('ar', ARABIC, 6, entry('%s has %d item', forms('لديه عنصر واحد'), plural))).toEqual([
       'error: translation is missing placeholder(s) %s, %d',
     ])
+    // The form's only placeholder takes the first argument, the name, so the
+    // count is lost as well as the %s.
     expect(placeholderFindings('ar', ARABIC, 6, entry('%s has %d item', forms('لدى %d عنصر'), plural))).toEqual([
-      'error: translation is missing placeholder(s) %s',
+      'error: translation is missing placeholder(s) %s, %d',
     ])
     expect(placeholderFindings('ar', ARABIC, 6, entry('%s has %d item', forms('لدى %s عنصر واحد'), plural))).toEqual([glotpress('%d', 0)])
   })
@@ -227,8 +229,9 @@ describe('placeholder rule on plural forms', () => {
       ['لا عناصر في %s', 'عنصر واحد في %s', 'عنصران في %s', '%d عناصر في %s', '%d عنصرًا في %s', '%d عنصر في %s'],
       { msgidPlural: '%d items in %s' },
     )
+    // The %s left standing takes the count, so the title is lost too.
     expect(placeholderFindings('ar', ARABIC, 6, e)).toEqual([
-      'error: translation is missing placeholder(s) %d',
+      'error: translation is missing placeholder(s) %d, %s',
     ])
   })
 
