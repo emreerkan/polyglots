@@ -79,7 +79,7 @@
     "@types/node": "^26.5.0",
     "@types/react": "^19.2.18",
     "esbuild": "^0.28.2",
-    "happy-dom": "^20.14.5",
+    "happy-dom": "^21.0.4",
     "ink-testing-library": "^4.0.0",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
