@@ -7,6 +7,7 @@ import { CUSTOM_RULE } from '../../rules/names.js'
 import { runRegexOps, skippedFor, type RegexOp } from '../../rules/sandbox.js'
 import type { CustomPattern, DateTimeRules, SentenceEndRules } from '../../rules/schema.js'
 import { dateFormatProblems, isDateFormat } from './date-format.js'
+import { nameOrderProblem, type NameRules } from './name-order.js'
 import { missingPlaceholders, movedPlaceholders } from '../../draft/placeholders.js'
 import {
   acronymStem,
@@ -56,6 +57,9 @@ export interface RuleContext {
   // The locale's clock, date order and usual formats, from the same file.
   // Absent leaves the date-format rule to its universal checks.
   dateTime?: DateTimeRules
+  // The order the locale writes names in, from the same file. Absent keeps the
+  // name-order rule quiet.
+  names?: NameRules
 }
 
 export interface BuildRuleContextOptions {
@@ -180,6 +184,7 @@ export function buildRuleContext(opts: BuildRuleContextOptions): RuleContext {
     ...(customPatterns && customPatterns.length > 0 ? { customPatterns } : {}),
     ...(sentenceEnd ? { sentenceEnd } : {}),
     ...(file?.dateTime ? { dateTime: file.dateTime } : {}),
+    ...(file?.names ? { names: file.names } : {}),
   }
 }
 
@@ -907,6 +912,20 @@ const dateFormat: Rule = (entry, ctx) => {
   ]
 }
 
+/**
+ * A full name kept in English order where the locale's rules file says it
+ * writes the family name first. The detail is in name-order.ts. A suspect,
+ * not an error: the roles come from a comment or a context, and a string the
+ * check misread should cost the contributor a look, not a rejection.
+ */
+const nameOrder: Rule = (entry, ctx) => {
+  if (!ctx.names) return []
+  const text = entry.msgstr.find(Boolean)
+  if (!text) return []
+  const message = nameOrderProblem(entry, text, ctx.names.order, languageName(ctx.locale))
+  return message === undefined ? [] : [{ rule: 'name-order', severity: 'suspect', message }]
+}
+
 const RULES: Array<{ name: string; run: Rule }> = [
   { name: 'placeholder', run: placeholder },
   { name: 'html', run: html },
@@ -925,6 +944,7 @@ const RULES: Array<{ name: string; run: Rule }> = [
   { name: 'inconsistent', run: inconsistent },
   { name: 'tm-conflict', run: tmConflict },
   { name: 'date-format', run: dateFormat },
+  { name: 'name-order', run: nameOrder },
   { name: 'control', run: (entry) => {
     const spec = controlSpec(entry)
     return spec ? controlFindings(entry, spec) : []

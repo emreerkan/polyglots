@@ -45,6 +45,7 @@ function state(raw: unknown): BuilderState {
   const nouns = isObject(raw.properNouns) ? raw.properNouns : {};
   const end = isObject(raw.sentenceEnd) ? raw.sentenceEnd : {};
   const dates = isObject(raw.dateTime) ? raw.dateTime : {};
+  const names = isObject(raw.names) ? raw.names : {};
   const ratio = raw.glossaryStemRatio;
   return {
     locale: str(raw.locale),
@@ -68,6 +69,7 @@ function state(raw: unknown): BuilderState {
       order: dates.order === 'dmy' || dates.order === 'mdy' || dates.order === 'ymd' ? dates.order : '',
       formats: rows(dates.formats, (o) => (typeof o.source === 'string' ? { source: o.source, target: str(o.target) } : undefined)),
     },
+    names: { order: names.order === 'given-first' || names.order === 'family-first' ? names.order : '' },
   };
 }
 

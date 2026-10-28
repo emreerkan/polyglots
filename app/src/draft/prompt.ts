@@ -1,4 +1,5 @@
 import { dateTimeInstruction } from '../audit/rules/date-format.js'
+import { nameOrderInstruction } from '../audit/rules/name-order.js'
 import { loadLocaleRules } from '../rules/load.js'
 import type { Locale } from '../types.js'
 import { localeDisplayName, splitLocale } from '../wporg/locales.js'
@@ -37,7 +38,9 @@ export function draftSystemPrompt(locale: Locale, nplurals: number): string {
   // prune is the one they asked for: drafts made under the other address are
   // what the cache must stop serving, for DeepL and the AI engines alike.
   const formality = loadLocaleRules(locale)?.formality
-  const dateTime = dateTimeInstruction(loadLocaleRules(locale)?.dateTime, localeDisplayName(locale.replaceAll('_', '-')))
+  const language = localeDisplayName(locale.replaceAll('_', '-'))
+  const dateTime = dateTimeInstruction(loadLocaleRules(locale)?.dateTime, language)
+  const names = nameOrderInstruction(loadLocaleRules(locale)?.names, language)
   return [
     `You are a professional WordPress UI translator. Translate each item from English (en) into ${describeLocale(locale)}.`,
     'These are gettext strings from WordPress core, plugins and themes: UI labels, messages, settings.',
@@ -49,6 +52,8 @@ export function draftSystemPrompt(locale: Locale, nplurals: number): string {
     ...(formality === undefined ? [] : [`- Address the reader ${formality === 'formal' ? 'formally' : 'informally'}.`]),
     // Only when the file has a dateTime, for the same reason as formality.
     ...(dateTime === '' ? [] : [dateTime.trimEnd()]),
+    // And the names, only for a locale that writes the family name first.
+    ...(names === '' ? [] : [names.trimEnd()]),
     `- The target locale has ${nplurals} plural form(s). For an item WITHOUT "msgidPlural", return exactly 1 draft. For an item WITH "msgidPlural", return exactly ${nplurals} drafts: index 0 translates "msgid" (singular), the remaining indexes translate "msgidPlural" for the locale's other plural forms, in order.`,
     // Items are identified by a number, never by the gettext key. A key can
     // begin with a newline and end in spaces, and a model asked to echo one

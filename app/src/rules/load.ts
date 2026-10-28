@@ -87,7 +87,8 @@ const isEmpty = (r: LocaleRules) =>
   r.register === undefined &&
   r.formality === undefined &&
   r.sentenceEnd === undefined &&
-  r.dateTime === undefined
+  r.dateTime === undefined &&
+  r.names === undefined
 
 /**
  * A stable fingerprint of a locale's rules, for the review fingerprint and so

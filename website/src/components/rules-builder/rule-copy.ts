@@ -23,4 +23,5 @@ export const RULE_EXAMPLES: Record<BuiltInRule, string> = {
   'tm-conflict': 'Your approved translations say “Ayarlar” for “Settings”; this file says “Seçenekler”.',
   control: '“ltr” (a text direction the code reads) translated as words.',
   'date-format': 'The date format “M d, Y” translated as “M d, J”: PHP has no J, so the year is gone and a letter J shows instead.',
+  'name-order': 'A full name “%1$s %2$s” (1: first name, 2: last name) kept in that order where the locale writes the family name first.',
 };

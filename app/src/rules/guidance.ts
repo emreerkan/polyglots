@@ -1,4 +1,5 @@
 import { dateTimeInstruction } from '../audit/rules/date-format.js'
+import { nameOrderInstruction } from '../audit/rules/name-order.js'
 import type { Locale } from '../types.js'
 import { loadLocaleRules } from './load.js'
 
@@ -19,4 +20,13 @@ export function guidanceSection(locale: Locale): string {
 /** The locale file's dateTime as a prompt line; see dateTimeInstruction. */
 export function dateTimeLine(locale: Locale, language: string): string {
   return dateTimeInstruction(loadLocaleRules(locale)?.dateTime, language)
+}
+
+/**
+ * The locale file's names as a prompt line; see nameOrderInstruction. Empty
+ * for a locale that writes the given name first, as English does: telling a
+ * model to keep the order it would keep anyway only lengthens every prompt.
+ */
+export function nameOrderLine(locale: Locale, language: string): string {
+  return nameOrderInstruction(loadLocaleRules(locale)?.names, language)
 }

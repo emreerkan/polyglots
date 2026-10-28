@@ -207,6 +207,9 @@ export function diffRules(before: LocaleRules | undefined, after: LocaleRules): 
           ].join(', ')}`,
     )
   }
+  if (before?.names?.order !== after.names?.order) {
+    lines.push(after.names === undefined ? 'names removed' : `names changed: ${after.names.order}`)
+  }
 
   // A note or a suggested wording is shown when the other file had no such
   // text anywhere, so moving a pattern does not repeat its note. Both ways:

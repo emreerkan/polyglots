@@ -46,6 +46,7 @@ export interface BuilderState {
   // The page has no fields for it yet. Carried so that starting from the
   // published rules and downloading the file keeps the locale's dateTime.
   dateTime: { clock: '' | '12h' | '24h'; order: '' | 'dmy' | 'mdy' | 'ymd'; formats: { source: string; target: string }[] }
+  names: { order: '' | 'given-first' | 'family-first' }
 }
 
 export function emptyBuilderState(locale: string): BuilderState {
@@ -63,6 +64,7 @@ export function emptyBuilderState(locale: string): BuilderState {
     patterns: [],
     sentenceEnd: { answers: [], unmarked: false, notEnding: '' },
     dateTime: { clock: '', order: '', formats: [] },
+    names: { order: '' },
   }
 }
 
@@ -105,6 +107,7 @@ export function stateFromRules(rules: LocaleRules, locale: string): BuilderState
       order: rules.dateTime?.order ?? '',
       formats: Object.entries(rules.dateTime?.formats ?? {}).map(([source, target]) => ({ source, target })),
     },
+    names: { order: rules.names?.order ?? '' },
   }
 }
 
@@ -123,6 +126,7 @@ const SECTION_COMMENTS: Record<string, string> = {
   patterns: ' Literal text or regular expressions: a hint to weigh, an error, or a fix.',
   sentenceEnd: ' How a sentence ends in this script, for the punctuation check.',
   dateTime: ' The clock, the date order and the usual date formats, for the date-format check.',
+  names: ' Whether a person\'s given name or family name comes first, for the name-order check.',
 }
 
 const filled = (s: string) => s.trim() !== ''
@@ -143,7 +147,7 @@ function contents(state: BuilderState): Record<string, unknown> {
   // released polyglots reads. Declaring the highest this app knows, as it
   // once did, would have made polyglots 1.1 refuse every file the builder
   // wrote from the day schema 3 existed, whatever was in it.
-  const needs3 = Object.keys(dateTime).length > 0 || [...enable, ...disable].some((name) => SCHEMA_3_RULES.includes(name))
+  const needs3 = Object.keys(dateTime).length > 0 || state.names.order !== '' || [...enable, ...disable].some((name) => SCHEMA_3_RULES.includes(name))
   const out: Record<string, unknown> = { schema: needs3 ? 3 : 2 }
   if (enable.length > 0 || disable.length > 0) out.rules = { enable, disable }
   if (state.glossaryStemRatio !== null) out.glossaryStemRatio = state.glossaryStemRatio
@@ -205,6 +209,7 @@ function contents(state: BuilderState): Record<string, unknown> {
   }
   if (Object.keys(sentenceEnd).length > 0) out.sentenceEnd = sentenceEnd
   if (Object.keys(dateTime).length > 0) out.dateTime = dateTime
+  if (state.names.order !== '') out.names = { order: state.names.order }
   return out
 }
 

@@ -228,6 +228,14 @@ describe('diffRules', () => {
     expect(diffRules(before, parse('schema: 3\n'))).toContain('dateTime removed')
   })
 
+  it('shows a name order that changed, and says nothing when it did not', () => {
+    const before = parse('schema: 3\nnames:\n  order: given-first\n')
+    const after = parse('schema: 3\nnames:\n  order: family-first\n')
+    expect(diffRules(before, after)).toContain('names changed: family-first')
+    expect(diffRules(after, after).join('\n')).not.toContain('names')
+    expect(diffRules(after, parse('schema: 3\n'))).toContain('names removed')
+  })
+
   it('lists every key against nothing, in the order of the spec', () => {
     const after = parse(
       [

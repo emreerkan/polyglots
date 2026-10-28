@@ -530,6 +530,16 @@ msgctxt "rule:date-format:desc"
 msgid "A PHP date format such as “F j, Y” is broken in the translation, or written the English way where the locale has its own."
 msgstr ""
 
+#. The name of a check ("name-order") in the legend of "What gets flagged". Sentence case.
+msgctxt "rule:name-order"
+msgid "Name order"
+msgstr ""
+
+#. One line explaining the check "name-order", shown in a tooltip.
+msgctxt "rule:name-order:desc"
+msgid "A full name such as “%1$s %2$s” keeps the English order where the locale writes the family name first."
+msgstr ""
+
 #. The name of a check ("custom") in the legend of "What gets flagged". Sentence case.
 msgctxt "rule:custom"
 msgid "Locale rule"

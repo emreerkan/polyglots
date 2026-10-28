@@ -83,6 +83,14 @@ describe('emitRulesYaml', () => {
     expect(parse(yaml).dateTime).toEqual({ clock: '24h', order: 'dmy', formats: { 'F j, Y': 'j F Y', 'g:i a': 'H:i' } })
   })
 
+  it('declares schema 3 for a name order, and keeps the one it started from', () => {
+    const yaml = emitRulesYaml({ ...emptyBuilderState('ja'), names: { order: 'family-first' } })
+    expect(yaml).toMatch(/^schema: 3$/m)
+    expect(parse(yaml).names).toEqual({ order: 'family-first' })
+    const before = parse('schema: 3\nnames:\n  order: family-first\n')
+    expect(parse(emitRulesYaml(stateFromRules(before, 'ja')))).toEqual(before)
+  })
+
   it('keeps the dateTime of the rules it started from', () => {
     const before = parse("schema: 3\ndateTime:\n  clock: 24h\n  formats:\n    'M j': 'j M'\n")
     expect(parse(emitRulesYaml(stateFromRules(before, 'tr_TR')))).toEqual(before)

@@ -1,6 +1,6 @@
 import { DEFAULT_REGISTER, pluralFormsLine, universalOnlyNote, type PromptOptions } from '../audit/prompt.js'
 import { isUniversalOnly, profileFor } from '../audit/rules/profiles.js'
-import { dateTimeLine, guidanceSection } from '../rules/guidance.js'
+import { dateTimeLine, guidanceSection, nameOrderLine } from '../rules/guidance.js'
 import { loadLocaleRules } from '../rules/load.js'
 import { localeDisplayName, splitLocale } from '../wporg/locales.js'
 import type { Locale, ReviewInput } from '../types.js'
@@ -78,7 +78,7 @@ ${tools ? TOOL_RULES(language) : NO_TOOL_RULES(language)}- Preserve the source's
 - Preserve HTML tags and their attributes exactly.
 - Preserve leading/trailing whitespace and newlines exactly as in the source.
 - The "text" array must have exactly ${nplurals} strings for entries with msgidPlural (one per plural form, in the locale's plural order), and exactly 1 string otherwise. Never return an empty string.
-${register}${dateTimeLine(locale, language)}${universalOnly}- Do not translate brand names, product names, code, shortcodes, URLs, CSS classes or option keys.
+${register}${dateTimeLine(locale, language)}${nameOrderLine(locale, language)}${universalOnly}- Do not translate brand names, product names, code, shortcodes, URLs, CSS classes or option keys.
 - Use the .po comments and msgctxt to disambiguate; they describe where and how the string is used.
 - An entry marked "control" is a setting WordPress code reads, not text: "on" or "off" for a font, "ltr" for text direction, a language tag, a number separator. Its draft is the source value. Set it to the value its translator comment says fits this locale. Never translate the English word.
 - Some entries carry "automatedChecks": findings from deterministic checks the draft failed. Fix the ones that are real problems in your text and ignore the ones that are not. A check about placeholders, HTML or the number of plural forms is always real.

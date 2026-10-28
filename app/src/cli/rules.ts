@@ -46,6 +46,7 @@ export type RulesReport =
       formality?: 'formal' | 'informal'
       sentenceEnd: boolean
       dateTime?: { clock?: '12h' | '24h'; order?: 'dmy' | 'mdy' | 'ymd'; formats: number }
+      names?: 'given-first' | 'family-first'
     }
   // column only for a YAML syntax error, the one place the parser knows it.
   | { valid: false; path: string; error: string; line?: number; column?: number }
@@ -84,6 +85,7 @@ export function summariseRules(rules: LocaleRules, path: string): RulesReport & 
             formats: Object.keys(rules.dateTime.formats ?? {}).length,
           },
         }),
+    ...(rules.names === undefined ? {} : { names: rules.names.order }),
   }
 }
 
@@ -161,6 +163,7 @@ export function renderRulesReport(report: RulesReport, p: Painter = plainPainter
             plural(report.dateTime.formats, 'format'),
           ].join(', ')}`,
         ]),
+    ...(report.names === undefined ? [] : [`  names: ${report.names}`]),
   ]
 }
 

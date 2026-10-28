@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { dateFormatProblems, isDateFormat, normaliseFormat, type DateTimeRules } from '../audit/rules/date-format.js'
+import type { NameRules } from '../audit/rules/name-order.js'
 import { BUILT_IN_RULES } from './names.js'
 
 export const GUIDANCE_LIMIT = 1500
@@ -25,10 +26,10 @@ export const SENTENCE_REGEX_LIMIT = 1000
 export const SCHEMA_2_KEYS = ['capitalization', 'register', 'formality', 'sentenceEnd'] as const
 // The same for schema 3, and for the rule names it added: polyglots 1.1
 // refuses date-format in rules.enable or rules.disable as an unknown rule.
-export const SCHEMA_3_KEYS = ['dateTime'] as const
-export const SCHEMA_3_RULES: readonly string[] = ['date-format']
+export const SCHEMA_3_KEYS = ['dateTime', 'names'] as const
+export const SCHEMA_3_RULES: readonly string[] = ['date-format', 'name-order']
 
-export type { DateTimeRules }
+export type { DateTimeRules, NameRules }
 
 export type PatternLevel = 'hint' | 'error' | 'fix'
 
@@ -84,6 +85,7 @@ export interface LocaleRules {
   formality?: 'formal' | 'informal'
   sentenceEnd?: SentenceEndRules
   dateTime?: DateTimeRules
+  names?: NameRules
 }
 
 const ruleName = z.string().superRefine((name, ctx) => {
@@ -223,6 +225,11 @@ export const localeRulesSchema = z
       .strict()
       .optional(),
     dateTime: dateTime.optional(),
+    // Only the order, on purpose: a patronymic, a single name field or a
+    // calling name are real, but none of them is something a translation can
+    // get wrong on its own, and a key that ships cannot change its shape
+    // without a new schema. More can be added beside order later.
+    names: z.object({ order: z.enum(['given-first', 'family-first']) }).strict().optional(),
   })
   .strict()
   .superRefine((raw, ctx) => {
@@ -339,5 +346,6 @@ export function normalise(raw: RawLocaleRules): LocaleRules {
     ...(raw.formality === undefined ? {} : { formality: raw.formality }),
     ...(sentenceEnd === undefined ? {} : { sentenceEnd }),
     ...(dateTimeRules === undefined ? {} : { dateTime: dateTimeRules }),
+    ...(raw.names === undefined ? {} : { names: { order: raw.names.order } }),
   }
 }

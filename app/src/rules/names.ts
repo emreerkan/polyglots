@@ -23,6 +23,7 @@ export const BUILT_IN_RULES = [
   'tm-conflict',
   'control',
   'date-format',
+  'name-order',
 ] as const
 
 // These depend on nothing about a particular language: a dropped placeholder, a
@@ -52,6 +53,9 @@ export const UNIVERSAL_RULES: readonly string[] = [
   // dates should look like comes from its rules file's dateTime, not from
   // turning this on or off.
   'date-format',
+  // Says nothing until the rules file's names says which order the locale
+  // writes names in, and then only about strings a translator comment explains.
+  'name-order',
 ] satisfies BuiltInRule[]
 
 // Mistakes and patterns from a locale file. Never switched on by name: it runs
@@ -137,6 +141,10 @@ const RULE_LABELS: Record<BuiltInRule | typeof CUSTOM_RULE | 'repaired', Label> 
   'date-format': {
     name: 'Date or time format',
     description: 'A PHP date format such as “F j, Y” is broken in the translation, or written the English way where the locale has its own.',
+  },
+  'name-order': {
+    name: 'Name order',
+    description: 'A full name such as “%1$s %2$s” keeps the English order where the locale writes the family name first.',
   },
   custom: {
     name: 'Locale rule',

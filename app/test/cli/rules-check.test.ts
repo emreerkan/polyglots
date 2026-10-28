@@ -183,6 +183,14 @@ describe('rules check --file', () => {
     expect(JSON.parse(json.out)).toMatchObject({ valid: true, schema: 3, dateTime: { clock: '24h', order: 'dmy', formats: 2 } })
   })
 
+  it('names the name order when set', async () => {
+    const file = await writeFileIn('n.yaml', 'schema: 3\nnames:\n  order: family-first\n')
+    const { out } = await run(['rules', 'check', '--file', file])
+    expect(out).toMatch(/^ {2}names: family-first$/m)
+    const json = await run(['rules', 'check', '--json', '--file', file])
+    expect(JSON.parse(json.out)).toMatchObject({ valid: true, schema: 3, names: 'family-first' })
+  })
+
   it('says register: default when the file sets none, and names formality and sentenceEnd when set', async () => {
     const file = await writeFileIn('f.yaml', 'schema: 2\nformality: formal\nsentenceEnd:\n  unmarked: true\n')
     const { out } = await run(['rules', 'check', '--file', file])

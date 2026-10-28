@@ -65,13 +65,17 @@ const hashTr = () => configHash({ locale: 'tr', glossary: [], properNouns: [] })
 // All seven moved once more, on purpose, when both prompts stopped asking for
 // the source's placeholder order and let a numbered placeholder move: a
 // reviewer told to keep the order would put a family-name-first swap back.
+//
+// The four review hashes moved again in the same release when name-order
+// joined the universal rules. The translate hashes did not: without a names
+// section in the rules file, no prompt changes.
 const BEFORE = {
-  trEmpty: 'b57bd9c30ca95d4f',
-  trGloss: 'bc5109121dbad0d8',
-  de: '11bd4373d3753372',
+  trEmpty: 'aa6f691014555e4d',
+  trGloss: '7ba0536714c30cce',
+  de: '0b27d3d39f56f8b4',
   deTranslate: '49775b74c2dbe18b',
   trTranslate: '77b078ef3b7513a7',
-  sv: 'd3c58d85bca4ba95',
+  sv: 'e99d7da46d8121a6',
   svTranslate: 'b94fa073e1528987',
 }
 
@@ -224,6 +228,46 @@ describe('date-format', () => {
     await writeRules('tr', 'schema: 3\nguidance: Be brief.\n')
     for (const prompt of [buildAuditPrompt([], 'tr', 2), buildReviewPrompt([], 'tr', 2), draftSystemPrompt('tr', 2)]) {
       expect(prompt).not.toContain('Dates and times')
+    }
+  })
+})
+
+describe('name-order', () => {
+  // woocommerce's full name, with its comment as translate.wordpress.org has it.
+  const entry = (msgstr: string) => ({
+    key: '%1$s %2$s',
+    msgid: '%1$s %2$s',
+    msgctxt: 'full name',
+    msgstr: [msgstr],
+    comments: ['translators: 1: first name 2: last name'],
+    references: [],
+    fuzzy: false,
+  })
+  const run = (e: ReturnType<typeof entry>) => runRules(e, buildRuleContext({ locale: 'ja', glossary: [], nplurals: 1, entries: [e] })).filter((f) => f.rule === 'name-order')
+
+  it('says nothing without a rules file', () => {
+    expect(run(entry('%1$s %2$s'))).toEqual([])
+  })
+
+  it('reads the locale’s name order from its rules file', async () => {
+    await writeRules('ja', 'schema: 3\nnames:\n  order: family-first\n')
+    expect(run(entry('%1$s %2$s'))).toEqual([{ rule: 'name-order', severity: 'suspect', message: 'Japanese writes the family name first: "%2$s %1$s"' }])
+    expect(run(entry('%2$s %1$s'))).toEqual([])
+  })
+
+  it('is switched off by name', async () => {
+    await writeRules('ja', 'schema: 3\nnames:\n  order: family-first\nrules: { disable: [name-order] }\n')
+    expect(run(entry('%1$s %2$s'))).toEqual([])
+  })
+
+  it('reaches all three prompts for a family-first locale, and none for a given-first one', async () => {
+    await writeRules('ja', 'schema: 3\nnames:\n  order: family-first\n')
+    await writeRules('tr', 'schema: 3\nnames:\n  order: given-first\n')
+    for (const prompt of [buildAuditPrompt([], 'ja', 1), buildReviewPrompt([], 'ja', 1), draftSystemPrompt('ja', 1)]) {
+      expect(prompt).toMatch(/- Names: Japanese( \(ja\))? writes a person's family name before the given name\./)
+    }
+    for (const prompt of [buildAuditPrompt([], 'tr', 2), buildReviewPrompt([], 'tr', 2), draftSystemPrompt('tr', 2)]) {
+      expect(prompt).not.toContain('- Names:')
     }
   })
 })

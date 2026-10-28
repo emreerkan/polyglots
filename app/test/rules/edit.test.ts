@@ -205,6 +205,14 @@ describe('saveRulesDraft', () => {
     expect((await readFile(localeRulesFile('tr'), 'utf8')).match(/^schema:.*$/gm)).toEqual(['schema: 3'])
   })
 
+  it('keeps a names section it has no field for', async () => {
+    await writeRules('schema: 3\nnames:\n  order: family-first\n')
+    const draft = openRulesDraft('tr')
+    await saveRulesDraft(draft, { ...draft.value, guidance: 'Short.' })
+    expect(loadLocaleRules('tr')?.names).toEqual({ order: 'family-first' })
+    expect((await readFile(localeRulesFile('tr'), 'utf8')).match(/^schema:.*$/gm)).toEqual(['schema: 3'])
+  })
+
   it('removes a schema-2 section that was cleared', async () => {
     await writeRules('schema: 2\nformality: informal\nregister: Use sen.\n')
     const draft = openRulesDraft('tr')

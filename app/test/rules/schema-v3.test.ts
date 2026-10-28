@@ -82,3 +82,30 @@ describe('schema 3', () => {
     expect(rulesFingerprint(parse(TR))).not.toBe(rulesFingerprint(parse(TR.replace("'H:i'", "'G:i'"))))
   })
 })
+
+describe('schema 3 names', () => {
+  it('reads the order', () => {
+    expect(parse('schema: 3\nnames:\n  order: family-first\n').names).toEqual({ order: 'family-first' })
+  })
+
+  it.each(['schema: 2\n', ''])('refuses names under %j', (head) => {
+    expect(error(`${head}names: { order: family-first }`).message).toContain('needs schema: 3 at the top of the file')
+  })
+
+  it('needs schema 3 to name name-order in rules.disable', () => {
+    expect(error('schema: 2\nrules: { disable: [name-order] }').message).toContain('needs schema: 3 at the top of the file')
+  })
+
+  // Unlike dateTime, whose every field is optional, names has one field and
+  // a section without it says nothing.
+  it.each(['names: {}', 'names: { order: surname-first }', 'names: { order: family-first, patronymic: true }'])('refuses %s', (body) => {
+    expect(() => parse(`schema: 3\n${body}`)).toThrow(RulesFileError)
+  })
+
+  it('moves the fingerprint, and counts as a file with something in it', () => {
+    const plain = rulesFingerprint(parse('schema: 3\n'))
+    const named = rulesFingerprint(parse('schema: 3\nnames:\n  order: family-first\n'))
+    expect(plain).toBe('')
+    expect(named).not.toBe('')
+  })
+})

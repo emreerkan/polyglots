@@ -38,7 +38,8 @@ Before it writes, it checks the file and shows what it changes:
   would reject. Nothing is written, and the command exits 1.
 - It prints, in full, any guidance, capitalization or register text that
   differs from your file, every note and suggested wording that is new, and
-  every fix pattern added or removed, and a `dateTime` that changed. It
+  every fix pattern added or removed, and a `dateTime` or `names` that
+  changed. It
   says whether `sentenceEnd` changed, and gives one line for the switches,
   proper nouns and other patterns.
 - It names the file's status (`maintained` or `draft`) and its maintainers,
@@ -71,7 +72,8 @@ it works over SSH too. The app's Locale rules screen has the same link.
 - **Start from the published rules** loads your locale's file from
   polyglots-data, so you change your team's rules rather than start over.
   Its comments are not carried over. The builder has no fields for
-  `dateTime` yet, but a `dateTime` in the file you start from is kept.
+  `dateTime` or `names` yet, but either one in the file you start from is
+  kept.
 - **Paste a rules file** loads a file from anywhere: one you have, or your
   AI agent's answer. A code block in the answer is found by itself, and a
   file polyglots would refuse is not loaded.
@@ -103,9 +105,9 @@ creating it first if needed. The new file spells out what the code already
 does for that locale, commented out, with an example of every section. A file
 that sets nothing changes nothing.
 
-The app's **Locale rules** screen edits every section too except `dateTime`,
-in the rules builder's order, and keeps the comments you wrote in the file
-and the `dateTime` it does not edit.
+The app's **Locale rules** screen edits every section too except `dateTime`
+and `names`, in the rules builder's order, and keeps the comments you wrote
+in the file and the two sections it does not edit.
 
 ```yaml
 # The rules format version. polyglots refuses a file newer than it reads.
@@ -152,9 +154,10 @@ sentenceEnd:
 Every section is optional.
 
 - **`schema`** is the version of the file format. Leave it out and the file
-  is read as schema 1, which has every section here except the last four.
-  Those need `schema: 2` at the top of the file. `dateTime`, and naming
-  `date-format` in `rules`, need `schema: 3`, which polyglots 1.2 and later
+  is read as schema 1, which has every section here up to `guidance`. The
+  four after it need `schema: 2` at the top of the file. `dateTime` and
+  `names`, and naming `date-format` or `name-order` in `rules`, need
+  `schema: 3`, which polyglots 1.2 and later
   read. A file with a schema newer than your polyglots reads is refused with
   a request to update polyglots, rather than reviewed on half-understood
   rules. Declare the lowest schema the file needs, so older versions of
@@ -234,6 +237,27 @@ Every section is optional.
   names your wording. The prompts get one line with the clock, the order and
   the formats, so the AI rearranges a longer format, such as
   `M j, Y @ g:i a`, the same way.
+- **`names`** says which name your language writes first, for the
+  `name-order` check and for the AI prompts. `order` is `given-first`, as in
+  English, or `family-first`, as in Japanese or Hungarian. polyglots-data
+  takes it from CLDR, where the two are called `givenFirst` and
+  `surnameFirst`. Needs `schema: 3`.
+
+  ```yaml
+  schema: 3
+  names:
+    order: family-first
+  ```
+
+  With `family-first`, a full name that keeps the English order is a hint
+  that gives the order to use: `%1$s %2$s` with a translator comment saying
+  1 is the first name and 2 the last should be `%2$s %1$s`. The check needs
+  a translator comment or a context that names the two, such as core's
+  "Display name based on first name and last name", and the two names side
+  by side in the source. A sort form such as `%2$s, %1$s` and a sentence
+  that names each person in its own place are left alone. The prompts get
+  one line saying the family name comes first. `given-first` adds no line
+  and reports nothing, since it is the order the English already has.
 
 Check a file after editing it:
 

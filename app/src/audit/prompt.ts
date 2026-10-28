@@ -3,7 +3,7 @@ import { localeDisplayName } from '../wporg/locales.js'
 import type { GlossaryMatch } from './rules/index.js'
 import { AUDIT_CATEGORIES } from './schema.js'
 import { isUniversalOnly, profileFor } from './rules/profiles.js'
-import { dateTimeLine, guidanceSection } from '../rules/guidance.js'
+import { dateTimeLine, guidanceSection, nameOrderLine } from '../rules/guidance.js'
 import { loadLocaleRules } from '../rules/load.js'
 import { isSkipFinding } from '../rules/custom.js'
 
@@ -193,7 +193,7 @@ nplurals: ${nplurals}
 ${pluralFormsLine(nplurals, pluralForms)}
 The locale team's standards:
 - The official WordPress ${language} glossary is binding. Every glossary term an entry's source contains is listed on that entry under "glossary", with its approved translation, so you do not need to look those up. ${tools ? 'Call glossary_lookup only for a term you need that is not listed there.' : 'A term that is not listed there is not in the glossary.'}
-${capitalization}${dateTimeLine(locale, language)}${isUniversalOnly(profile) ? universalOnlyNote(language) : ''}- Each entry's "references" are the source file and line the string comes from, and they are the best clue to its role: a path like admin-menu.php or help.php points at a label or a heading, while one like actions.php, or a translation in the imperative, points at a command.
+${capitalization}${dateTimeLine(locale, language)}${nameOrderLine(locale, language)}${isUniversalOnly(profile) ? universalOnlyNote(language) : ''}- Each entry's "references" are the source file and line the string comes from, and they are the best clue to its role: a path like admin-menu.php or help.php points at a label or a heading, while one like actions.php, or a translation in the imperative, points at a command.
 - Placeholders (%s, %1$s, %d, {x}) must be the ones the source has, none added and none dropped. A numbered placeholder such as %1$s may move where the language needs it, since the code fills it by its number: a locale that puts the family name first writes "%2$s %1$s" for "%1$s %2$s". Unnumbered ones such as %s and %d are filled in turn: keep them in the source's order, or number them all (%1$s, %2$d) to move them. HTML tags and leading/trailing whitespace must match the source exactly.
 ${register}- An entry's "memory" lists how this exact source has been translated and approved before, and every wording in it is already approved. Prefer one of them unless the source means something different here, or it breaks one of the standards above; where there are several, they are alternatives the locale accepts and any of them is a correct answer. ${tools ? 'You do not need tm_lookup for an entry that has one; call it only for near matches to an entry that has none. Call consistency_lookup to see how WordPress core already translates a string. ' : ''}Prefer established usage over a fresh invention.
 ${guidanceSection(locale)}
