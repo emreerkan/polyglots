@@ -157,3 +157,16 @@ describe('a locale rule skipped as a runaway', () => {
     expect(line).toBe('{"id":1,"source":"Save","submitted":["Kaydet"]}')
   })
 })
+
+describe('placeholder order', () => {
+  // A family-name-first locale writes "%2$s %1$s" for "%1$s %2$s", and sprintf
+  // fills a numbered placeholder by its number. Both prompts used to ask for
+  // the source's order, which sent a reviewer to put a correct swap back.
+  it('lets both prompts move a numbered placeholder but keep unnumbered ones in order', () => {
+    for (const prompt of [audit('de'), review('de')]) {
+      expect(prompt).toContain('A numbered placeholder such as %1$s may move')
+      expect(prompt).toContain('keep unnumbered ones such as %s and %d in the source\'s order')
+      expect(prompt).not.toMatch(/\{x\}\), HTML tags, and leading\/trailing whitespace must match|add, drop, reorder/)
+    }
+  })
+})

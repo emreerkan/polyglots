@@ -61,14 +61,18 @@ const hashTr = () => configHash({ locale: 'tr', glossary: [], properNouns: [] })
 // format, so every locale re-reviews once. The translate hashes did not move
 // for that, but did in the same release, when the agent's rules gained the
 // review prompt's line saying there is no shell and no filesystem.
+//
+// All seven moved once more, on purpose, when both prompts stopped asking for
+// the source's placeholder order and let a numbered placeholder move: a
+// reviewer told to keep the order would put a family-name-first swap back.
 const BEFORE = {
-  trEmpty: '258589bbfbb38a37',
-  trGloss: '39a20f1f70224c63',
-  de: '9899ccd1d0cafbfb',
-  deTranslate: '8487179fef88c973',
-  trTranslate: '620af8f4cb9c3a8e',
-  sv: '0388950fc4fa589a',
-  svTranslate: '98152972e0f05290',
+  trEmpty: '71b268a596c24fae',
+  trGloss: 'dd3715e2cfd40f40',
+  de: '5a2814228ef45213',
+  deTranslate: 'd8f68a89232e6829',
+  trTranslate: '491bd449f5fdb4dd',
+  sv: '7517e0f39aa44752',
+  svTranslate: '2c5670831d10d2c2',
 }
 
 describe('without a rules file', () => {

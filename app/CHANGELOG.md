@@ -28,6 +28,7 @@ Entries say what changed. For why and how, read the commit.
 ### Fixed
 
 - `glossary sync`, and the app after a sync from its menu, no longer end by asking for the sync just done.
+- The review and draft review prompts let a numbered placeholder move (`%2$s %1$s`), so a reviewer no longer undoes a family-name-first order. Every locale is re-reviewed, and agent draft reviews asked again, once.
 
 ## [1.1.0] - 2026-10-19
 
