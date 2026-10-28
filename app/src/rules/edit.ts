@@ -27,7 +27,7 @@ export interface RulesDraft {
   builtIn: { rules: string[]; glossaryStemRatio: number; properNouns: ProperNouns }
 }
 
-const SECTIONS = ['rules', 'glossaryStemRatio', 'properNouns', 'mistakes', 'patterns', 'guidance', ...SCHEMA_2_KEYS] as const
+const SECTIONS = ['rules', 'glossaryStemRatio', 'properNouns', 'mistakes', 'patterns', 'guidance', ...SCHEMA_2_KEYS, ...SCHEMA_3_KEYS] as const
 // Prompt text a person writes as several lines, one point per line.
 const PROSE = new Set<string>(['guidance', 'capitalization'])
 
@@ -105,9 +105,8 @@ export async function saveRulesDraft(draft: RulesDraft, next: RulesValue): Promi
   // the loader's message says it belongs. It is added only when something in
   // the saved value needs it: declaring 2 on a file that does not use it
   // would make an older polyglots refuse a file it can read. Schema 3 the
-  // same way: the editor has no dateTime fields, but turning date-format off
-  // names a rule only schema 3 knows, and a file opened with a dateTime
-  // keeps it.
+  // same way, for dateTime and names, and for turning date-format or
+  // name-order off, which names a rule only schema 3 knows.
   const needsSchema3 =
     SCHEMA_3_KEYS.some((key) => next[key] !== undefined) ||
     [...(next.rules?.enable ?? []), ...(next.rules?.disable ?? [])].some((name) => SCHEMA_3_RULES.includes(name))

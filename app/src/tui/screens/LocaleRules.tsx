@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import { useEffect, useState } from 'react'
 import { Box, Text } from 'ink'
+import { dateFormatProblems, isDateFormat } from '../../audit/rules/date-format.js'
 import { UNIVERSAL_RULES } from '../../audit/rules/profiles.js'
 import { openRulesDraft, saveRulesDraft, type RulesDraft, type RulesValue } from '../../rules/edit.js'
 import { BUILT_IN_RULES, findingLabel } from '../../rules/names.js'
@@ -47,6 +48,9 @@ type Stage =
   | 'sentenceEnd'
   | 'notEnding'
   | 'answers'
+  | 'dateTime'
+  | 'formats'
+  | 'names'
   | 'try'
   | 'copy'
   | 'fetch'
@@ -66,6 +70,8 @@ const SECTION_STAGE: Stage[] = [
   'mistakes',
   'patterns',
   'sentenceEnd',
+  'dateTime',
+  'names',
   'ratio',
   'try',
   'copy',
@@ -128,6 +134,31 @@ const describeRegister = (register: RulesValue['register']) => {
   if (parts.audit === undefined && parts.translate === undefined) return 'not set'
   return `review ${parts.audit === undefined ? 'not set' : 'set'} · draft ${parts.translate === undefined ? 'not set' : 'set'}`
 }
+
+type DateTime = NonNullable<RulesValue['dateTime']>
+type Clock = DateTime['clock']
+type DateOrder = DateTime['order']
+const CLOCKS: Clock[] = [undefined, '24h', '12h']
+const DATE_ORDERS: DateOrder[] = [undefined, 'dmy', 'mdy', 'ymd']
+const DATE_TIME_ROWS = 3
+type Format = { source: string; target: string }
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+const describeDateTime = (d: DateTime | undefined) => {
+  const formats = Object.keys(d?.formats ?? {}).length
+  const parts = [...(d?.clock ? [d.clock] : []), ...(d?.order ? [d.order] : []), ...(formats > 0 ? [plural(formats, 'format')] : [])]
+  return parts.length > 0 ? parts.join(' · ') : 'not set'
+}
+// The next value in a short list, wrapping round: three or four choices are
+// quicker to step through than to pick from a menu.
+const step = <T,>(list: readonly T[], current: T, by: number): T => list[(list.indexOf(current) + by + list.length) % list.length]!
+
+type NameOrder = NonNullable<RulesValue['names']>['order'] | undefined
+const NAME_ORDERS: { value: NameOrder; label: string }[] = [
+  { value: undefined, label: 'Not set' },
+  { value: 'given-first', label: 'Given name first' },
+  { value: 'family-first', label: 'Family name first' },
+]
 
 const sentenceRegex = (v: string) =>
   v === '' ? undefined : v.length > SENTENCE_REGEX_LIMIT ? `longer than ${SENTENCE_REGEX_LIMIT} characters` : !compiles(v) ? 'not a valid regular expression' : undefined
@@ -253,6 +284,7 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   const [nounCursor, setNounCursor] = useState(0)
   const [registerCursor, setRegisterCursor] = useState(0)
   const [endCursor, setEndCursor] = useState(0)
+  const [dateCursor, setDateCursor] = useState(0)
   const [trial, setTrial] = useState<TryResult | string>()
   const [glossary, setGlossary] = useState<GlossaryEntry[]>()
   const [copyResult, setCopyResult] = useState<{ ok: boolean; lines: string[] }>()
@@ -421,6 +453,54 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   }
   const formalityIndex = Math.max(0, FORMALITIES.findIndex((f) => f.value === value.formality))
 
+  const dates: DateTime = value.dateTime ?? {}
+  // As setEnd: only what is set reaches the file, and a section left with
+  // nothing in it is taken out rather than written empty.
+  const setDateTime = (next: DateTime) => {
+    const kept: DateTime = {
+      ...(next.clock ? { clock: next.clock } : {}),
+      ...(next.order ? { order: next.order } : {}),
+      ...(next.formats && Object.keys(next.formats).length > 0 ? { formats: next.formats } : {}),
+    }
+    const { dateTime: _, ...rest } = value
+    setValue(Object.keys(kept).length === 0 ? rest : { ...value, dateTime: kept })
+    setNotice(undefined)
+  }
+  const changeDateRow = (by: number) => {
+    if (dateCursor === 0) setDateTime({ ...dates, clock: step(CLOCKS, dates.clock, by) })
+    if (dateCursor === 1) setDateTime({ ...dates, order: step(DATE_ORDERS, dates.order, by) })
+  }
+  const formats: Format[] = Object.entries(dates.formats ?? {}).map(([source, target]) => ({ source, target }))
+  // Checked as the schema checks them, as they are typed: a suggestion the
+  // date-format check reports would teach contributors the wrong answer, and
+  // the file would be refused at save with the form long closed.
+  const formatFields = [
+    {
+      key: 'source',
+      label: 'English format',
+      required: true,
+      validate: (v: string) => (v.trim() !== '' && !isDateFormat(v.trim(), 'date format') ? 'not a PHP date format' : undefined),
+    },
+    {
+      key: 'target',
+      label: 'Your format',
+      required: true,
+      validate: (v: string, all: Record<string, string>) => {
+        const source = (all.source ?? '').trim()
+        if (v.trim() === '' || !isDateFormat(source, 'date format')) return undefined
+        const rules = { ...(dates.clock ? { clock: dates.clock } : {}), ...(dates.order ? { order: dates.order } : {}) }
+        const problem = dateFormatProblems(source, v.trim(), rules)[0]
+        return problem ? `the date-format check reports: ${problem.message}` : undefined
+      },
+    },
+  ]
+  const nameOrderIndex = Math.max(0, NAME_ORDERS.findIndex((n) => n.value === value.names?.order))
+  const setNameOrder = (order: NameOrder) => {
+    const { names: _, ...rest } = value
+    setValue(order === undefined ? rest : { ...value, names: { order } })
+    setNotice(undefined)
+  }
+
   // One listener, every stage: what a key does depends on the stage, and only
   // the live stage's handlers are set. The list editors, the forms and the
   // guidance editor own their keys, so none are set here while one is open.
@@ -495,7 +575,9 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
   useKeys({
     back: {
       esc:
-        copyNotice || on('nouns', 'rules', 'ratio', 'leave', 'builder', 'formality', 'register', 'sentenceEnd') || (on('fetch') && !writing)
+        copyNotice ||
+        on('nouns', 'rules', 'ratio', 'leave', 'builder', 'formality', 'register', 'sentenceEnd', 'dateTime', 'names') ||
+        (on('fetch') && !writing)
           ? toOverview
           : on('pick')
             ? onBack
@@ -565,6 +647,20 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
         : undefined,
       open: on('sentenceEnd') ? openEndRow : undefined,
     },
+    dateTime: {
+      move: on('dateTime')
+        ? (_ch, key) =>
+            key.upArrow ? setDateCursor((c) => Math.max(0, c - 1)) : setDateCursor((c) => Math.min(DATE_TIME_ROWS - 1, c + 1))
+        : undefined,
+      change: on('dateTime') && dateCursor < 2 ? (_ch, key) => changeDateRow(key.leftArrow ? -1 : 1) : undefined,
+      open: on('dateTime') && dateCursor === 2 ? () => setStage('formats') : undefined,
+    },
+    names: {
+      choose: on('names')
+        ? (_ch, key) =>
+            setNameOrder(NAME_ORDERS[key.upArrow ? Math.max(0, nameOrderIndex - 1) : Math.min(NAME_ORDERS.length - 1, nameOrderIndex + 1)]!.value)
+        : undefined,
+    },
   })
 
   const marker = (selected: boolean) => (selected ? '❯ ' : '  ')
@@ -588,6 +684,10 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
         return `Patterns           ${value.patterns.length}`
       case 'sentenceEnd':
         return `Sentence ends      ${describeSentenceEnd(value.sentenceEnd)}`
+      case 'dateTime':
+        return `Dates and times    ${describeDateTime(value.dateTime)}`
+      case 'names':
+        return `Name order         ${value.names?.order ?? 'not set'}`
       case 'ratio':
         return `Glossary match     ${ratio.toFixed(2)}`
       case 'try':
@@ -647,8 +747,14 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
 
       {draft && (stage === 'overview' || stage === 'leave') && (
         <>
+          {/* Followed, as the rule list is: with dateTime and names the list
+              is taller than a 24-row terminal, and a body with no target to
+              follow kept whatever offset the last screen left, hiding the
+              title on the way back and the cursor on the way down. */}
           {rows.map((row, i) => (
-            <Text key={row}>{`${marker(cursor === i)}${sectionLabel(row)}`}</Text>
+            <ScrollTarget key={row} active={cursor === i}>
+              <Text>{`${marker(cursor === i)}${sectionLabel(row)}`}</Text>
+            </ScrollTarget>
           ))}
           {dirty && (
             <Text color="yellow">
@@ -867,6 +973,41 @@ export function LocaleRules({ onBack }: LocaleRulesProps) {
           onChange={(answers) => setEnd({ ...end, answers })}
           onBack={() => setStage('sentenceEnd')}
         />
+      )}
+
+      {draft && stage === 'dateTime' && (
+        <>
+          <Text dimColor>How the language writes dates and times, for the date-format check and the prompts.</Text>
+          <Text>{`${marker(dateCursor === 0)}Clock              ${dates.clock ?? 'not set'}`}</Text>
+          <Text>{`${marker(dateCursor === 1)}Date order         ${dates.order ?? 'not set'}`}</Text>
+          <Text>{`${marker(dateCursor === 2)}Formats            ${formats.length}`}</Text>
+          <Hint>{dateCursor === 2 ? '↑↓ move · enter open · esc back to the overview' : '↑↓ move · ←→ change · esc back to the overview'}</Hint>
+        </>
+      )}
+
+      {draft && stage === 'formats' && (
+        <ListEditor<Format>
+          title="Usual formats"
+          items={formats}
+          empty={'No formats. Add what a common English format becomes, such as "F j, Y" → "j F Y".'}
+          describe={(f) => `"${f.source}" → "${f.target}"`}
+          fields={formatFields}
+          toForm={(f) => ({ source: f.source, target: f.target })}
+          fromForm={(v) => ({ source: v.source!.trim(), target: v.target!.trim() })}
+          onChange={(list) => setDateTime({ ...dates, formats: Object.fromEntries(list.map((f) => [f.source, f.target])) })}
+          onBack={() => setStage('dateTime')}
+        />
+      )}
+
+      {draft && stage === 'names' && (
+        <>
+          <Text>Which name the language writes first, for the name-order check</Text>
+          {NAME_ORDERS.map((n, i) => (
+            <Text key={n.label}>{`${marker(i === nameOrderIndex)}${n.label}`}</Text>
+          ))}
+          <Text dimColor>Family name first adds a line to the prompts and checks full names such as "%1$s %2$s".</Text>
+          <Hint>↑↓ choose · esc back to the overview</Hint>
+        </>
       )}
 
       {draft && stage === 'copy' && (

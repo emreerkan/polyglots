@@ -308,6 +308,14 @@ export const KEYS = {
     move: { keys: '↑↓', does: 'move through the sentence-end settings', match: vertical },
     open: { keys: 'space  enter', does: 'turn "no final mark" on or off, or open a setting', match: any(enter, space) },
   },
+  dateTime: {
+    move: { keys: '↑↓', does: 'move through the clock, the date order and the usual formats', match: vertical },
+    change: { keys: '←→  space', does: 'change the clock or the date order', match: any(horizontal, space) },
+    open: { keys: 'enter', does: 'open the usual formats', match: enter },
+  },
+  names: {
+    choose: { keys: '↑↓', does: 'choose not set, given name first or family name first', match: vertical },
+  },
   leave: {
     save: { keys: 's', does: 'with unsaved changes: save them', match: char('s') },
     discard: { keys: 'd', does: 'with unsaved changes: leave without saving', match: char('d') },
@@ -540,6 +548,10 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
       KEYS.register.open,
       KEYS.sentenceEnd.move,
       KEYS.sentenceEnd.open,
+      KEYS.dateTime.move,
+      KEYS.dateTime.change,
+      KEYS.dateTime.open,
+      KEYS.names.choose,
       KEYS.listEditor.move,
       KEYS.listEditor.add,
       KEYS.listEditor.edit,

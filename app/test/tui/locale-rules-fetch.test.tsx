@@ -54,7 +54,7 @@ async function openFetch(view: View) {
 }
 
 async function selectFetch(view: View) {
-  for (let i = 0; i < 12 && !/❯ Fetch from polyglots-data/.test(view.lastFrame()); i++) {
+  for (let i = 0; i < 14 && !/❯ Fetch from polyglots-data/.test(view.lastFrame()); i++) {
     view.stdin.write(keys.down)
     await tick()
   }

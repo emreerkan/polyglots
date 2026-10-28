@@ -29,7 +29,7 @@ function mount(overrides: Partial<TuiCommands> = {}) {
 
 async function openBuilder(view: ReturnType<typeof mount>) {
   await waitForText(view.lastFrame, /Built-in rules/)
-  for (let i = 0; i < 14 && !/❯ Open the rules builder in your browser/.test(view.lastFrame()); i++) {
+  for (let i = 0; i < 16 && !/❯ Open the rules builder in your browser/.test(view.lastFrame()); i++) {
     view.stdin.write(keys.down)
     await tick()
   }

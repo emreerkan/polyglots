@@ -37,6 +37,28 @@ async function openRuleList(size = { columns: 80, rows: 24 }) {
 
 const lines = (frame: string) => frame.split('\n')
 
+describe('the locale rules overview on a 24-row terminal', () => {
+  // Taller than the body since dateTime and names joined it. Its rows had no
+  // scroll target, so the cursor walked off the bottom out of sight.
+  it('keeps the highlighted row in view down to the last one, and the title on the way back', async () => {
+    const view = render(<App commands={fakeCommands()} cwd={cwd} />, { columns: 80, rows: 24 })
+    await openFromHome(view.stdin, 'locale-rules')
+    await waitForText(view.lastFrame, 'Built-in rules')
+    for (let i = 0; i < 20; i++) {
+      view.stdin.write(keys.down)
+      await tick()
+    }
+    await waitForText(view.lastFrame, /❯ Open the rules builder in your browser/)
+    expect(lines(view.lastFrame()).length).toBeLessThanOrEqual(24)
+    for (let i = 0; i < 20; i++) {
+      view.stdin.write(keys.up)
+      await tick()
+    }
+    await waitForText(view.lastFrame, /❯ Built-in rules/)
+    expect(flat(view.lastFrame())).toContain('Locale rules ·')
+  })
+})
+
 describe('a screen taller than the body', () => {
   it('keeps the frame inside the terminal, footer included', async () => {
     const { lastFrame } = await openRuleList()
