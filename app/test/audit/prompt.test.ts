@@ -165,7 +165,7 @@ describe('placeholder order', () => {
   it('lets both prompts move a numbered placeholder but keep unnumbered ones in order', () => {
     for (const prompt of [audit('de'), review('de')]) {
       expect(prompt).toContain('A numbered placeholder such as %1$s may move')
-      expect(prompt).toContain('keep unnumbered ones such as %s and %d in the source\'s order')
+      expect(prompt).toContain('keep them in the source\'s order, or number them all (%1$s, %2$d) to move them')
       expect(prompt).not.toMatch(/\{x\}\), HTML tags, and leading\/trailing whitespace must match|add, drop, reorder/)
     }
   })

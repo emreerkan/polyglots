@@ -123,8 +123,11 @@ describe('missingPlaceholders', () => {
     expect(missingPlaceholders('Hello %1$s, you have %2$d {things}', 'Merhaba %1$s')).toEqual(['%2$d', '{things}'])
   })
 
-  it('returns an empty list when all survive, regardless of order', () => {
-    expect(missingPlaceholders('%s of %d', '%d içinden %s')).toEqual([])
+  // sprintf fills unnumbered placeholders in turn, so moving %d in front of %s
+  // hands the number to %s and the string to %d. This used to pass.
+  it('reports unnumbered placeholders of different kinds moved out of order', () => {
+    expect(missingPlaceholders('%s of %d', '%d içinden %s')).toEqual(['%s', '%d'])
+    expect(missingPlaceholders('%s of %d', '%2$d içinden %1$s')).toEqual([])
   })
 
   it('ignores literal percent signs and plain braces text', () => {

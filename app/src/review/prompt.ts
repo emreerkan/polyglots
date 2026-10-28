@@ -74,7 +74,7 @@ Target locale: ${locale}
 nplurals: ${nplurals}
 ${pluralFormsLine(nplurals, pluralForms)}
 Rules:
-${tools ? TOOL_RULES(language) : NO_TOOL_RULES(language)}- Preserve the source's placeholders: %s, %d, %1$s, %2$d, {x}, {{x}}, and similar. Do not add, drop or reformat them. A numbered placeholder such as %1$s may move where the language needs it, since the code fills it by its number: a locale that puts the family name first writes "%2$s %1$s" for "%1$s %2$s". But keep unnumbered ones such as %s and %d in the source's order, since the code fills them in turn.
+${tools ? TOOL_RULES(language) : NO_TOOL_RULES(language)}- Preserve the source's placeholders: %s, %d, %1$s, %2$d, {x}, {{x}}, and similar. Do not add, drop or reformat them. A numbered placeholder such as %1$s may move where the language needs it, since the code fills it by its number: a locale that puts the family name first writes "%2$s %1$s" for "%1$s %2$s". Unnumbered ones such as %s and %d are filled in turn: keep them in the source's order, or number them all (%1$s, %2$d) to move them.
 - Preserve HTML tags and their attributes exactly.
 - Preserve leading/trailing whitespace and newlines exactly as in the source.
 - The "text" array must have exactly ${nplurals} strings for entries with msgidPlural (one per plural form, in the locale's plural order), and exactly 1 string otherwise. Never return an empty string.

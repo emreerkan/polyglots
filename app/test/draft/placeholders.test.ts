@@ -66,3 +66,27 @@ describe('missingPlaceholders and percent-encoded URLs', () => {
     expect(missingPlaceholders(src, '<a href="https://example.com/ab">Bağlantı</a>')).toHaveLength(1)
   })
 })
+
+describe('missingPlaceholders and numbering', () => {
+  // sprintf fills the k-th unnumbered placeholder from the k-th argument, so a
+  // translation that numbers them can put them in any order. A family-name-first
+  // locale needs that for "%s %s", and Turkish word order often does.
+  it('accepts unnumbered placeholders numbered and reordered in the translation', () => {
+    expect(missingPlaceholders('%s %s', '%2$s %1$s')).toEqual([])
+    expect(missingPlaceholders('%s by %s', '%2$s tarafından %1$s')).toEqual([])
+    expect(missingPlaceholders('%s of %d items', '%2$d öğenin %1$s kadarı')).toEqual([])
+    expect(missingPlaceholders('%2$s %1$s', '%s %s')).toEqual([])
+  })
+
+  it('still finds a numbered placeholder whose conversion does not match its argument', () => {
+    expect(missingPlaceholders('%s of %d items', '%2$s of %1$d items')).toEqual(['%s', '%d'])
+  })
+
+  it('still finds a lost argument when the rest are numbered', () => {
+    expect(missingPlaceholders('%s %s', '%2$s')).toEqual(['%s'])
+  })
+
+  it('leaves a source that mixes numbered and unnumbered placeholders as written', () => {
+    expect(missingPlaceholders('%1$s %s', '%2$s %1$s')).toEqual(['%s'])
+  })
+})

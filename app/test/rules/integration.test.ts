@@ -66,13 +66,13 @@ const hashTr = () => configHash({ locale: 'tr', glossary: [], properNouns: [] })
 // the source's placeholder order and let a numbered placeholder move: a
 // reviewer told to keep the order would put a family-name-first swap back.
 const BEFORE = {
-  trEmpty: '71b268a596c24fae',
-  trGloss: 'dd3715e2cfd40f40',
-  de: '5a2814228ef45213',
-  deTranslate: 'd8f68a89232e6829',
-  trTranslate: '491bd449f5fdb4dd',
-  sv: '7517e0f39aa44752',
-  svTranslate: '2c5670831d10d2c2',
+  trEmpty: 'b57bd9c30ca95d4f',
+  trGloss: 'bc5109121dbad0d8',
+  de: '11bd4373d3753372',
+  deTranslate: '49775b74c2dbe18b',
+  trTranslate: '77b078ef3b7513a7',
+  sv: 'd3c58d85bca4ba95',
+  svTranslate: 'b94fa073e1528987',
 }
 
 describe('without a rules file', () => {

@@ -88,6 +88,17 @@ describe('placeholder rule', () => {
   it('accepts placeholders that survive, including positional ones', () => {
     expect(rules(entry('%1$s of %2$s', '%2$s içinde %1$s'))).not.toContain('placeholder')
   })
+
+  it('accepts unnumbered placeholders that the translation numbers to move them', () => {
+    expect(rules(entry('%s by %s', '%2$s tarafından %1$s'))).not.toContain('placeholder')
+    expect(rules(entry('%s %s', '%2$s'))).toContain('placeholder')
+  })
+
+  it('tells a translation that moved unnumbered placeholders to number them', () => {
+    const finding = check(entry('%s of %d', '%d içinden %s')).find((f) => f.rule === 'placeholder')
+    expect(finding?.severity).toBe('error')
+    expect(finding?.message).toBe('translation moves %s, %d out of the order the code fills them in; number them (%1$s, %2$d) to move them')
+  })
 })
 
 describe('html rule', () => {

@@ -27,19 +27,52 @@ function placeholderPattern(): RegExp {
   return new RegExp(`${PRINTF_PLACEHOLDER}|${BRACE_PLACEHOLDER}`, 'g')
 }
 
-function countPlaceholders(text: string): Map<string, number> {
-  const counts = new Map<string, number>()
-  for (const [match] of text.replaceAll('%%', '').matchAll(placeholderPattern())) {
-    counts.set(match, (counts.get(match) ?? 0) + 1)
+const NUMBERED = /^%\d+\$/
+
+// sprintf fills the k-th unnumbered placeholder from the k-th argument, so in
+// a text whose printf placeholders are all unnumbered, %s in second place is
+// the same placeholder as %2$s. Comparing them that way lets a translation
+// number them and move them, which word order often needs ("%s by %s" in
+// Turkish) and a family-name-first locale needs for "%s %s". Comparing them as
+// written called that correct translation broken. A text that mixes the two
+// forms is compared as written: which argument a bare %s takes after a
+// numbered one is not something to guess at.
+function countPlaceholders(text: string): Map<string, { n: number; shown: string }> {
+  const found = [...text.replaceAll('%%', '').matchAll(placeholderPattern())].map(([match]) => match)
+  const printf = found.filter((ph) => ph.startsWith('%'))
+  const number = printf.length > 0 && !printf.some((ph) => NUMBERED.test(ph))
+  const counts = new Map<string, { n: number; shown: string }>()
+  let k = 0
+  for (const ph of found) {
+    const key = number && ph.startsWith('%') ? `%${++k}$${ph.slice(1)}` : ph
+    const seen = counts.get(key)
+    counts.set(key, { n: (seen?.n ?? 0) + 1, shown: ph })
   }
   return counts
 }
 
+/**
+ * The source's unnumbered printf placeholders, when the draft has the same ones
+ * in another order. missingPlaceholders reports those as lost, which is true of
+ * the arguments they now receive but tells a contributor nothing they can act
+ * on; this lets the message say what to do instead.
+ */
+export function movedPlaceholders(source: string, draft: string): string[] | undefined {
+  const printf = (text: string) =>
+    [...text.replaceAll('%%', '').matchAll(placeholderPattern())].map(([match]) => match).filter((ph) => ph.startsWith('%'))
+  const from = printf(source)
+  const to = printf(draft)
+  if (from.length < 2 || [...from, ...to].some((ph) => NUMBERED.test(ph))) return undefined
+  if (from.join('\u0000') === to.join('\u0000') || [...from].sort().join('\u0000') !== [...to].sort().join('\u0000')) return undefined
+  return from
+}
+
+/** The source's placeholders the draft lacks, as the source writes them. */
 export function missingPlaceholders(source: string, draft: string): string[] {
   const inDraft = countPlaceholders(draft)
   const missing: string[] = []
-  for (const [ph, n] of countPlaceholders(source)) {
-    if ((inDraft.get(ph) ?? 0) < n) missing.push(ph)
+  for (const [key, { n, shown }] of countPlaceholders(source)) {
+    if ((inDraft.get(key)?.n ?? 0) < n && !missing.includes(shown)) missing.push(shown)
   }
   return missing
 }

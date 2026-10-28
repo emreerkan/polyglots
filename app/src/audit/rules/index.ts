@@ -7,7 +7,7 @@ import { CUSTOM_RULE } from '../../rules/names.js'
 import { runRegexOps, skippedFor, type RegexOp } from '../../rules/sandbox.js'
 import type { CustomPattern, DateTimeRules, SentenceEndRules } from '../../rules/schema.js'
 import { dateFormatProblems, isDateFormat } from './date-format.js'
-import { missingPlaceholders } from '../../draft/placeholders.js'
+import { missingPlaceholders, movedPlaceholders } from '../../draft/placeholders.js'
 import {
   acronymStem,
   capitalizedWords,
@@ -218,6 +218,16 @@ const placeholder: Rule = (entry) => {
 
   for (const [i, text] of translation.entries()) {
     const source = sources[Math.min(i, sources.length - 1)]!
+    const moved = movedPlaceholders(source, text)
+    if (moved) {
+      const numbered = moved.map((ph, k) => `%${k + 1}$${ph.slice(1)}`)
+      findings.push({
+        rule: 'placeholder',
+        severity: 'error',
+        message: `translation moves ${moved.join(', ')} out of the order the code fills them in; number them (${numbered.join(', ')}) to move them`,
+      })
+      continue
+    }
     const missing = missingPlaceholders(source, text)
     const added = missingPlaceholders(text, source)
     if (missing.length > 0) {
