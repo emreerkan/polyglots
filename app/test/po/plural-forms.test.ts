@@ -34,6 +34,17 @@ describe('pluralDistribution', () => {
     expect(single(IRISH, 5)).toEqual([0, 1])
   })
 
+  // Turkish and French send 0 to the form for one. Nothing there says a count
+  // a word cannot, and code that can pass 0 guards it with its own string.
+  it('names the forms that serve no number above one', () => {
+    const upToOne = (header: string, nplurals: number) => [...pluralDistribution(header, nplurals)!.upToOne]
+    expect(upToOne('nplurals=2; plural=n > 1;', 2)).toEqual([0])
+    expect(upToOne('nplurals=2; plural=n != 1;', 2)).toEqual([0])
+    expect(upToOne(ARABIC, 6)).toEqual([0, 1])
+    expect(upToOne(RUSSIAN, 3)).toEqual([])
+    expect(upToOne('nplurals=1; plural=0;', 1)).toEqual([])
+  })
+
   // translate.wordpress.org compares this form with the singular.
   it('names the form that serves 1', () => {
     expect(pluralDistribution(ARABIC, 6)!.formForOne).toBe(1)

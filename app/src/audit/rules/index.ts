@@ -8,7 +8,7 @@ import { runRegexOps, skippedFor, type RegexOp } from '../../rules/sandbox.js'
 import type { CustomPattern, DateTimeRules, SentenceEndRules } from '../../rules/schema.js'
 import { dateFormatProblems, isDateFormat } from './date-format.js'
 import { nameOrderProblem, type NameRules } from './name-order.js'
-import { missingPlaceholders, movedPlaceholders, placeholdersIn } from '../../draft/placeholders.js'
+import { missingPlaceholders, movedPlaceholders, placeholderKeys } from '../../draft/placeholders.js'
 import type { PluralDistribution } from '../../po/plural-forms.js'
 import {
   acronymStem,
@@ -258,8 +258,10 @@ interface PlaceholderCheck {
  * one may go there.
  */
 function spellsOutTheNumber(source: string, text: string): boolean {
-  const written = placeholdersIn(source)
-  const kept = placeholdersIn(text)
+  // Read as missingPlaceholders reads them, so an all-unnumbered source's %s is
+  // the %1$s a form numbers it as.
+  const written = placeholderKeys(source).map(({ key }) => key)
+  const kept = placeholderKeys(text).map(({ key }) => key)
   const lost = written.filter((placeholder) => {
     const at = kept.indexOf(placeholder)
     if (at === -1) return true
@@ -292,10 +294,11 @@ function spellsOutTheNumber(source: string, text: string): boolean {
  */
 function placeholderChecks(entry: AuditEntry, ctx: RuleContext): PlaceholderCheck[] {
   const plural = entry.msgidPlural
-  const single = ctx.pluralDistribution?.singleNumber
-  if (plural && single) {
+  const distribution = ctx.pluralDistribution
+  if (plural && distribution) {
+    const { singleNumber, upToOne } = distribution
     return entry.msgstr.flatMap((text, form) =>
-      text ? [{ text, source: plural, alsoFrom: entry.msgid, mayOmit: single.has(form) }] : [],
+      text ? [{ text, source: plural, alsoFrom: entry.msgid, mayOmit: singleNumber.has(form) || upToOne.has(form) }] : [],
     )
   }
   const sources = plural ? [entry.msgid, plural] : [entry.msgid]
