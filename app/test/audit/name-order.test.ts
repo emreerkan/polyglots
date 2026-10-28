@@ -11,6 +11,8 @@ describe('nameRoles', () => {
     expect(nameRoles(['translators: 1: customer given name, 2: customer surname'])).toEqual({ given: 1, family: 2 })
     expect(nameRoles(['translators: 1: family name; 2: forename'])).toEqual({ given: 2, family: 1 })
     expect(nameRoles(['translators: 1: First, 2: Last.'])).toEqual({ given: 1, family: 2 })
+    // Core's, beside the context "Display name based on first name and last name".
+    expect(nameRoles(['translators: 1: User\'s first name, 2: Last name.'])).toEqual({ given: 1, family: 2 })
   })
 
   it('takes a bare role word only when it is the whole description', () => {
