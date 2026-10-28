@@ -128,6 +128,32 @@ describe('placeholder rule on plural forms', () => {
       .filter((f) => f.rule === 'placeholder')
       .map((f) => `${f.severity}: ${f.message}`)
   }
+  const TURKISH = 'nplurals=2; plural=n > 1;'
+
+  // Turkish and French send 0 to the form for one as well. Core guards zero
+  // with its own string ("No comments"), translate.wordpress.org compares that
+  // form with the singular, and so does msgfmt, which is lenient on a form it
+  // sees fewer than five times. An error here rejects a correct translation
+  // without the model ever seeing it.
+  // %1$s is the %s of an all-unnumbered source, so this form keeps the name
+  // and says its one number in words.
+  it('reads a numbered placeholder in a form for one as the source\'s unnumbered one', () => {
+    const forms = ['لا عناصر لدى %s', 'لدى %1$s عنصر واحد', 'لدى %s عنصران', 'لدى %s %d عناصر', 'لدى %s %d عنصرًا', 'لدى %s %d عنصر']
+    const findings = placeholderFindings('ar', ARABIC, 6, entry('%s has %d item', forms, { msgidPlural: '%s has %d items' }))
+    expect(findings.filter((f) => f.startsWith('error'))).toEqual([])
+  })
+
+  it('lets the form for one in an n > 1 locale follow the singular', () => {
+    expect(
+      placeholderFindings('tr', TURKISH, 2, entry('One comment', ['Bir yorum', '%s yorum'], { msgidPlural: '%s comments' })),
+    ).toEqual([])
+    // translate.wordpress.org compares it with a singular that has %s, so it
+    // warns, and the model weighs that.
+    expect(
+      placeholderFindings('fr', TURKISH, 2, entry('%s comment', ['Un commentaire', '%s commentaires'], { msgidPlural: '%s comments' })),
+    ).toEqual([glotpress('%s', 0)])
+  })
+
   const glotpress = (placeholders: string, form: number) =>
     `suspect: translate.wordpress.org warns about placeholder(s) ${placeholders} in msgstr[${form}], though the form is right for the numbers its plural formula serves`
 

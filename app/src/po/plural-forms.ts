@@ -28,6 +28,18 @@ export interface PluralDistribution {
    * only a form for a single number counts here.
    */
   singleNumber: ReadonlySet<number>
+  /**
+   * The forms the formula uses for no number above one: 0, 1, or both.
+   *
+   * Turkish and French send 0 to the form for one, so it is not a form for a
+   * single number, and holding it to msgid_plural made "Bir yorum" for "One
+   * comment" an error. translate.wordpress.org compares that form with the
+   * singular and accepts it, msgfmt checks it leniently as a form seen twice,
+   * and code that can pass 0 guards it with its own string ("No comments").
+   * Nothing a form for 0 and 1 says is a count no word can spell, which is what
+   * keeps Irish 3 to 6 out of singleNumber.
+   */
+  upToOne: ReadonlySet<number>
   // The form the formula uses for 1. translate.wordpress.org compares this one
   // with the singular and every other form with the plural.
   formForOne: number
@@ -51,6 +63,7 @@ export function pluralDistribution(header: string | undefined, nplurals: number)
   const expression = /plural\s*=\s*([^;]+)/.exec(header ?? '')?.[1]?.trim()
   if (!expression) return undefined
   const counts: number[] = Array.from({ length: nplurals }, () => 0)
+  const largest: number[] = Array.from({ length: nplurals }, () => -1)
   let formForOne = 0
   try {
     const formFor = pluralForms(expression)
@@ -58,6 +71,7 @@ export function pluralDistribution(header: string | undefined, nplurals: number)
       const form = formFor(n)
       if (!Number.isInteger(form) || form < 0 || form >= nplurals) return undefined
       counts[form]!++
+      largest[form] = n
       if (n === 1) formForOne = form
     }
   } catch {
@@ -65,6 +79,7 @@ export function pluralDistribution(header: string | undefined, nplurals: number)
   }
   return {
     singleNumber: new Set(counts.flatMap((count, form) => (count === 1 ? [form] : []))),
+    upToOne: new Set(largest.flatMap((n, form) => (n >= 0 && n <= 1 ? [form] : []))),
     formForOne,
   }
 }
