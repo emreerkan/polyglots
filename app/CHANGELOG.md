@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-28
+
 ### Fixed
 
 - Glossary terms are found in a capitalized source in every locale; in Turkish and Azerbaijani a term with an `i` was missed when the source wrote it `I`.
