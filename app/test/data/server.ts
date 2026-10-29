@@ -19,7 +19,9 @@ export async function serve(routes: Record<string, Route>): Promise<TestServer> 
   const server = createServer((req, res) => {
     const path = req.url ?? '/'
     requests.push({ path, userAgent: req.headers['user-agent'] })
-    const route = routes[path]
+    // Own keys only: a request target of `constructor` or `toString` would
+    // otherwise find a method on the object's prototype and call it as a route.
+    const route = Object.hasOwn(routes, path) ? routes[path] : undefined
     if (route) route(req, res)
     else res.writeHead(404).end('not here')
   })
