@@ -2,7 +2,7 @@ import { buildReport } from '../review/message.js'
 import type { Locale, ReviewSummary } from '../types.js'
 import type { FetchStatus } from '../wporg/projects.js'
 import type { ProjectOutcome } from './batch.js'
-import type { Resolution } from './fetch.js'
+import type { Fetched, Resolution } from './fetch.js'
 import type { TranslateSummary } from './translate.js'
 
 export type BatchSummary = ReviewSummary | TranslateSummary
@@ -41,6 +41,19 @@ export function describeResolution(r: Resolution, status: FetchStatus): string {
   if (r.state === 'not-found') return 'not found'
   if (r.state === 'unreachable') return `could not check: ${r.reason}`
   return r.reason
+}
+
+// One line of the list once checked. A plugin's readme is checked with its
+// code, from the same page, so it is named on the plugin's line.
+export function describeChecked(results: Resolution[], status: FetchStatus): string {
+  const [code, readme] = results
+  const line = code === undefined ? '' : describeResolution(code, status)
+  return readme?.state === 'ready' ? `${line} + readme, ${readme.count} ${status}` : line
+}
+
+export function describeDownload(f: Fetched): string {
+  if (f.state === 'failed') return `failed: ${f.reason}`
+  return f.state === 'fetched' ? 'saved' : 'kept, already on disk'
 }
 
 /**

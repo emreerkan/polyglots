@@ -10,6 +10,14 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Added
+
+- Fetch lists every project while it checks the list and downloads the exports, with a count and a spinner on the one in progress; the CLI shows the same on stderr.
+
+### Changed
+
+- In the TUI, q and esc while fetch checks or downloads ask first, then cancel the requests and go back to the menu. Leaving the screen cancels them too.
+
 ### Security
 
 - Upgraded @hono/node-server to 2.1.5.

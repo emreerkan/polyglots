@@ -41,7 +41,7 @@ export interface HttpResponse {
   retryAfter?: string
 }
 
-export type HttpGet = (url: string, opts?: { timeoutMs?: number }) => Promise<HttpResponse>
+export type HttpGet = (url: string, opts?: { timeoutMs?: number; signal?: AbortSignal }) => Promise<HttpResponse>
 
 /**
  * A GET that reports the status instead of throwing on it.
@@ -60,15 +60,19 @@ export const httpGet: HttpGet = async (url, opts = {}) => {
   const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  // The caller's signal is a person leaving the screen, not a slow server, so
+  // it is rethrown as the abort it is rather than reported as a timeout.
+  const signal = opts.signal ? AbortSignal.any([controller.signal, opts.signal]) : controller.signal
   try {
     const res = await fetch(url, {
       method: 'GET',
       headers: { 'User-Agent': USER_AGENT },
-      signal: controller.signal,
+      signal,
     })
     const retryAfter = res.headers.get('retry-after')
     return { status: res.status, body: await res.text(), ...(retryAfter ? { retryAfter } : {}) }
   } catch (err) {
+    opts.signal?.throwIfAborted()
     if (err instanceof Error && err.name === 'AbortError') {
       throw new Error(`GET ${url} timed out after ${timeoutMs}ms`)
     }

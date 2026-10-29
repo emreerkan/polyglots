@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { endOfJob } from '../../src/commands/fetch-report.js'
+import { describeChecked, describeDownload, endOfJob } from '../../src/commands/fetch-report.js'
 import type { TranslateSummary } from '../../src/commands/translate.js'
 import type { ReviewSummary } from '../../src/types.js'
 
@@ -62,5 +62,22 @@ describe('endOfJob: a file with a batch given up', () => {
   it('names the failed batches on a stopped translate line', () => {
     const end = endOfJob({ file: 'a.po', state: 'done', summary: translated({ skipped: 4, stopped: 'stopped by the operator' }) }, 'me')
     expect(end).toEqual({ tally: 'stopped', detail: '5 translated, 1 fuzzy, 2 from TM, 4 in failed batches, stopped: stopped by the operator' })
+  })
+})
+
+describe('describeDownload', () => {
+  it('says what became of each export', () => {
+    expect(describeDownload({ input: 'koji', file: '/x/a.po', state: 'fetched' })).toBe('saved')
+    expect(describeDownload({ input: 'koji', file: '/x/a.po', state: 'kept' })).toBe('kept, already on disk')
+    expect(describeDownload({ input: 'koji', state: 'failed', reason: 'export answered 500' })).toBe('failed: export answered 500')
+  })
+})
+
+describe('describeChecked', () => {
+  it("names a plugin's readme beside its code", () => {
+    const code = { input: 'acme', state: 'ready' as const, type: 'wp-plugins' as const, slug: 'acme', branch: 'dev', count: 4 }
+    const readme = { ...code, input: 'wp-plugins/acme/stable-readme', branch: 'stable-readme', count: 2 }
+    expect(describeChecked([code], 'waiting')).toBe('plugin dev, 4 waiting')
+    expect(describeChecked([code, readme], 'waiting')).toBe('plugin dev, 4 waiting + readme, 2 waiting')
   })
 })

@@ -64,8 +64,16 @@ export interface BatchRunProps {
    * files already on disk. Its waiting notices go under the preparing line.
    */
   prepare: (onWait: (notice: string | undefined) => void) => Promise<Prepared>
-  // What the screen says while prepare runs: "Downloading 3 exports...".
-  preparing?: string
+  // What the screen shows while prepare runs: fetch's list of exports.
+  preparing?: ReactNode
+  /**
+   * The preparing view binds q itself, and the run keys stay off until the
+   * jobs start. Fetch's downloads take minutes, and its view asks whether to
+   * leave: q stopping the batch there waited for every export before the stop
+   * took hold. A prepare that is over before a key can be pressed leaves it
+   * unset, and q stops the batch as it does once the jobs run.
+   */
+  preparingKeys?: true
   /**
    * Fetch has one locale for the list, and so do local files once a locale
    * is configured: the header names it and l changes it. With none, local
@@ -421,13 +429,14 @@ export function BatchRun(props: BatchRunProps) {
   // screen binds c and t for its own reply, and both would answer.
   const summary = done && !inspected
   const close = () => setInspecting(undefined)
+  const runKeys = shown === 'running' && !(phase === 'preparing' && props.preparingKeys)
   useKeys({
     // Before back, so q stops the whole batch from an opened file too: the
     // run keys act on the batch in both views, and the hint there says so.
     run: {
-      pause: shown === 'running' ? () => control.current?.pause() : undefined,
-      resume: shown === 'running' ? () => control.current?.resume() : undefined,
-      stop: shown === 'running' ? () => control.current?.stop() : undefined,
+      pause: runKeys ? () => control.current?.pause() : undefined,
+      resume: runKeys ? () => control.current?.resume() : undefined,
+      stop: runKeys ? () => control.current?.stop() : undefined,
     },
     back: {
       esc: options ? props.onLeave : inspected ? close : shown === 'done' && !report.holdsEsc ? props.onBack : undefined,
@@ -586,7 +595,7 @@ export function BatchRun(props: BatchRunProps) {
     return (
       <Box flexDirection="column">
         {phase === 'preparing' ? (
-          props.preparing && <Text>{props.preparing}</Text>
+          props.preparing
         ) : (
           <>
             <Text>{first}</Text>
@@ -612,7 +621,7 @@ export function BatchRun(props: BatchRunProps) {
         )}
         {phase === 'preparing' && waiting && <Text color="yellow">{waiting}</Text>}
         {runNotes}
-        <Hint>{`${phase === 'running' ? `${tracks.length > 1 ? '↑↓ move · ' : ''}enter open a file · ` : ''}p pause · r resume · q stop and keep what is done`}</Hint>
+        {runKeys && <Hint>{`${phase === 'running' ? `${tracks.length > 1 ? '↑↓ move · ' : ''}enter open a file · ` : ''}p pause · r resume · q stop and keep what is done`}</Hint>}
       </Box>
     )
   }

@@ -11,6 +11,8 @@ export interface GlyphSet {
   box: { tl: string; tr: string; bl: string; br: string; h: string; v: string }
   bar: { filled: string; empty: string }
   spark: readonly string[]
+  // The frames of the mark on a line being worked on, in order.
+  spinner: readonly string[]
 }
 
 // The bar keeps the parallelograms progress.ts has always drawn, moved here so
@@ -27,6 +29,7 @@ export const UNICODE_GLYPHS: GlyphSet = {
   box: { tl: '╭', tr: '╮', bl: '╰', br: '╯', h: '─', v: '│' },
   bar: { filled: '▰', empty: '▱' },
   spark: ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'],
+  spinner: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
 }
 
 export const ASCII_GLYPHS: GlyphSet = {
@@ -39,4 +42,5 @@ export const ASCII_GLYPHS: GlyphSet = {
   box: { tl: '+', tr: '+', bl: '+', br: '+', h: '-', v: '|' },
   bar: { filled: '#', empty: '-' },
   spark: ['_', '.', ':', '-', '=', '+', '*', '#'],
+  spinner: ['|', '/', '-', '\\'],
 }

@@ -402,3 +402,163 @@ describe('rate limiting', () => {
     }
   })
 })
+
+// A list of thirty projects takes minutes to check and longer to download, so
+// the screens show which project is being worked on. The events carry nothing
+// the results do not: only when each project starts and how it ended.
+describe('progress', () => {
+  let out: string
+
+  beforeEach(async () => {
+    out = await mkdtemp(join(tmpdir(), 'polyglots-fetch-'))
+  })
+
+  afterEach(async () => {
+    await rm(out, { recursive: true, force: true })
+  })
+
+  it('reports each project as it is checked and how it ended', async () => {
+    const http = serve({ [localePageUrl('wp-themes', 'koji', 'tr')]: { status: 200, body: fixture('theme-page.html') } })
+    const events: unknown[] = []
+    await resolveProjects(parseProjectLines('koji\nnope'), {
+      locale: 'tr',
+      status: 'waiting',
+      pauseMs: 0,
+      http,
+      onProgress: (e) => events.push(e),
+    })
+    expect(events).toEqual([
+      { input: 'koji', state: 'checking' },
+      { input: 'koji', state: 'checked', results: [expect.objectContaining({ input: 'koji', state: 'ready' })] },
+      { input: 'nope', state: 'checking' },
+      { input: 'nope', state: 'checked', results: [expect.objectContaining({ input: 'nope', state: 'not-found' })] },
+    ])
+  })
+
+  // A plugin's readme is a line of the results but not of the list, so it
+  // arrives with its plugin rather than as a project of its own.
+  it("reports a plugin's readme with the plugin it came from", async () => {
+    const http = serve({
+      [localePageUrl('wp-plugins', 'acme', 'tr')]: {
+        status: 200,
+        body: pluginPage('acme', { dev: { untranslated: 0, waiting: 4 }, 'stable-readme': { untranslated: 0, waiting: 2 } }),
+      },
+    })
+    const events: Array<{ state: string; results?: unknown[] }> = []
+    await resolveProjects(parseProjectLines('wp-plugins/acme'), {
+      locale: 'tr',
+      status: 'waiting',
+      pauseMs: 0,
+      http,
+      onProgress: (e) => events.push(e),
+    })
+    expect(events.map((e) => e.state)).toEqual(['checking', 'checked'])
+    expect(events[1]!.results).toHaveLength(2)
+  })
+
+  it('reports each export as it downloads and how it ended', async () => {
+    const http = serve({ [exportUrl('wp-themes', 'koji', undefined, 'tr', 'waiting')]: { status: 200, body: PO } })
+    const ready = [
+      { input: 'koji', state: 'ready' as const, type: 'wp-themes' as const, slug: 'koji', count: 1 },
+      { input: 'gone', state: 'ready' as const, type: 'wp-themes' as const, slug: 'gone', count: 1 },
+    ]
+    const events: unknown[] = []
+    await fetchProjects(ready, { locale: 'tr', status: 'waiting', outDir: out, http, pauseMs: 0, onProgress: (e) => events.push(e) })
+    expect(events).toEqual([
+      { input: 'koji', state: 'downloading' },
+      { input: 'koji', state: 'downloaded', result: expect.objectContaining({ state: 'fetched' }) },
+      { input: 'gone', state: 'downloading' },
+      { input: 'gone', state: 'downloaded', result: expect.objectContaining({ state: 'failed' }) },
+    ])
+  })
+
+  // A file kept for translate is never requested, so it never downloads.
+  it('reports a kept file as ended without downloading it', async () => {
+    const theme = { input: 'koji', state: 'ready' as const, type: 'wp-themes' as const, slug: 'koji', count: 1 }
+    await writeFile(join(out, 'wp-themes-koji-tr-untranslated.po'), PO)
+    const events: unknown[] = []
+    await fetchProjects([theme], { locale: 'tr', status: 'untranslated', outDir: out, http: serve({}), pauseMs: 0, onProgress: (e) => events.push(e) })
+    expect(events).toEqual([{ input: 'koji', state: 'downloaded', result: expect.objectContaining({ state: 'kept' }) }])
+  })
+})
+
+// The person can leave the screen part way through a long list. Nothing after
+// that is asked of wp.org, and the request in flight is cancelled with it.
+describe('abort', () => {
+  let out: string
+
+  beforeEach(async () => {
+    out = await mkdtemp(join(tmpdir(), 'polyglots-fetch-'))
+  })
+
+  afterEach(async () => {
+    await rm(out, { recursive: true, force: true })
+  })
+
+  // Answers every page after the first only once the test lets it, so the
+  // abort lands while a request is in flight.
+  function gated(controller: AbortController) {
+    const asked: string[] = []
+    const signals: Array<AbortSignal | undefined> = []
+    const http: HttpGet = (url, opts) => {
+      asked.push(url)
+      signals.push(opts?.signal)
+      return new Promise((resolve, reject) => {
+        opts?.signal?.addEventListener('abort', () => reject(opts.signal!.reason))
+        if (asked.length === 1) resolve({ status: 404, body: '' })
+        else queueMicrotask(() => controller.abort())
+      })
+    }
+    return { http, asked, signals }
+  }
+
+  it('stops checking the list and cancels the page in flight', async () => {
+    const controller = new AbortController()
+    const { http, asked, signals } = gated(controller)
+    const run = resolveProjects(parseProjectLines('wp-themes/a\nwp-themes/b\nwp-themes/c'), {
+      locale: 'tr',
+      status: 'waiting',
+      pauseMs: 0,
+      http,
+      signal: controller.signal,
+    })
+    await expect(run).rejects.toMatchObject({ name: 'AbortError' })
+    expect(asked).toHaveLength(2)
+    expect(signals[1]?.aborted).toBe(true)
+  })
+
+  it('stops the downloads and cancels the export in flight', async () => {
+    const controller = new AbortController()
+    const { http, asked, signals } = gated(controller)
+    const ready = ['a', 'b', 'c'].map((slug) => ({ input: slug, state: 'ready' as const, type: 'wp-themes' as const, slug, count: 1 }))
+    const run = fetchProjects(ready, {
+      locale: 'tr',
+      status: 'waiting',
+      outDir: out,
+      pauseMs: 0,
+      http,
+      signal: controller.signal,
+    })
+    await expect(run).rejects.toMatchObject({ name: 'AbortError' })
+    expect(asked).toHaveLength(2)
+    expect(signals[1]?.aborted).toBe(true)
+  })
+
+  it('asks nothing more once aborted during the pause between requests', async () => {
+    const asked: string[] = []
+    const http: HttpGet = async (url) => {
+      asked.push(url)
+      return { status: 404, body: '' }
+    }
+    const controller = new AbortController()
+    const run = resolveProjects(parseProjectLines('wp-themes/a\nwp-themes/b'), {
+      locale: 'tr',
+      status: 'waiting',
+      http,
+      signal: controller.signal,
+      sleep: async () => controller.abort(),
+    })
+    await expect(run).rejects.toMatchObject({ name: 'AbortError' })
+    expect(asked).toHaveLength(1)
+  })
+})

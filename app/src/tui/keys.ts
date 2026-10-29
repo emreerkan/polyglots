@@ -248,6 +248,14 @@ export const KEYS = {
   fetchResolved: {
     next: { keys: 'enter', does: 'continue to the options', match: enter },
   },
+  // Leaving a fetch part way, from the check or the downloads. Asked first,
+  // since a long list is minutes of requests to throw away, and a yes cancels
+  // them rather than leaving them running behind the menu.
+  fetchAbort: {
+    leave: { keys: 'q  esc', does: 'stop and go back to the menu, asking first', match: any(char('q'), esc) },
+    yes: { keys: 'y', does: 'stop and go back to the menu', match: char('y') },
+    no: { keys: 'n  esc', does: 'keep going', match: any(char('n'), esc) },
+  },
   // Import TM's first question: the vault's memory, or a file of one's own.
   importChoice: {
     move: { keys: '↑↓', does: 'fetch from polyglots-data or import a file', match: vertical },
@@ -500,6 +508,9 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
       KEYS.fetchGet.readme,
       KEYS.fetchGet.check,
       KEYS.fetchResolved.next,
+      KEYS.fetchAbort.leave,
+      KEYS.fetchAbort.yes,
+      KEYS.fetchAbort.no,
       ...FORM,
       finished.close,
       KEYS.needsLocale.setup,

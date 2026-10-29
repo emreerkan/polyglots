@@ -374,3 +374,144 @@ describe('Menu entry', () => {
     await waitFor(() => /Projects/.test(view.lastFrame()))
   })
 })
+
+// A list of thirty projects is minutes of requests, and an export of a big
+// plugin takes minutes on its own. Every line is on screen while that runs,
+// the one being worked on marked with a spinner, and a count says how far.
+describe('Fetch progress', () => {
+  const SPIN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/
+
+  it('lists every project while the list is checked and marks the one in progress', async () => {
+    let release!: () => void
+    const view = mount({
+      resolveProjects: async (refs, opts) => {
+        opts.onProgress?.({ input: 'koji', state: 'checking' })
+        opts.onProgress?.({ input: 'koji', state: 'checked', results: [{ input: 'koji', state: 'ready', type: 'wp-themes', slug: 'koji', count: 5 }] })
+        opts.onProgress?.({ input: 'sydney', state: 'checking' })
+        await new Promise<void>((r) => (release = r))
+        return resolveProjects(refs, opts)
+      },
+    })
+    await enterList(view, ['koji', 'sydney', 'astra'])
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Checking projects: 1\/3/)
+    const frame = flat(view.lastFrame())
+    expect(frame).toMatch(/koji theme, 5 waiting/)
+    expect(frame).toMatch(new RegExp(`${SPIN.source} sydney checking`))
+    expect(frame).toMatch(/astra queued/)
+    release()
+    await waitForText(view.lastFrame, /enter to continue/)
+  })
+
+  it('lists every export while they download and marks the one in progress', async () => {
+    let release!: () => void
+    const view = mount({
+      fetchProjects: async (ready, opts) => {
+        opts.onProgress?.({ input: 'koji', state: 'downloading' })
+        opts.onProgress?.({ input: 'koji', state: 'downloaded', result: { input: 'koji', state: 'fetched', file: '/x/koji.po' } })
+        opts.onProgress?.({ input: 'sydney', state: 'downloading' })
+        await new Promise<void>((r) => (release = r))
+        return fetchProjects(ready, opts)
+      },
+    })
+    await enterList(view, ['koji', 'sydney', 'missing'])
+    await chooseAndResolve(view, 'waiting')
+    await toOptions(view)
+    for (let i = 0; i < 4; i++) {
+      view.stdin.write(keys.down)
+      await tick()
+    }
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Downloading exports: 1\/2/)
+    const frame = flat(view.lastFrame())
+    expect(frame).toMatch(/koji saved/)
+    expect(frame).toMatch(new RegExp(`${SPIN.source} sydney downloading`))
+    expect(frame).not.toMatch(/missing/)
+    release()
+  })
+})
+
+// Leaving part way asks first, since a long list is minutes of work to throw
+// away, and a yes cancels the requests rather than leaving them running.
+describe('Fetch stopped part way', () => {
+  // Never answers, and records the signal it was handed.
+  function hanging() {
+    const seen: { signal?: AbortSignal } = {}
+    const wait = (signal: AbortSignal | undefined) =>
+      new Promise<never>((_resolve, reject) => {
+        seen.signal = signal
+        signal?.addEventListener('abort', () => reject(signal.reason))
+      })
+    return { seen, wait }
+  }
+
+  for (const [name, key] of [
+    ['q', 'q'],
+    ['esc', keys.esc],
+  ] as const) {
+    it(`asks before ${name} stops the check, and goes back to the menu on yes`, async () => {
+      const { seen, wait } = hanging()
+      const onBack = vi.fn()
+      const view = mount({ resolveProjects: async (_refs, opts) => wait(opts.signal) }, onBack)
+      await enterList(view, ['koji'])
+      view.stdin.write(keys.enter)
+      await waitForText(view.lastFrame, /Checking projects/)
+      view.stdin.write(key)
+      await waitForText(view.lastFrame, /Stop checking and go back to the menu\?/)
+      expect(onBack).not.toHaveBeenCalled()
+      view.stdin.write('y')
+      await tick()
+      expect(onBack).toHaveBeenCalledTimes(1)
+      expect(seen.signal?.aborted).toBe(true)
+    })
+  }
+
+  it('keeps checking on no', async () => {
+    const { seen, wait } = hanging()
+    const onBack = vi.fn()
+    const view = mount({ resolveProjects: async (_refs, opts) => wait(opts.signal) }, onBack)
+    await enterList(view, ['koji'])
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Checking projects/)
+    view.stdin.write('q')
+    await waitForText(view.lastFrame, /Stop checking/)
+    view.stdin.write('n')
+    await tick()
+    expect(flat(view.lastFrame())).not.toMatch(/Stop checking/)
+    expect(flat(view.lastFrame())).toMatch(/Checking projects/)
+    expect(onBack).not.toHaveBeenCalled()
+    expect(seen.signal?.aborted).toBe(false)
+  })
+
+  it('asks before q stops the downloads, and goes back to the menu on yes', async () => {
+    const { seen, wait } = hanging()
+    const onBack = vi.fn()
+    const view = mount({ fetchProjects: async (_ready, opts) => wait(opts.signal) }, onBack)
+    await enterList(view, ['koji'])
+    await chooseAndResolve(view, 'waiting')
+    await toOptions(view)
+    for (let i = 0; i < 4; i++) {
+      view.stdin.write(keys.down)
+      await tick()
+    }
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Downloading exports/)
+    view.stdin.write('q')
+    await waitForText(view.lastFrame, /Stop the downloads and go back to the menu\?/)
+    expect(flat(view.lastFrame())).toMatch(/already saved stay in/)
+    view.stdin.write('y')
+    await tick()
+    expect(onBack).toHaveBeenCalledTimes(1)
+    expect(seen.signal?.aborted).toBe(true)
+  })
+
+  it('cancels the check when the screen goes away', async () => {
+    const { seen, wait } = hanging()
+    const view = mount({ resolveProjects: async (_refs, opts) => wait(opts.signal) })
+    await enterList(view, ['koji'])
+    view.stdin.write(keys.enter)
+    await waitForText(view.lastFrame, /Checking projects/)
+    view.unmount()
+    expect(seen.signal?.aborted).toBe(true)
+  })
+})

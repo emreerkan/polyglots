@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Box, Text } from 'ink'
 import { providerLabel } from '../local.js'
-import { defaultOutDir, type Ready, type Resolution } from '../../commands/fetch.js'
+import { defaultOutDir, projectInput, type Ready, type Resolution } from '../../commands/fetch.js'
 import { describeResolution, endOfResolution, waitNotice, type ProjectEnd } from '../../commands/fetch-report.js'
 import type { Locale } from '../../types.js'
 import { parseProjectLines, type FetchStatus } from '../../wporg/projects.js'
@@ -9,6 +9,8 @@ import { configuredLocale } from '../../config.js'
 import { useCommands, useConfig } from '../commands.js'
 import { BatchRun, type BatchStage } from '../components/BatchRun.js'
 import { NeedsLocale } from '../components/NeedsLocale.js'
+import { ProjectProgress } from '../components/ProjectProgress.js'
+import { checkRows, downloadRows, queuedRows, type ProgressRow } from '../fetch-progress.js'
 import { DONE_HINT, Hint } from '../components/Hint.js'
 import { useKeys } from '../hooks/useKeys.js'
 import { useTypingWhile } from '../input.js'
@@ -67,6 +69,16 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
   // The latest backoff, shown under the checking line.
   const [waiting, setWaiting] = useState<string | undefined>(undefined)
   const [batchStage, setBatchStage] = useState<BatchStage>('options')
+  // Each line while the list is checked, and each export while it downloads.
+  const [checking, setChecking] = useState<ProgressRow[]>([])
+  const [downloads, setDownloads] = useState<ProgressRow[]>([])
+  // Asking whether to stop the check part way.
+  const [confirming, setConfirming] = useState(false)
+  // The check's requests, cancelled by a yes or by the screen going away.
+  // Without it the lookups went on behind the menu, and their answer landed
+  // on a screen that was no longer there.
+  const abort = useRef<AbortController | undefined>(undefined)
+  useEffect(() => () => abort.current?.abort(), [])
 
   const review = status === 'waiting'
   const ready = resolutions.filter((r): r is Ready => r.state === 'ready')
@@ -74,35 +86,58 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
   useFooterStage(shown === 'batch' ? (batchStage === 'summary' ? 'done' : batchStage) : undefined)
 
   const resolve = (chosen: FetchStatus) => {
+    const refs = parseProjectLines(lines.join('\n'))
+    const controller = new AbortController()
+    abort.current = controller
     setStage('resolving')
     setResolveError(undefined)
+    setChecking(queuedRows(refs.map(projectInput)))
     commands
-      .resolveProjects(parseProjectLines(lines.join('\n')), {
+      .resolveProjects(refs, {
         locale,
         status: chosen,
         readme,
+        signal: controller.signal,
         onWait: (ms) => setWaiting(waitNotice(ms)),
+        onProgress: (e) => setChecking((rows) => checkRows(rows, e, chosen)),
       })
-      .then(setResolutions, (err: unknown) => setResolveError(err instanceof Error ? err.message : String(err)))
+      .then(
+        (r) => !controller.signal.aborted && setResolutions(r),
+        (err: unknown) => !controller.signal.aborted && setResolveError(err instanceof Error ? err.message : String(err)),
+      )
       .finally(() => {
+        if (controller.signal.aborted) return
         setWaiting(undefined)
+        setConfirming(false)
         setStage('resolved')
       })
+  }
+
+  // Leaves the check or the downloads, whichever is running: both keep their
+  // requests in abort.
+  const stopAndLeave = () => {
+    abort.current?.abort()
+    onBack()
   }
 
   // The downloads are fetch's part of the batch; BatchRun runs what they
   // leave on disk, the same way it runs files marked in a picker.
   const prepare = async (onWait: (notice: string | undefined) => void) => {
+    const controller = new AbortController()
+    abort.current = controller
     const ends = new Map<string, ProjectEnd>()
     for (const r of resolutions) {
       const end = endOfResolution(r, status)
       if (end) ends.set(r.input, end)
     }
+    setDownloads(queuedRows(ready.map((r) => r.input)))
     const fetched = await commands.fetchProjects(ready, {
       locale,
       status,
       outDir: defaultOutDir(),
+      signal: controller.signal,
       onWait: (ms) => onWait(waitNotice(ms)),
+      onProgress: (e) => setDownloads((rows) => downloadRows(rows, e)),
     })
     const items = fetched.flatMap((f) => {
       if (f.state === 'failed') {
@@ -135,9 +170,16 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
   const listing = shown === 'list'
   // The batch's stages bind their own keys, back included, in BatchRun.
   const batch = shown === 'batch'
+  const resolving = shown === 'resolving'
   useKeys({
-    // Only escape leaves the list: q is a letter that slugs contain.
-    back: { esc: batch ? undefined : onBack, q: batch || listing ? undefined : onBack },
+    // Only escape leaves the list: q is a letter that slugs contain. While
+    // the list is checked, both ask first (fetchAbort).
+    back: { esc: batch || resolving ? undefined : onBack, q: batch || listing || resolving ? undefined : onBack },
+    fetchAbort: {
+      leave: resolving && !confirming ? () => setConfirming(true) : undefined,
+      yes: resolving && confirming ? stopAndLeave : undefined,
+      no: resolving && confirming ? () => setConfirming(false) : undefined,
+    },
     fetchList: {
       add: listing
         ? () => {
@@ -212,8 +254,17 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
         </>
       )}
 
-      {shown === 'resolving' && <Text>Checking {plural(lines.length, 'project', 'projects')}...</Text>}
+      {shown === 'resolving' && <ProjectProgress title="Checking projects" rows={checking} working="checking..." />}
       {shown === 'resolving' && waiting && <Text color="yellow">{waiting}</Text>}
+      {shown === 'resolving' &&
+        (confirming ? (
+          <>
+            <Text color="yellow">Stop checking and go back to the menu?</Text>
+            <Hint>y stop · n keep checking</Hint>
+          </>
+        ) : (
+          <Hint>q stop and go back to the menu</Hint>
+        ))}
 
       {shown === 'resolved' && (
         <>
@@ -243,7 +294,8 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
           noun={{ one: 'project', many: 'projects' }}
           inputs={resolutions.map((r) => r.input)}
           prepare={prepare}
-          preparing={`Downloading ${plural(ready.length, 'export', 'exports')}...`}
+          preparing={<Downloads rows={downloads} onStop={stopAndLeave} />}
+          preparingKeys
           locale={{ fixed: locale }}
           after={`Saves to ${defaultOutDir()}`}
           onLeave={onBack}
@@ -251,6 +303,32 @@ function FetchInLocale({ onBack, locale }: FetchProps & { locale: Locale }) {
           onBack={onBack}
           onStage={setBatchStage}
         />
+      )}
+    </Box>
+  )
+}
+
+// The downloads, while BatchRun prepares the run. It binds its own q and
+// escape (preparingKeys), so leaving asks first here as it does on the check.
+function Downloads({ rows, onStop }: { rows: ProgressRow[]; onStop: () => void }) {
+  const [confirming, setConfirming] = useState(false)
+  useKeys({
+    fetchAbort: {
+      leave: confirming ? undefined : () => setConfirming(true),
+      yes: confirming ? onStop : undefined,
+      no: confirming ? () => setConfirming(false) : undefined,
+    },
+  })
+  return (
+    <Box flexDirection="column">
+      <ProjectProgress title="Downloading exports" rows={rows} working="downloading..." />
+      {confirming ? (
+        <>
+          <Text color="yellow">Stop the downloads and go back to the menu? Exports already saved stay in {defaultOutDir()}.</Text>
+          <Hint>y stop · n keep going</Hint>
+        </>
+      ) : (
+        <Hint>q stop and go back to the menu</Hint>
       )}
     </Box>
   )

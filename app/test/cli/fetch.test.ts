@@ -328,6 +328,38 @@ describe('fetch', () => {
 // review and translate say these things before a run; fetch runs the same
 // jobs, so it has to say them too, and before the first request to wp.org
 // rather than after the downloads.
+// A long list is minutes of lookups and downloads; stderr says which project
+// each one is on as it goes, a line per project down a pipe.
+describe('fetch progress', () => {
+  it('says which project it checked and downloaded, with a count', async () => {
+    const wporg = fakeWporg()
+    const resolveProjects: CliDeps['resolveProjects'] = async (refs, opts) => {
+      const results = await wporg.resolveProjects!(refs, opts)
+      for (const r of results) {
+        opts.onProgress?.({ input: r.input, state: 'checking' })
+        opts.onProgress?.({ input: r.input, state: 'checked', results: [r] })
+      }
+      return results
+    }
+    const fetchProjects: CliDeps['fetchProjects'] = async (ready, opts) => {
+      const fetched = await wporg.fetchProjects!(ready, opts)
+      for (const f of fetched) {
+        opts.onProgress?.({ input: f.input, state: 'downloading' })
+        opts.onProgress?.({ input: f.input, state: 'downloaded', result: f })
+      }
+      return fetched
+    }
+    const r = await run(['fetch', 'koji', 'missing', 'sydney', '--get', 'waiting', '--out-dir', home], {
+      ...wporg,
+      resolveProjects,
+      fetchProjects,
+      reviewFile: async (opts) => reviewSummary(opts.file),
+    })
+    expect(r.stderr).toMatch(/checked 1\/3 koji\nchecked 2\/3 missing\nchecked 3\/3 sydney\n/)
+    expect(r.stderr).toMatch(/downloaded 1\/2 koji: saved\ndownloaded 2\/2 sydney: saved\n/)
+  })
+})
+
 describe('fetch, before anything is downloaded', () => {
   async function writeConfig(config: Record<string, unknown>): Promise<void> {
     await writeFile(join(home, 'config', 'config.json'), JSON.stringify({ defaultLocale: 'tr', ...config }))

@@ -2,13 +2,15 @@ import { text } from 'node:stream/consumers'
 import { localReviewBatchSize } from '../review/local.js'
 import { batchAdvice } from '../agent/providers.js'
 import { defaultOutDir, type fetchProjects, type resolveProjects, type Fetched, type Resolution } from '../commands/fetch.js'
-import { describeResolution, endOfResolution, waitNotice, type ProjectEnd } from '../commands/fetch-report.js'
+import { describeChecked, describeDownload, describeResolution, endOfResolution, waitNotice, type ProjectEnd } from '../commands/fetch-report.js'
 import { loadSecrets } from '../config.js'
 import { loadLocaleRules } from '../rules/load.js'
 import { parseProjectLines, type FetchStatus } from '../wporg/projects.js'
 import { UsageError, parseDraftEngine, parsePositiveInt, secretForEngine } from './args.js'
 import { parseParallel, printBatchEnd, runBatchJobs, startProviderCheck, type BatchCli } from './batch.js'
 import { requireLocale } from './locale.js'
+import { createFetchProgressReporter } from './fetch-progress.js'
+import type { ProgressStream } from './progress.js'
 import { warnLine } from '../ui/messages.js'
 import { table } from '../ui/layout.js'
 import type { checkLocalModel } from '../draft/discover.js'
@@ -30,6 +32,8 @@ export interface FetchFlags {
 }
 
 export interface FetchCli extends BatchCli {
+  // stderr, for the line that names the project being checked or downloaded.
+  progress: ProgressStream
   resolveProjects: typeof resolveProjects
   fetchProjects: typeof fetchProjects
   checkLocalModel: typeof checkLocalModel
@@ -118,8 +122,16 @@ export async function runFetch(cli: FetchCli, names: string[], flags: FetchFlags
   const preflight = startProviderCheck(cli, review ? flags.ai !== false : draftEngine !== 'none')
 
   cli.err(`Checking ${refs.length} ${refs.length === 1 ? 'project' : 'projects'} on translate.wordpress.org...`)
-  const onWait = (ms: number) => cli.err(waitNotice(ms))
-  const resolutions = await cli.resolveProjects(refs, { locale, status, onWait, readme: flags.readme !== false })
+  const checking = createFetchProgressReporter(cli.progress, { title: 'Checking projects', verb: 'checked', total: refs.length }, cli.ui.err)
+  const resolutions = await cli
+    .resolveProjects(refs, {
+      locale,
+      status,
+      onWait: (ms) => checking.note(waitNotice(ms)),
+      onProgress: (e) => (e.state === 'checking' ? checking.working(e.input) : checking.ended(e.input, describeChecked(e.results, status))),
+      readme: flags.readme !== false,
+    })
+    .finally(() => checking.finish())
   for (const line of table(resolutions.map((r) => [r.input, describeResolution(r, status)]), { indent: 2 })) cli.out(line)
 
   const ends = new Map<string, ProjectEnd>()
@@ -131,13 +143,22 @@ export async function runFetch(cli: FetchCli, names: string[], flags: FetchFlags
   const ready = resolutions.filter((r): r is Extract<Resolution, { state: 'ready' }> => r.state === 'ready')
   if (ready.length > 0) {
     cli.err(`Downloading ${ready.length} ${ready.length === 1 ? 'export' : 'exports'} to ${outDir}...`)
-    const fetched = await cli.fetchProjects(ready, {
-      locale,
-      status,
-      outDir,
-      onWait,
-      ...(flags.force ? { force: true } : {}),
-    })
+    const downloading = createFetchProgressReporter(
+      cli.progress,
+      { title: 'Downloading exports', verb: 'downloaded', total: ready.length, keep: true },
+      cli.ui.err,
+    )
+    const fetched = await cli
+      .fetchProjects(ready, {
+        locale,
+        status,
+        outDir,
+        onWait: (ms) => downloading.note(waitNotice(ms)),
+        onProgress: (e) =>
+          e.state === 'downloading' ? downloading.working(e.input) : downloading.ended(e.input, describeDownload(e.result)),
+        ...(flags.force ? { force: true } : {}),
+      })
+      .finally(() => downloading.finish())
     const toRun: Array<Extract<Fetched, { file: string }>> = []
     for (const f of fetched) {
       if (f.state === 'failed') ends.set(f.input, { tally: 'failed', detail: `download failed: ${f.reason}` })

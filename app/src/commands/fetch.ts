@@ -24,6 +24,13 @@ export type Fetched =
   | { input: string; file: string; state: 'fetched' | 'kept' }
   | { input: string; state: 'failed'; reason: string }
 
+// When each line of the list is worked on, for a screen that shows it. A list
+// of thirty projects takes minutes to check and longer to download, and a
+// single "Checking..." line over all of it read as a hung screen. Results are
+// keyed by the line as given: a plugin's readme arrives with its plugin.
+export type CheckProgress = { input: string; state: 'checking' } | { input: string; state: 'checked'; results: Resolution[] }
+export type DownloadProgress = { input: string; state: 'downloading' } | { input: string; state: 'downloaded'; result: Fetched }
+
 // Between requests. Half a second was enough for a handful of projects and not
 // for a list of twenty-odd, which wp.org answered with 429s part way through
 // resolving. A bare slug can cost two page requests, theme then plugin, so a
@@ -45,8 +52,24 @@ const MAX_RETRY_AFTER_MS = 120_000
 // of WooCommerce is generated on request and takes minutes, not seconds.
 const EXPORT_TIMEOUT_MS = 300_000
 
-type Sleep = (ms: number) => Promise<void>
-const realSleep: Sleep = (ms) => (ms > 0 ? new Promise<void>((r) => setTimeout(r, ms)) : Promise.resolve())
+type Sleep = (ms: number, signal?: AbortSignal) => Promise<void>
+// Cut short by the signal, so leaving the screen during a 45-second backoff
+// does not hold the next screen up for the rest of it.
+const realSleep: Sleep = (ms, signal) =>
+  ms > 0
+    ? new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(done, ms)
+        function done() {
+          signal?.removeEventListener('abort', abort)
+          resolve()
+        }
+        function abort() {
+          clearTimeout(timer)
+          reject(signal!.reason)
+        }
+        signal?.addEventListener('abort', abort, { once: true })
+      })
+    : Promise.resolve()
 
 // Seconds, or an HTTP date. Anything unreadable falls back to the backoff step.
 function retryAfterMs(raw: string | undefined, now = Date.now()): number | undefined {
@@ -59,6 +82,15 @@ interface Polite {
   http: HttpGet
   sleep: Sleep
   onWait?: (ms: number, url: string) => void
+  // The person leaving the screen. Checked after every pause as well as
+  // handed to the request, since an injected sleep may not watch it.
+  signal?: AbortSignal
+}
+
+const pause = async (p: Polite, ms: number) => {
+  p.signal?.throwIfAborted()
+  await p.sleep(ms, p.signal)
+  p.signal?.throwIfAborted()
 }
 
 /**
@@ -72,12 +104,13 @@ interface Polite {
  */
 async function politeGet(p: Polite, url: string, opts?: { timeoutMs?: number }): Promise<HttpResponse & { refusals: number }> {
   for (let attempt = 0; ; attempt++) {
-    const res = await p.http(url, opts)
+    p.signal?.throwIfAborted()
+    const res = await p.http(url, { ...opts, ...(p.signal ? { signal: p.signal } : {}) })
     const refused = res.status === 429 || res.status === 503
     if (!refused || attempt >= BACKOFF_MS.length) return { ...res, refusals: refused ? attempt + 1 : attempt }
     const wait = retryAfterMs(res.retryAfter) ?? BACKOFF_MS[attempt]!
     p.onWait?.(wait, url)
-    await p.sleep(wait)
+    await pause(p, wait)
   }
 }
 
@@ -92,7 +125,7 @@ export function defaultOutDir(): string {
 
 // How the line was written, for the tables. A resolved slug says less than the
 // URL the person pasted, and they recognise their own input fastest.
-const inputOf = (ref: ProjectRef) =>
+export const projectInput = (ref: ProjectRef) =>
   ref.type ? [ref.type, ref.slug, ref.branch].filter(Boolean).join('/') : ref.slug
 
 type PageLookup =
@@ -168,24 +201,36 @@ export async function resolveProjects(
     pauseMs?: number
     sleep?: Sleep
     onWait?: (ms: number, url: string) => void
+    onProgress?: (e: CheckProgress) => void
+    // Stops the lookups: the page in flight is cancelled and the promise
+    // rejects with the signal's reason. Nothing is returned part way, since
+    // a half-checked list is not one a batch should run.
+    signal?: AbortSignal
     // Whether a plugin named without a sub-project also brings its readme.
     // On unless turned off (--no-readme, or the Fetch screen's choice).
     readme?: boolean
   },
 ): Promise<Resolution[]> {
   const sleep = opts.sleep ?? realSleep
-  const polite: Polite = { http: opts.http ?? httpGet, sleep, ...(opts.onWait ? { onWait: opts.onWait } : {}) }
+  const polite: Polite = {
+    http: opts.http ?? httpGet,
+    sleep,
+    ...(opts.onWait ? { onWait: opts.onWait } : {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
+  }
   const pauseMs = opts.pauseMs ?? PAGE_PAUSE_MS
   let first = true
 
   const lookup = async (type: ProjectType, slug: string): Promise<PageLookup> => {
-    if (!first) await sleep(pauseMs)
+    if (!first) await pause(polite, pauseMs)
     first = false
     const url = localePageUrl(type, slug, opts.locale)
     let res
     try {
       res = await politeGet(polite, url)
     } catch (err) {
+      // Leaving is not an outage, and must not be reported as one.
+      opts.signal?.throwIfAborted()
       return { kind: 'unreachable', reason: err instanceof Error ? err.message : String(err) }
     }
     if (res.status === 404) return { kind: 'missing' }
@@ -198,7 +243,8 @@ export async function resolveProjects(
 
   const results: Resolution[] = []
   for (const ref of refs) {
-    const input = inputOf(ref)
+    const input = projectInput(ref)
+    opts.onProgress?.({ input, state: 'checking' })
     const types: ProjectType[] = ref.type ? [ref.type] : ['wp-themes', 'wp-plugins']
     let resolution: Resolution | undefined
     let readme: Resolution | undefined
@@ -235,8 +281,10 @@ export async function resolveProjects(
             }
       break
     }
-    results.push(resolution ?? { input, state: 'not-found', reason: `no theme or plugin named ${ref.slug}` })
-    if (readme) results.push(readme)
+    const ended: Resolution[] = [resolution ?? { input, state: 'not-found', reason: `no theme or plugin named ${ref.slug}` }]
+    if (readme) ended.push(readme)
+    results.push(...ended)
+    opts.onProgress?.({ input, state: 'checked', results: ended })
   }
   // A readme added beside its code and also named on a line of its own would
   // be downloaded and run twice, under one input. The first one stays.
@@ -299,41 +347,56 @@ export async function fetchProjects(
     pauseMs?: number
     sleep?: Sleep
     onWait?: (ms: number, url: string) => void
+    onProgress?: (e: DownloadProgress) => void
+    // Stops the downloads as it stops resolveProjects. An export already
+    // saved stays on disk; the one in flight never reaches its real name.
+    signal?: AbortSignal
   },
 ): Promise<Fetched[]> {
   const sleep = opts.sleep ?? realSleep
-  const polite: Polite = { http: opts.http ?? httpGet, sleep, ...(opts.onWait ? { onWait: opts.onWait } : {}) }
+  const polite: Polite = {
+    http: opts.http ?? httpGet,
+    sleep,
+    ...(opts.onWait ? { onWait: opts.onWait } : {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
+  }
   const pauseMs = opts.pauseMs ?? EXPORT_PAUSE_MS
   await mkdir(opts.outDir, { recursive: true })
 
   const results: Fetched[] = []
+  const ended = (f: Fetched) => {
+    results.push(f)
+    opts.onProgress?.({ input: f.input, state: 'downloaded', result: f })
+  }
   let first = true
   for (const p of ready) {
     const file = join(opts.outDir, exportFileName(p, opts.locale, opts.status))
     if (opts.status === 'untranslated' && !opts.force && (await exists(file))) {
-      results.push({ input: p.input, file, state: 'kept' })
+      ended({ input: p.input, file, state: 'kept' })
       continue
     }
-    if (!first) await sleep(pauseMs)
+    if (!first) await pause(polite, pauseMs)
     first = false
+    opts.onProgress?.({ input: p.input, state: 'downloading' })
     const url = exportUrl(p.type, p.slug, p.branch, opts.locale, opts.status)
     try {
       const res = await politeGet(polite, url, { timeoutMs: EXPORT_TIMEOUT_MS })
       if (res.status !== 200) {
         const reason = res.status === 429 ? refusedReason(url, 429, res.refusals) : `export answered ${res.status}`
-        results.push({ input: p.input, state: 'failed', reason })
+        ended({ input: p.input, state: 'failed', reason })
         continue
       }
       if (!/^msgid /m.test(res.body)) {
-        results.push({ input: p.input, state: 'failed', reason: 'export is not a catalogue' })
+        ended({ input: p.input, state: 'failed', reason: 'export is not a catalogue' })
         continue
       }
       const tmp = `${file}.part`
       await writeFile(tmp, res.body, 'utf8')
       await rename(tmp, file)
-      results.push({ input: p.input, file, state: 'fetched' })
+      ended({ input: p.input, file, state: 'fetched' })
     } catch (err) {
-      results.push({ input: p.input, state: 'failed', reason: err instanceof Error ? err.message : String(err) })
+      opts.signal?.throwIfAborted()
+      ended({ input: p.input, state: 'failed', reason: err instanceof Error ? err.message : String(err) })
     }
   }
   return results

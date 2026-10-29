@@ -171,14 +171,14 @@ export interface ProgressStream {
   write(chunk: string): boolean
 }
 
-const CLEAR_LINE = '\r\x1b[2K'
+export const CLEAR_LINE = '\r\x1b[2K'
 
 // The erase-line above reaches only the row the cursor is on, so a live line
 // wider than the terminal wraps and every redraw strands its first rows in
 // the scrollback. A review line with a long file name and the estimate ran to
 // 83 columns, past a default 80-column window. One column is left free
 // because some terminals wrap on a write to the last one.
-const redraw = (line: string, p: Painter): string => `${CLEAR_LINE}${truncate(line, p.width - 1, p.glyphs.ellipsis)}`
+export const redraw = (line: string, p: Painter): string => `${CLEAR_LINE}${truncate(line, p.width - 1, p.glyphs.ellipsis)}`
 
 export interface ProgressReporter {
   (event: TranslateEvent): void

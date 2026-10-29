@@ -51,6 +51,24 @@ describe('httpGet', () => {
     await expect(httpGet('https://example.test/slow', { timeoutMs: 10 })).rejects.toThrow(/example\.test\/slow.*timed out/)
   })
 
+  // A caller leaving the screen cancels the request. That is not a timeout,
+  // and reporting it as one would name a slow server that was never slow.
+  it("cancels the request on the caller's signal, as an abort", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, init: { signal: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+          }),
+      ),
+    )
+    const controller = new AbortController()
+    const request = httpGet('https://example.test/slow', { signal: controller.signal })
+    controller.abort()
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
   it('identifies itself with the version actually running', async () => {
     const seen = vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
       expect(init.headers['User-Agent']).toBe(USER_AGENT)

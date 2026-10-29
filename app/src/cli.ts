@@ -1455,6 +1455,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
         await runFetch(
           {
             stdin: cli.streams.stdin,
+            progress: cli.streams.stderr,
             config: cli.config,
             resolveProjects: cli.resolveProjects,
             fetchProjects: cli.fetchProjects,
