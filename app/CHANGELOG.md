@@ -10,6 +10,10 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Security
+
+- Upgraded @hono/node-server to 2.1.5.
+
 ## [1.3.0] - 2026-10-28
 
 ### Fixed
