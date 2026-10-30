@@ -1,0 +1,96 @@
+---
+import Base from '../layouts/Base.astro';
+import { WPORG_LOCALES, localeDisplayName, localeId } from '../../../app/src/wporg/locales';
+
+// A client-side tool, like the rules builder: the markup is here and the
+// script fills in the editor. The file is read and written in the browser;
+// nothing is sent anywhere. Work in progress is kept in localStorage until it
+// is exported.
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+// One entry per GlotPress slug: a glossary belongs to the locale, not to a
+// translation set, so nl/formal would only repeat nl.
+const seen = new Set<string>();
+const locales = WPORG_LOCALES.filter((l) => !seen.has(l.slug) && seen.add(l.slug)).map((l) => ({
+  slug: l.slug,
+  name: localeDisplayName(localeId(l.slug, 'default')),
+}));
+---
+<Base
+  title="Glossary editor · polyglots"
+  description="Edit a WordPress locale's glossary CSV in your browser as a spreadsheet, then export it. Nothing is uploaded."
+  path="glossary-editor/"
+>
+  <div class="wrap ge-page" data-ge-page>
+    <header class="intro">
+      <p class="eyebrow">ada.tools/polyglots/glossary-editor</p>
+      <h1>Glossary editor</h1>
+      <p class="lede">
+        Edit a locale’s glossary as a spreadsheet. Open the CSV you exported from translate.wordpress.org, change it, and
+        export it again. The file stays in your browser, and nothing is uploaded. If you already use polyglots, run
+        <code>polyglots glossary edit</code> to edit the glossary it keeps. See <a href={`${base}docs/`}>the docs</a>.
+      </p>
+    </header>
+    <noscript><p class="note">The glossary editor runs in your browser and needs JavaScript.</p></noscript>
+
+    <section class="start" data-ge-start hidden aria-label="Open a glossary">
+      <p class="start-error" data-ge-error role="alert" hidden></p>
+      <div class="start-continue" data-ge-continue hidden>
+        <p><strong>You have unexported work.</strong> <span data-ge-continue-text></span></p>
+        <button type="button" class="gbtn primary" data-ge-continue-btn>Continue</button>
+      </div>
+      <div class="start-grid">
+        <div class="start-card">
+          <h2>Open a CSV</h2>
+          <p>Drop the file here, or choose it.</p>
+          <label class="gbtn drop" data-ge-drop>Choose a CSV… <input type="file" accept=".csv,text/csv" class="sr-only" data-ge-file /></label>
+        </div>
+        <div class="start-card">
+          <h2>Start a new glossary</h2>
+          <label class="field">Locale
+            <select data-ge-locale>
+              {locales.map((l) => <option value={l.slug}>{l.name} ({l.slug})</option>)}
+            </select>
+          </label>
+          <div class="row">
+            <button type="button" class="gbtn" data-ge-new>Start empty</button>
+            <a data-ge-export-link target="_blank" rel="noopener">Get the current glossary from wp.org</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div data-ge-root hidden></div>
+  </div>
+</Base>
+
+<style is:global>
+  .ge-page { padding-top: 3rem; display: grid; gap: 1.5rem; }
+  .ge-page [hidden] { display: none !important; }
+  .ge-page .intro { max-width: 40rem; }
+  .ge-page .start { display: grid; gap: 1rem; }
+  .ge-page .start-grid { display: grid; gap: 1rem; }
+  @media (min-width: 48rem) { .ge-page .start-grid { grid-template-columns: 1fr 1fr; } }
+  .ge-page .start-card, .ge-page .start-continue {
+    border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg-2);
+    padding: 1rem 1.1rem; display: grid; gap: 0.6rem; align-content: start;
+  }
+  .ge-page .start-card h2 { font-size: 1.05rem; margin: 0; }
+  .ge-page .start-card p, .ge-page .start-continue p { margin: 0; }
+  .ge-page .start-error { margin: 0; color: var(--fg); border-left: 3px solid #b32d2e; padding: 0.5rem 0.75rem; background: var(--bg-2); }
+  .ge-page .row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+  .ge-page .field { display: grid; gap: 0.25rem; font-size: 0.9rem; }
+  .ge-page .field select { font: inherit; padding: 0.4rem 0.5rem; max-width: 100%; }
+  .ge-page .gbtn {
+    font: inherit; cursor: pointer; padding: 0.45rem 0.9rem; border: 1px solid var(--rule); border-radius: var(--radius);
+    background: var(--bg); color: var(--fg); width: fit-content; display: inline-block;
+  }
+  .ge-page .gbtn:hover { border-color: var(--muted); }
+  .ge-page .gbtn:focus-within, .ge-page .gbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .ge-page .gbtn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .ge-page .drop.over { border-color: var(--accent); border-style: dashed; }
+</style>
+
+<script>
+  import { start } from '../components/glossary-editor/main';
+  start();
+</script>
