@@ -10,6 +10,15 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Added
+
+- `glossary edit` opens the glossary in the browser as a table, from the command or the menu's Edit glossary, and `glossary import` loads a reviewed CSV; both keep local edits that survive `glossary sync`.
+- A glossary editor on the website, for CSV files.
+
+### Changed
+
+- Review and translate prompts carry each glossary row's part of speech and note; the first review after updating, and the first after any glossary edit, starts without cached verdicts.
+
 ## [1.4.0] - 2026-10-30
 
 ### Added

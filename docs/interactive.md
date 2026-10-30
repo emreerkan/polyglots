@@ -240,6 +240,7 @@ again once stopped.
 | Key | Screen | What it does |
 |---|---|---|
 | `g` | Sync WordPress.org glossary | Downloads your locale's glossary on `enter`. Run it again when your team changes it. With no locale set, it asks which. |
+| `e` | Edit glossary | Opens your locale's glossary in the browser as a table, and keeps your changes across a sync. See [Glossary editor](glossary-editor.md). |
 | `r` | Locale rules | Edits your locale's rules: which built-in checks run, proper nouns, common mistakes, patterns, and guidance for the reviewer. `s` saves. It opens on the current locale, and asks which locale only when none is set. **Fetch from polyglots-data** comes first in the list when polyglots-data has maintained rules for the locale; it shows what the published file would change and writes it on `y`. **Open the rules builder in your browser** opens the website's rules builder for the locale, and shows its address. |
 | `t` | Reply templates | Your locale's [reply templates](reply-templates.md): `e` edits one, `n` creates one from a starter, `d` deletes one, `v` previews it clean or with problems. |
 | `a` | Check AI agents | Shows whether each review agent is installed, signed in and set up for polyglots. `r` checks again. `d` turns [debug mode](review.md#debug-mode) on or off. |

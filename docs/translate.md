@@ -146,6 +146,8 @@ The summary before the download says how many projects are long text.
 translate.wordpress.org. Both commands use it, and review refuses to run
 without it. `polyglots glossary export glossary.csv` writes it as a CSV with
 Term, Translation and Notes columns, the layout Poedit imports.
+To correct it, or add terms, without waiting for wp.org, use the
+[glossary editor](glossary-editor.md): `polyglots glossary edit`.
 
 A glossary translation that lists several wordings, such as
 `waarschuwing/waarschuwingen` or `ilke, politika`, approves each of them: the
