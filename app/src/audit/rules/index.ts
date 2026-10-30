@@ -1,4 +1,4 @@
-import type { AuditEntry, Finding, GlossaryEntry, Locale } from '../../types.js'
+import type { AuditEntry, Finding, GlossaryEntry, GlossaryMatchRow, Locale } from '../../types.js'
 import { controlFindings, controlSpec } from '../control.js'
 import { localeDisplayName } from '../../wporg/locales.js'
 import { customFindings, skipFinding } from '../../rules/custom.js'
@@ -763,9 +763,16 @@ function containsTerm(haystack: string, needle: string, stemRatio: number): bool
   return stem.length >= 3 && haystack.includes(stem)
 }
 
+// `translations` is the flat list the glossary rule checks a translation
+// against, and does not care which part of speech a wording belongs to: any
+// approved wording passes. `rows` is what the prompt shows, so the model can
+// tell the noun from the verb. They are de-duplicated differently on purpose:
+// a translation approved as both a noun and a verb is one wording to the rule
+// and two rows to the model.
 export interface GlossaryMatch {
   term: string
   translations: string[]
+  rows: GlossaryMatchRow[]
 }
 
 // Each row's term lowered once per glossary rather than once per entry: the
@@ -795,21 +802,56 @@ function loweredTerms(ctx: RuleContext): Array<{ item: GlossaryEntry; term: stri
  */
 export function glossaryMatches(msgid: string, ctx: RuleContext): GlossaryMatch[] {
   const source = lowerSource(msgid)
-  const byTerm = new Map<string, { term: string; translations: string[] }>()
+  const byTerm = new Map<string, GlossaryMatch>()
   for (const { item, term } of loweredTerms(ctx)) {
     if (term.length < 3) continue
     // The substring test first: hasWord builds a regex, and this runs for
     // every glossary row on every entry, which on a real glossary and file
     // was seconds of a run spent compiling patterns for terms not present.
     if (!source.includes(term) || !hasWord(source, term)) continue
-    const found = byTerm.get(term) ?? { term: item.sourceTerm, translations: [] }
+    const found = byTerm.get(term) ?? { term: item.sourceTerm, translations: [], rows: [] }
     // Compared under NFC, so a translation stored in both encodings is listed
-    // once; the first spelling stored is the one kept.
+    // once; the first spelling stored is the one kept. Rows follow the same
+    // rule, with the part of speech and note beside it: the same wording under
+    // the same part of speech and note is one row however it was encoded.
     const nfc = item.translation.normalize('NFC')
     if (!found.translations.some((t) => t.normalize('NFC') === nfc)) found.translations.push(item.translation)
+    const row: GlossaryMatchRow = {
+      translation: item.translation,
+      ...(item.partOfSpeech ? { pos: item.partOfSpeech } : {}),
+      ...(item.notes ? { note: item.notes } : {}),
+    }
+    const same = (r: GlossaryMatchRow) =>
+      r.translation.normalize('NFC') === nfc && (r.pos ?? '') === (row.pos ?? '') && (r.note ?? '') === (row.note ?? '')
+    if (!found.rows.some(same)) found.rows.push(row)
     byTerm.set(term, found)
   }
   return [...byTerm.values()]
+}
+
+/**
+ * The glossary terms as both prompts render them on an entry: each term's
+ * rows, keyed "tr" for the translation whatever the locale, since the prompt
+ * names the target language elsewhere and a key per locale would make the
+ * payload shape depend on it. An empty part of speech or note is left out.
+ */
+export function glossaryPayload(matches: readonly GlossaryMatch[]): Record<string, Array<{ tr: string; pos?: string; note?: string }>> {
+  return Object.fromEntries(
+    matches.map((g) => [
+      g.term,
+      g.rows.map((r) => ({ tr: r.translation, ...(r.pos ? { pos: r.pos } : {}), ...(r.note ? { note: r.note } : {}) })),
+    ]),
+  )
+}
+
+/**
+ * One term's part of a per-entry cache key: everything glossaryPayload
+ * renders for it, so a part of speech or note edited on one row re-asks the
+ * entries that carry that term and no others. Shared by the audit key and the
+ * draft review key so the two cannot drift from the prompt, or from each other.
+ */
+export function glossaryKey(match: GlossaryMatch): string {
+  return `${match.term}=${match.rows.map((r) => [r.translation, r.pos ?? '', r.note ?? ''].join('/')).join('|')}`
 }
 
 /**

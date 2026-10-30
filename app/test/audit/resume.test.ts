@@ -61,4 +61,12 @@ describe('fingerprintReview', () => {
   it('is stable across calls with the same inputs', () => {
     expect(fingerprintReview({ ...INPUT })).toEqual(fingerprintReview(INPUT))
   })
+
+  // The prompt shows each row's note, so a note edited locally answers a
+  // different question and must refuse a resume like any other glossary edit.
+  it('moves its glossary part when only a note changes', () => {
+    const noted = (notes: string) => fingerprintReview({ ...INPUT, glossary: [{ ...GLOSSARY[0]!, notes }] })
+    expect(noted('a').glossary).toBe(noted('a').glossary)
+    expect(noted('a').glossary).not.toBe(noted('b').glossary)
+  })
 })

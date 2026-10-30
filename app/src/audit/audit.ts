@@ -12,6 +12,7 @@ import { applyFixPatterns, isSkipFinding } from '../rules/custom.js'
 import { auditBatchJsonSchema, mapAuditResults, type AuditResult } from './schema.js'
 import {
   buildRuleContext,
+  glossaryKey,
   glossaryMatches as glossaryFor,
   runRules,
   tmKey,
@@ -340,7 +341,7 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
         comments: candidate.comments,
         hints: automatedChecks(candidate.hints),
         ...(candidate.memory ? { memory: candidate.memory } : {}),
-        ...(candidate.glossary ? { glossary: candidate.glossary.map((g) => `${g.term}=${g.translations.join('|')}`) } : {}),
+        ...(candidate.glossary ? { glossary: candidate.glossary.map(glossaryKey) } : {}),
         nplurals: opts.nplurals,
         ...(opts.pluralForms === undefined ? {} : { pluralForms: opts.pluralForms }),
         repaired: candidate.repaired !== undefined,

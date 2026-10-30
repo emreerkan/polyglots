@@ -1,4 +1,5 @@
-import { DEFAULT_REGISTER, pluralFormsLine, universalOnlyNote, type PromptOptions } from '../audit/prompt.js'
+import { DEFAULT_REGISTER, GLOSSARY_ROWS, pluralFormsLine, universalOnlyNote, type PromptOptions } from '../audit/prompt.js'
+import { glossaryPayload } from '../audit/rules/index.js'
 import { isUniversalOnly, profileFor } from '../audit/rules/profiles.js'
 import { dateTimeLine, guidanceSection, nameOrderLine } from '../rules/guidance.js'
 import { loadLocaleRules } from '../rules/load.js'
@@ -14,13 +15,13 @@ import type { Locale, ReviewInput } from '../types.js'
 // so it is kept for the case nothing on the entry settles. The last line is
 // the review prompt's own: Gemini Flash, with antigravity's settings
 // approving every tool, wrote and ran scripts in the folder it was started in.
-const TOOL_RULES = (language: string) => `- The official WordPress ${language} glossary is binding. Every glossary term an entry's source contains is listed on that entry under "glossary", with its approved translation, so do not look those up. Call glossary_lookup only for a term you need that is not listed there.
+const TOOL_RULES = (language: string) => `- The official WordPress ${language} glossary is binding. Every glossary term an entry's source contains is listed on that entry under "glossary", with its approved translation, so do not look those up. ${GLOSSARY_ROWS} Call glossary_lookup only for a term you need that is not listed there.
 - Call tm_lookup only when you are unsure of a wording and want to see how the locale worded similar strings; not for every entry.
 - Call consistency_lookup only when neither the entry's glossary nor the translation memory settles the wording of a UI string WordPress core is likely to have. It reports how WordPress core already translates that exact string, which is authoritative; never call it to confirm a term the glossary already settled.
 - This prompt and the three lookup tools are everything you have. There is no shell and no filesystem: never write a file or run a command.
 `
 
-const NO_TOOL_RULES = (language: string) => `- Follow the official WordPress ${language} glossary. An entry's "glossary" lists the approved translation of every glossary term its source contains; use it. A term that is not listed there is not in the glossary. There are no tools: this prompt is everything you have.
+const NO_TOOL_RULES = (language: string) => `- Follow the official WordPress ${language} glossary. An entry's "glossary" lists the approved translation of every glossary term its source contains; use it. ${GLOSSARY_ROWS} A term that is not listed there is not in the glossary. There are no tools: this prompt is everything you have.
 `
 
 export function localeLabel(locale: Locale): string {
@@ -62,7 +63,7 @@ export function buildReviewPrompt(
         ...(input.automatedChecks?.length ? { automatedChecks: input.automatedChecks } : {}),
         ...(input.control ? { control: true } : {}),
         ...(input.glossary?.length
-          ? { glossary: Object.fromEntries(input.glossary.map((g) => [g.term, g.translations])) }
+          ? { glossary: glossaryPayload(input.glossary) }
           : {}),
       }
       return `${i + 1}. ${JSON.stringify(entry)}`

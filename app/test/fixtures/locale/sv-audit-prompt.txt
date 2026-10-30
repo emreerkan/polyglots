@@ -4,7 +4,7 @@ Target locale: sv
 nplurals: 2
 
 The locale team's standards:
-- The official WordPress Swedish glossary is binding. Every glossary term an entry's source contains is listed on that entry under "glossary", with its approved translation, so you do not need to look those up. Call glossary_lookup only for a term you need that is not listed there.
+- The official WordPress Swedish glossary is binding. Every glossary term an entry's source contains is listed on that entry under "glossary", with its approved translation, so you do not need to look those up. Each glossary translation may carry its part of speech and a note; use the one whose part of speech fits the source. Call glossary_lookup only for a term you need that is not listed there.
 - Swedish uses sentence case, not English Title Case. Only the first word and proper nouns are capitalized: "Spara Alla Ändringar" is wrong; "Spara alla ändringar" is right. Brand names (WordPress, WooCommerce) and acronyms keep their own casing.
 - Swedish writes the names of languages, nationalities, days of the week and months in lower case (svenska, engelsk, måndag, januari), even where English capitalizes them. A capital on one of those mid-sentence is an English calque.
 - The two kinds of title-case check are not equal evidence. A finding that says the translation "mirrors the English source" means the source itself was Title Case and the translation copied its shape word for word; that is close to proof of an English calque. A finding that only says a word is capitalized mid-string is weaker: check whether the word is a proper noun or a brand before confirming it.

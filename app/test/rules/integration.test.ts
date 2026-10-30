@@ -69,14 +69,20 @@ const hashTr = () => configHash({ locale: 'tr', glossary: [], properNouns: [] })
 // The four review hashes moved again in the same release when name-order
 // joined the universal rules. The translate hashes did not: without a names
 // section in the rules file, no prompt changes.
+//
+// All seven moved once more, on purpose, when both prompts began showing each
+// glossary row's part of speech and note and gained the sentence telling the
+// model to pick the row whose part of speech fits. trGloss moved for a second
+// reason in the same change: the glossary fingerprint now hashes each row's
+// note, so a note edited locally prunes like any other glossary edit.
 const BEFORE = {
-  trEmpty: 'aa6f691014555e4d',
-  trGloss: '7ba0536714c30cce',
-  de: '0b27d3d39f56f8b4',
-  deTranslate: '49775b74c2dbe18b',
-  trTranslate: '77b078ef3b7513a7',
-  sv: 'e99d7da46d8121a6',
-  svTranslate: 'b94fa073e1528987',
+  trEmpty: '327a8dccb3c95b85',
+  trGloss: 'af4c8d36cf4c828b',
+  de: '1bfd5666d65c7c98',
+  deTranslate: '6f38d4d67fefd3ef',
+  trTranslate: '54abd674cbadab17',
+  sv: '9a8e99334d67d787',
+  svTranslate: 'c83d7df31412884b',
 }
 
 describe('without a rules file', () => {

@@ -59,10 +59,19 @@ export interface ReviewInput {
   automatedChecks?: string[]
   // A setting WordPress code reads, decided by the translator comment.
   control?: boolean
-  // The glossary terms the source contains, with their approved translations.
-  // Set only for a reviewer without tools (a local model), which cannot look
-  // them up; the agents' prompt never renders it.
-  glossary?: Array<{ term: string; translations: string[] }>
+  // The glossary terms the source contains, with their approved translations,
+  // for every reviewer: the prompt renders each term's rows, and the draft
+  // review's cache key covers them.
+  glossary?: Array<{ term: string; translations: string[]; rows: GlossaryMatchRow[] }>
+}
+
+// One translation a glossary term has, with the part of speech and note the
+// row it came from carries. Empty fields are left out rather than kept as "",
+// so the prompt omits them too.
+export interface GlossaryMatchRow {
+  translation: string
+  pos?: string
+  note?: string
 }
 
 export interface ReviewResult {

@@ -72,7 +72,7 @@ describe('translateFile with a local reviewer', () => {
     await translateFile(base({ engine: fakeEngine(), provider: 'local', localChat: chat }))
     const review = requests.filter((r) => r.schemaName === 'review')
     expect(review).toHaveLength(1)
-    expect(review[0]!.user).toContain('"glossary":{"form":["form"]}')
+    expect(review[0]!.user).toContain('"glossary":{"form":[{"tr":"form","pos":"noun"}]}')
     expect(review[0]!.user).not.toMatch(/glossary_lookup|tm_lookup|consistency_lookup/)
 
     const jobs = openJobsDb()

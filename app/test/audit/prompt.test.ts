@@ -2,7 +2,7 @@ import { mkdir, utimes, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildAuditPrompt, type AuditCandidate } from '../../src/audit/prompt.js'
-import { buildRuleContext, runRules } from '../../src/audit/rules/index.js'
+import { buildRuleContext, glossaryMatches, runRules } from '../../src/audit/rules/index.js'
 import { buildReviewPrompt } from '../../src/review/prompt.js'
 import { skipFinding } from '../../src/rules/custom.js'
 import { localeRulesFile } from '../../src/rules/load.js'
@@ -168,5 +168,81 @@ describe('placeholder order', () => {
       expect(prompt).toContain('keep them in the source\'s order, or number them all (%1$s, %2$d) to move them')
       expect(prompt).not.toMatch(/\{x\}\), HTML tags, and leading\/trailing whitespace must match|add, drop, reorder/)
     }
+  })
+})
+
+// A term can be both a noun and a verb, and the locale translates each one
+// differently: "post" is "gönderi" as a noun and "yayımla" as a verb. The
+// prompt once listed the two translations bare, which left the model to guess
+// which one the source wanted.
+describe('a glossary term with a part of speech and a note', () => {
+  const glossary = [
+    { locale: 'tr', sourceTerm: 'post', translation: 'gönderi', partOfSpeech: 'noun' },
+    { locale: 'tr', sourceTerm: 'post', translation: 'yayımla', partOfSpeech: 'verb', notes: 'to publish' },
+  ]
+  const ctx = buildRuleContext({ locale: 'tr', glossary, nplurals: 2, entries: [] })
+  const rendered =
+    '"glossary":{"post":[{"tr":"gönderi","pos":"noun"},{"tr":"yayımla","pos":"verb","note":"to publish"}]}'
+  const sentence = 'Each glossary translation may carry its part of speech and a note; use the one whose part of speech fits the source.'
+
+  it('matches one row per translation and part of speech, and keeps the flat list for the rule', () => {
+    const [post] = glossaryMatches('Edit post', ctx)
+    expect(post?.translations).toEqual(['gönderi', 'yayımla'])
+    expect(post?.rows).toEqual([
+      { translation: 'gönderi', pos: 'noun' },
+      { translation: 'yayımla', pos: 'verb', note: 'to publish' },
+    ])
+  })
+
+  it('keeps one row for a translation stored twice under two encodings', () => {
+    const twice = buildRuleContext({
+      locale: 'tr',
+      glossary: [
+        { locale: 'tr', sourceTerm: 'post', translation: 'gönderi', partOfSpeech: 'noun' },
+        { locale: 'tr', sourceTerm: 'post', translation: 'gönderi', partOfSpeech: 'noun' },
+      ],
+      nplurals: 2,
+      entries: [],
+    })
+    expect(glossaryMatches('Edit post', twice)[0]?.rows).toEqual([{ translation: 'gönderi', pos: 'noun' }])
+  })
+
+  it('renders both rows with their part of speech in the audit prompt', () => {
+    const candidate: AuditCandidate = {
+      id: 1,
+      key: 'Edit post',
+      msgid: 'Edit post',
+      msgstr: ['Gönderiyi düzenle'],
+      comments: [],
+      references: [],
+      hints: [],
+      glossary: glossaryMatches('Edit post', ctx),
+    }
+    const prompt = buildAuditPrompt([candidate], 'tr', 2)
+    expect(prompt).toContain(rendered)
+    expect(prompt).toContain(sentence)
+  })
+
+  it('renders both rows with their part of speech in the review prompt, with and without tools', () => {
+    const input: ReviewInput = {
+      key: 'Edit post',
+      msgid: 'Edit post',
+      comments: [],
+      drafts: ['Gönderiyi düzenle'],
+      glossary: glossaryMatches('Edit post', ctx),
+    }
+    for (const tools of [true, false]) {
+      const prompt = buildReviewPrompt([input], 'tr', 2, undefined, { tools })
+      expect(prompt).toContain(rendered)
+      expect(prompt).toContain(sentence)
+    }
+  })
+
+  // The key is the literal "tr" for every locale; the prompt names the target
+  // language elsewhere, so a German entry still reads correctly.
+  it('omits an empty part of speech and note, and keys the translation "tr" in any locale', () => {
+    const de = buildRuleContext({ locale: 'de', glossary: [{ locale: 'de', sourceTerm: 'post', translation: 'Beitrag' }], nplurals: 2, entries: [] })
+    const input: ReviewInput = { key: 'Edit post', msgid: 'Edit post', comments: [], drafts: ['Beitrag bearbeiten'], glossary: glossaryMatches('Edit post', de) }
+    expect(buildReviewPrompt([input], 'de', 2)).toContain('"glossary":{"post":[{"tr":"Beitrag"}]}')
   })
 })

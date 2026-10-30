@@ -37,7 +37,7 @@ describe('translateFile with an agent reviewer', () => {
     await translateFile(base({ engine: fakeEngine(), review }))
     const inputs = review.calls.flatMap((c) => c.inputs)
     const form = inputs.find((i) => i.msgid === 'Form entries')
-    expect(form?.glossary).toEqual([{ term: 'form', translations: ['form'] }])
+    expect(form?.glossary).toEqual([{ term: 'form', translations: ['form'], rows: [{ translation: 'form', pos: 'noun' }] }])
     const save = inputs.find((i) => i.msgid === 'Save Changes')
     expect(save).toBeDefined()
     expect(save?.glossary).toBeUndefined()
@@ -51,6 +51,20 @@ describe('translateFile with an agent reviewer', () => {
 
     const db = openDb()
     replaceGlossary(db, 'tr', [{ locale: 'tr', sourceTerm: 'form', translation: 'formu', partOfSpeech: 'noun' }])
+    db.close()
+    const changed = fakeReview()
+    await translateFile(base({ engine: fakeEngine(), review: changed }))
+    const asked = changed.calls.flatMap((c) => c.inputs)
+    expect(asked.length).toBeGreaterThan(0)
+    expect(asked.every((i) => i.glossary?.some((g) => g.term === 'form'))).toBe(true)
+  })
+
+  // The prompt shows each row's note, so a note is part of what the agent was
+  // asked: changing only the note re-asks the entries that carry the term.
+  it('re-asks the agent when only a glossary row\'s note changed', async () => {
+    await translateFile(base({ engine: fakeEngine(), review: fakeReview() }))
+    const db = openDb()
+    replaceGlossary(db, 'tr', [{ locale: 'tr', sourceTerm: 'form', translation: 'form', partOfSpeech: 'noun', notes: 'a web form' }])
     db.close()
     const changed = fakeReview()
     await translateFile(base({ engine: fakeEngine(), review: changed }))

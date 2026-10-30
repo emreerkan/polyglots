@@ -156,6 +156,10 @@ export interface ConfigHashInput {
 // only the entries a glossary edit could affect was designed and discarded,
 // because rules and glossary change while developing this tool rather than
 // during a review, and starting over is the wanted behaviour when they do.
+// That holds for the glossary the person edits locally as much as for a
+// sync: a local edit is a glossary change, and so is a part of speech or a
+// note alone, since both prompts render them. A full re-review after one is
+// wanted, not a cost to engineer away.
 //
 // fingerprintReview already hashes the glossary, and hashes the rule profile
 // together with the prompt template, which is exactly the split needed here.

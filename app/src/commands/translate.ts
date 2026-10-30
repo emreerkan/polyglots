@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3'
 import { controlSpec } from '../audit/control.js'
 import { createDraftChecker, type DraftChecker } from '../translate/checks.js'
+import { glossaryKey, type GlossaryMatch } from '../audit/rules/index.js'
 import { configuredProperNouns, shortMsgid } from './review.js'
 import { intlTag } from '../wporg/locales.js'
 import { chunk } from '../batch.js'
@@ -416,7 +417,7 @@ interface LocalAsk {
 }
 
 // Each entry's glossary terms, which every reviewer is handed on the entry.
-type EntryTerms = (unit: TranslationUnit) => Array<{ term: string; translations: string[] }>
+type EntryTerms = (unit: TranslationUnit) => GlossaryMatch[]
 
 async function reviewDrafts(
   units: TranslationUnit[],
@@ -476,7 +477,7 @@ async function reviewDrafts(
     ...input.drafts,
     ...(input.automatedChecks ?? []).map((c) => `\u0000check ${c}`),
     ...(local ? [`\u0000prompt ${local.variant}`] : []),
-    ...(input.glossary ?? []).map((g) => `\u0000glossary ${g.term}=${g.translations.join('|')}`),
+    ...(input.glossary ?? []).map((g) => `\u0000glossary ${glossaryKey(g)}`),
   ]
 
   const cached: ReviewResult[] = []

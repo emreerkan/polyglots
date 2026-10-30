@@ -10,6 +10,7 @@ import {
   srcHash,
   translateConfigHash,
 } from '../../src/jobs/hash.js'
+import { glossaryKey } from '../../src/audit/rules/index.js'
 import type { AuditEntry, GlossaryEntry } from '../../src/types.js'
 
 const entry = (over: Partial<AuditEntry> = {}): AuditEntry => ({
@@ -141,6 +142,19 @@ describe('auditSrcHash', () => {
     )
   })
 
+  // The prompt renders each row's part of speech and note, so the key does too.
+  it('changes when a glossary row\'s note changes, and not for identical rows', () => {
+    const post = (note: string) => ({
+      term: 'post',
+      translations: ['gönderi'],
+      rows: [{ translation: 'gönderi', pos: 'noun', note }],
+    })
+    const keyed = (note: string) => auditSrcHash(entry(), context({ glossary: [glossaryKey(post(note))] }))
+    expect(glossaryKey(post('a'))).toBe('post=gönderi/noun/a')
+    expect(keyed('a')).toBe(keyed('a'))
+    expect(keyed('a')).not.toBe(keyed('b'))
+  })
+
   it('changes when nplurals changes, which the prompt states outright', () => {
     expect(auditSrcHash(entry(), context())).not.toBe(auditSrcHash(entry(), context({ nplurals: 6 })))
   })
@@ -188,6 +202,14 @@ describe('configHash', () => {
 
   it('changes when a glossary term changes', () => {
     expect(configHash(config([term('ID', 'kimlik')]))).not.toBe(configHash(config([term('ID', 'ID')])))
+  })
+
+  // Deliberately coarse, as the rest of the glossary is: a note edited locally
+  // is a glossary change, and a full re-review after one is what is wanted.
+  it('changes when a glossary row\'s note changes, and not for identical rows', () => {
+    const noted = (notes: string): GlossaryEntry => ({ ...term('post', 'gönderi'), partOfSpeech: 'noun', notes })
+    expect(configHash(config([noted('a')]))).toBe(configHash(config([noted('a')])))
+    expect(configHash(config([noted('a')]))).not.toBe(configHash(config([noted('b')])))
   })
 
   it('changes when the proper noun list changes', () => {

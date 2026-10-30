@@ -57,11 +57,11 @@ describe('buildReviewPrompt', () => {
 
   it('carries an entry\'s glossary terms for an agent too, so it need not look them up', () => {
     const withTerms = buildReviewPrompt(
-      [{ ...inputs[0]!, glossary: [{ term: 'Save', translations: ['Kaydet'] }] }],
+      [{ ...inputs[0]!, glossary: [{ term: 'Save', translations: ['Kaydet'], rows: [{ translation: 'Kaydet' }] }] }],
       'tr',
       2,
     )
-    expect(withTerms).toContain('"glossary":{"Save":["Kaydet"]}')
+    expect(withTerms).toContain('"glossary":{"Save":[{"tr":"Kaydet"}]}')
     expect(withTerms).toMatch(/do not look those up/)
   })
 

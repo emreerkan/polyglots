@@ -38,7 +38,7 @@ const candidate = (over: Partial<AuditCandidate> = {}): AuditCandidate => ({
   comments: [],
   references: ['admin/menu.php:3'],
   hints: [],
-  glossary: [{ term: 'sidebar', translations: ['kenar çubuğu'] }],
+  glossary: [{ term: 'sidebar', translations: ['kenar çubuğu'], rows: [{ translation: 'kenar çubuğu' }] }],
   ...over,
 })
 
@@ -50,7 +50,7 @@ describe('the audit prompt without tools', () => {
     // The reply shape is stated, since a chat model gets no schema flag.
     expect(prompt).toContain('"results"')
     // What the tools would have answered is already on the entry.
-    expect(prompt).toContain('"glossary":{"sidebar":["kenar çubuğu"]}')
+    expect(prompt).toContain('"glossary":{"sidebar":[{"tr":"kenar çubuğu"}]}')
   })
 
   it('leaves the agents\' prompt exactly as it was', () => {
@@ -69,13 +69,13 @@ describe('the draft review prompt without tools', () => {
     msgid: 'Open the sidebar',
     comments: [],
     drafts: ['Kenar çubuğunu aç'],
-    glossary: [{ term: 'sidebar', translations: ['kenar çubuğu'] }],
+    glossary: [{ term: 'sidebar', translations: ['kenar çubuğu'], rows: [{ translation: 'kenar çubuğu' }] }],
   }
 
   it('carries the glossary terms on the entry and names no tool', () => {
     const prompt = buildReviewPrompt([input], 'tr', 2, undefined, { tools: false })
     expect(prompt).not.toMatch(TOOL_NAMES)
-    expect(prompt).toContain('"glossary":{"sidebar":["kenar çubuğu"]}')
+    expect(prompt).toContain('"glossary":{"sidebar":[{"tr":"kenar çubuğu"}]}')
   })
 
   it('renders the entry exactly as the agents\' prompt does, glossary field and all', () => {
@@ -134,7 +134,7 @@ describe('createLocalDraftReviewer', () => {
     const { chat, requests } = fakeChat(['{"results":[{"id":1,"text":["Kenar çubuğunu aç"],"fuzzy":false,"reason":"ok"}]}'])
     const review = createLocalDraftReviewer(chat, 'local:ollama:m')
     const out = await review(
-      [{ key: 'k', msgid: 'Open the sidebar', comments: [], drafts: ['Yan menüyü aç'], glossary: [{ term: 'sidebar', translations: ['kenar çubuğu'] }] }],
+      [{ key: 'k', msgid: 'Open the sidebar', comments: [], drafts: ['Yan menüyü aç'], glossary: [{ term: 'sidebar', translations: ['kenar çubuğu'], rows: [{ translation: 'kenar çubuğu' }] }] }],
       { locale: 'tr', nplurals: 2, mcpConfigPath: '' },
     )
     expect(out).toEqual([{ key: 'k', text: ['Kenar çubuğunu aç'], fuzzy: false, reason: 'ok' }])

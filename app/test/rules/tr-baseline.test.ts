@@ -30,7 +30,7 @@ const candidates: AuditCandidate[] = [
     comments: ['Button label'],
     references: ['wp-admin/edit.php:12'],
     hints: [{ rule: 'title-case', severity: 'suspect', message: 'title case mirrors the English source (Değişiklikleri, Kaydet); Turkish capitalizes only the first word and proper nouns' }],
-    glossary: [{ term: 'change', translations: ['değişiklik'] }],
+    glossary: [{ term: 'change', translations: ['değişiklik'], rows: [{ translation: 'değişiklik' }] }],
   },
   {
     id: 2,

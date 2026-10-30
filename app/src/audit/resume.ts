@@ -102,7 +102,7 @@ export function fingerprintReview(input: FingerprintInput): Fingerprint {
   return {
     source: hash(input.source),
     glossary: hash(
-      ...input.glossary.map((g) => [g.sourceTerm, g.translation, g.partOfSpeech ?? ''].join(FIELD)).sort(),
+      ...input.glossary.map((g) => [g.sourceTerm, g.translation, g.partOfSpeech ?? '', g.notes ?? ''].join(FIELD)).sort(),
     ),
     rules: hash(
       input.locale,
