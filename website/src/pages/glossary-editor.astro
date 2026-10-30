@@ -4,8 +4,10 @@ import { WPORG_LOCALES, localeDisplayName, localeId } from '../../../app/src/wpo
 
 // A client-side tool, like the rules builder: the markup is here and the
 // script fills in the editor. The file is read and written in the browser;
-// nothing is sent anywhere. Work in progress is kept in localStorage until it
-// is exported.
+// nothing is sent anywhere. The one request is for wp.org's current export,
+// asked of public/api/glossary/ with only the locale slug, since the browser
+// cannot read wp.org's export itself. Work in progress is kept in localStorage
+// until it is exported.
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
 // One entry per GlotPress slug: a glossary belongs to the locale, not to a
 // translation set, so nl/formal would only repeat nl.
@@ -25,8 +27,8 @@ const locales = WPORG_LOCALES.filter((l) => !seen.has(l.slug) && seen.add(l.slug
       <p class="eyebrow">ada.tools/polyglots/glossary-editor</p>
       <h1>Glossary editor</h1>
       <p class="lede">
-        Edit a locale’s glossary as a spreadsheet. Open the CSV you exported from translate.wordpress.org, change it, and
-        export it again. The file stays in your browser, and nothing is uploaded. If you already use polyglots, run
+        Edit a locale’s glossary as a spreadsheet. Open the current glossary from translate.wordpress.org, or a CSV you
+        have, change it, and export it again. Your work stays in your browser, and nothing is uploaded. If you already use polyglots, run
         <code>polyglots glossary edit</code> to edit the glossary it keeps. See <a href={`${base}docs/`}>the docs</a>.
       </p>
     </header>
@@ -53,8 +55,9 @@ const locales = WPORG_LOCALES.filter((l) => !seen.has(l.slug) && seen.add(l.slug
           </label>
           <div class="row">
             <button type="button" class="gbtn" data-ge-new>Start empty</button>
-            <a data-ge-export-link target="_blank" rel="noopener">Get the current glossary from wp.org</a>
+            <button type="button" class="gbtn primary" data-ge-wporg>Open the current glossary from wp.org</button>
           </div>
+          <p class="hint">Or <a data-ge-export-link target="_blank" rel="noopener">download it from wp.org</a> and open the file.</p>
         </div>
       </div>
     </section>
@@ -76,6 +79,7 @@ const locales = WPORG_LOCALES.filter((l) => !seen.has(l.slug) && seen.add(l.slug
   }
   .ge-page .start-card h2 { font-size: 1.05rem; margin: 0; }
   .ge-page .start-card p, .ge-page .start-continue p { margin: 0; }
+  .ge-page .start-card .hint { color: var(--muted); font-size: 0.9rem; }
   .ge-page .start-error { margin: 0; color: var(--fg); border-left: 3px solid #b32d2e; padding: 0.5rem 0.75rem; background: var(--bg-2); }
   .ge-page .row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
   .ge-page .field { display: grid; gap: 0.25rem; font-size: 0.9rem; }

@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readGlossaryCsv } from '../../app/src/glossary/csv.js'
 import { addRow, createModel, diffOf, setCell, toggleDelete } from '../../app/src/glossary/editor/model.js'
-import { STORAGE_KEY, exportUrl, webHost, type Start, type WebEnv } from '../src/components/glossary-editor/web-host.js'
+import { STORAGE_KEY, exportUrl, fetchWporgGlossary, webHost, type Start, type WebEnv } from '../src/components/glossary-editor/web-host.js'
 
 const CSV = 'en,tr,pos,description\nPost,Yazı,noun,\nPage,Sayfa,noun,A static page\n'
 
@@ -223,4 +223,26 @@ test('the analysis picker returns parsed JSON, and nothing when cancelled', asyn
 
 test('the wp.org export link uses the locale slug', () => {
   assert.equal(exportUrl('tr'), 'https://translate.wordpress.org/locale/tr/default/glossary/-export/')
+})
+
+test('the current wp.org glossary is asked of the site, and opens as a file named for its locale', async () => {
+  const asked: string[] = []
+  const fetch = async (url: string) => {
+    asked.push(url)
+    return new Response(CSV, { status: 200 })
+  }
+  assert.deepEqual(await fetchWporgGlossary(fetch, '/polyglots/', 'pt-br'), { name: 'glossary-pt-br.csv', text: CSV })
+  assert.deepEqual(asked, ['/polyglots/api/glossary/?locale=pt-br'])
+})
+
+// The dev server serves the script as a file and a proxy may answer with a
+// page; neither is a glossary, so neither opens as one.
+test('a failed or foreign answer for the wp.org glossary is an error that names the locale', async () => {
+  const answer = (body: string, status: number) => async () => new Response(body, { status })
+  await assert.rejects(fetchWporgGlossary(answer('wp.org did not return a glossary', 502), '/', 'tr'), /tr glossary could not be loaded/)
+  await assert.rejects(fetchWporgGlossary(answer('<?php echo 1;', 200), '/', 'tr'), /tr glossary could not be loaded/)
+  const offline = async () => {
+    throw new TypeError('Failed to fetch')
+  }
+  await assert.rejects(fetchWporgGlossary(offline, '/', 'tr'), /tr glossary could not be loaded/)
 })

@@ -54,6 +54,35 @@ export interface WebEnv {
 /** The glossary export GlotPress offers for a locale, the file a person starts from. */
 export const exportUrl = (slug: string): string => `https://translate.wordpress.org/locale/${slug}/default/glossary/-export/`
 
+/**
+ * The locale's current wp.org export, asked of the site's own
+ * api/glossary/ script: wp.org sends no CORS header, so the browser cannot
+ * read the export itself. It comes back as a file to open, so it passes
+ * through the same header and locale checks a CSV from disk does.
+ *
+ * Anything that is not an export is an error, not an empty glossary: a 502
+ * from the script, a network failure, and the dev server, which has no PHP
+ * and returns the script's source with a 200. The message names the locale,
+ * and the page offers wp.org's own download beside it.
+ */
+export async function fetchWporgGlossary(
+  fetch: (url: string) => Promise<Response>,
+  base: string,
+  slug: string,
+): Promise<{ name: string; text: string }> {
+  const failed = new Error(`The current ${slug} glossary could not be loaded from wp.org. Download it from wp.org and open the file instead.`)
+  let text: string
+  try {
+    const res = await fetch(`${base}api/glossary/?locale=${encodeURIComponent(slug)}`)
+    if (!res.ok) throw failed
+    text = await res.text()
+  } catch {
+    throw failed
+  }
+  if (!/^\uFEFF?en,/.test(text)) throw failed
+  return { name: `glossary-${slug}.csv`, text }
+}
+
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const ORIGINS = ['wporg', 'changed', 'added']
 

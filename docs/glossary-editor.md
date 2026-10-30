@@ -67,7 +67,10 @@ CSV's header, it says so after it imports.
 
 The [glossary editor on the website](https://ada.tools/polyglots/glossary-editor/)
 edits a CSV the same way. It works on a CSV only: nothing is uploaded, and your
-work stays in the browser until you export it. Use it when polyglots is not
+work stays in the browser until you export it. "Open the current glossary from
+wp.org" opens the locale's glossary as wp.org has it now, up to an hour old; the
+page gets it through ada.tools, because the browser cannot read wp.org's export
+directly. Use it when polyglots is not
 installed, or to prepare a CSV you then give to `polyglots glossary import`.
 When a CSV's header names no locale, or one wp.org does not list, the page asks
 for the locale before it opens the file, so the export has a header GlotPress

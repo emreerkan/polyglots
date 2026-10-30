@@ -1,7 +1,7 @@
 import { mountEditor } from '../../../../app/src/glossary/editor/page/editor.js'
 import { EDITOR_CSS } from '../../../../app/src/glossary/editor/page/styles.js'
 import { localeDisplayName, resolveLocale } from '../../../../app/src/wporg/locales.js'
-import { exportUrl, webHost, type Saved, type Start, type WebEnv } from './web-host.js'
+import { exportUrl, fetchWporgGlossary, webHost, type Saved, type Start, type WebEnv } from './web-host.js'
 
 // The page's behaviour: the start screen and the browser services the host
 // needs. The editor itself is the one the local server serves; only the host
@@ -62,6 +62,8 @@ export function start(): void {
   const cont = $<HTMLElement>('[data-ge-continue]')
   const select = $<HTMLSelectElement>('[data-ge-locale]')
   const link = $<HTMLAnchorElement>('[data-ge-export-link]')
+  const wporgBtn = $<HTMLButtonElement>('[data-ge-wporg]')
+  const hint = link.closest<HTMLElement>('.hint') ?? link
   const drop = $<HTMLElement>('[data-ge-drop]')
   const fileInput = $<HTMLInputElement>('[data-ge-file]')
 
@@ -96,6 +98,8 @@ export function start(): void {
           newBtn.textContent = label
           if (heading) heading.textContent = title
           if (openCard) openCard.hidden = false
+          wporgBtn.hidden = false
+          hint.hidden = false
           showError('')
           panel.hidden = true
           root.hidden = false
@@ -113,6 +117,10 @@ export function start(): void {
         newBtn.textContent = 'Open with this locale'
         if (heading) heading.textContent = `Open ${name}`
         if (openCard) openCard.hidden = true
+        // Only the picker and its button belong to this question; the wp.org
+        // button would start another glossary in the middle of it.
+        wporgBtn.hidden = true
+        hint.hidden = true
         cont.hidden = true
         showError(
           header === ''
@@ -140,6 +148,24 @@ export function start(): void {
         }
         const onChange = (): void => void onFile(fileInput.files?.[0])
         const onNew = (): void => finish({ kind: 'new', locale: select.value })
+        // Opened as a file would be, so its header and locale are checked the
+        // same way. The button stays disabled while the request runs, so a
+        // second click cannot open a second copy over the first.
+        const onWporg = async (): Promise<void> => {
+          const label = wporgBtn.textContent
+          wporgBtn.disabled = true
+          wporgBtn.textContent = 'Loading…'
+          showError('')
+          try {
+            finish({ kind: 'file', ...(await fetchWporgGlossary((url) => window.fetch(url), import.meta.env.BASE_URL.replace(/\/?$/, '/'), select.value)) })
+          } catch (e) {
+            showError(e instanceof Error ? e.message : String(e))
+          } finally {
+            wporgBtn.disabled = false
+            wporgBtn.textContent = label
+          }
+        }
+        const onWporgClick = (): void => void onWporg()
         const onContinue = (): void => finish({ kind: 'saved' })
         const onOver = (e: DragEvent): void => {
           e.preventDefault()
@@ -155,6 +181,7 @@ export function start(): void {
         const contBtn = $<HTMLElement>('[data-ge-continue-btn]')
         fileInput.addEventListener('change', onChange)
         newBtn.addEventListener('click', onNew)
+        wporgBtn.addEventListener('click', onWporgClick)
         contBtn.addEventListener('click', onContinue)
         drop.addEventListener('dragover', onOver)
         drop.addEventListener('dragleave', onLeave)
@@ -162,6 +189,7 @@ export function start(): void {
         function cleanup(): void {
           fileInput.removeEventListener('change', onChange)
           newBtn.removeEventListener('click', onNew)
+          wporgBtn.removeEventListener('click', onWporgClick)
           contBtn.removeEventListener('click', onContinue)
           drop.removeEventListener('dragover', onOver)
           drop.removeEventListener('dragleave', onLeave)
