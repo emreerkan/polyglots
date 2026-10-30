@@ -3,7 +3,7 @@ import React from 'react'
 import { saveConfig } from '../../src/config.js'
 import { App } from '../../src/tui/App.js'
 import type { GlossaryEditorOptions, GlossaryEditorServer } from '../../src/glossary/editor/server.js'
-import { cleanup, fakeCommands, flat, makeHome, openFromHome, render, tick, waitFor, waitForText, type Home } from './helpers.js'
+import { cleanup, fakeCommands, flat, keys, makeHome, openFromHome, render, tick, waitFor, waitForText, type Home } from './helpers.js'
 
 let home: Home
 
@@ -85,6 +85,28 @@ describe('the glossary editor screen', () => {
     await waitForText(view.lastFrame, 'http://127.0.0.1:4555/g10ss/')
     view.stdin.write('q')
     await waitFor(() => editor.close.mock.calls.length === 1)
+  })
+
+  // The locale key is live on this screen. A server left on the old locale
+  // under a heading naming the new one would write the wrong glossary.
+  it('restarts the editor on the new locale when the locale is switched', async () => {
+    const editor = fakeEditor()
+    const view = await open(fakeCommands({ startGlossaryEditor: editor.startGlossaryEditor, glossaryCount: () => 5, hasLocaleRules: () => true }))
+    await waitForText(view.lastFrame, 'polyglots, tr')
+    view.stdin.write('l')
+    await waitForText(view.lastFrame, 'Change locale')
+    for (const ch of 'de') {
+      view.stdin.write(ch)
+      await tick()
+    }
+    view.stdin.write(keys.enter)
+    await waitFor(() => editor.starts.length === 2)
+    expect(editor.starts.map((o) => o.source)).toEqual([
+      { kind: 'db', locale: 'tr' },
+      { kind: 'db', locale: 'de' },
+    ])
+    expect(editor.close).toHaveBeenCalled()
+    await waitForText(view.lastFrame, 'polyglots, de')
   })
 
   it('shows why the editor could not start', async () => {

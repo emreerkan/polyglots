@@ -273,8 +273,13 @@ describe('startGlossaryEditor: polyglots mode', () => {
   it('refuses a save under a stale stamp with 409 and writes nothing', async () => {
     server = await startGlossaryEditor(dbSource())
     const loaded = JSON.parse((await call(`${server.url}data`)).body)
-    // A sync lands while the page is open.
+    // A sync lands while the page is open, a minute after the first one. A
+    // sync in the same millisecond as the last writes the same updated_at,
+    // and so the same stamp, which made this test fail now and then.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.now() + 60_000)
     replaceGlossary(db, 'tr', [{ locale: 'tr', sourceTerm: 'post', translation: 'yazı', partOfSpeech: 'noun' }])
+    vi.useRealTimers()
     const before = glossaryStamp(db, 'tr')
     const diff: GlossaryDiff = { added: [{ term: 'quiz', pos: 'noun', translation: 'sınav', notes: '' }], changed: [], deleted: [] }
     const res = await post(server, 'save', { diff, stamp: loaded.stamp })

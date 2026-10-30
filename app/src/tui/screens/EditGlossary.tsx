@@ -29,7 +29,11 @@ export function EditGlossary(props: EditGlossaryProps) {
       />
     )
   }
-  return <EditGlossaryInLocale onBack={props.onBack} locale={locale} />
+  // Keyed by the locale so a new locale is a new server. The shell already
+  // remounts a screen when the locale changes (its Viewport key carries it),
+  // but this screen's server would otherwise go on writing the old locale's
+  // glossary under a heading naming the new one, so it does not rely on that.
+  return <EditGlossaryInLocale key={locale} onBack={props.onBack} locale={locale} />
 }
 
 type Serving =

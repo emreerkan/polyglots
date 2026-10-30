@@ -5,7 +5,7 @@ import { problemLines } from '../glossary/editor/server.js'
 import { openDb } from '../storage/db.js'
 import { glossaryStamp, importGlossaryRows } from '../storage/glossary-edits.js'
 import type { Locale } from '../types.js'
-import { resolveLocale } from '../wporg/locales.js'
+import { resolveLocale, splitLocale } from '../wporg/locales.js'
 
 export interface ImportGlossaryOptions {
   file: string
@@ -19,6 +19,8 @@ export interface ImportGlossaryResult {
   locale: Locale
   replaced: number
   added: number
+  // Set when --locale overrode a header that names another locale.
+  notice?: string
 }
 
 export const importedLine = (r: ImportGlossaryResult): string =>
@@ -34,7 +36,9 @@ export const importedLine = (r: ImportGlossaryResult): string =>
  * German terminology into the Turkish glossary because that is the default
  * would put German into Turkish prompts. A locale named on the command line
  * still wins over the header, as it does in the editor, for the person who
- * means it (nl/formal, which GlotPress writes as plain nl).
+ * means it, and as there the mismatch is said rather than kept quiet: it more
+ * often means the wrong file or the wrong flag. Only a different slug is a
+ * mismatch, since GlotPress writes nl/formal's export as plain nl.
  *
  * A CSV with any problem the editor would show is refused whole, with every
  * problem row named, before polyglots.db is opened. Importing the good rows
@@ -54,10 +58,19 @@ export async function importGlossaryCsv(opts: ImportGlossaryOptions): Promise<Im
   if (locale === undefined) {
     throw new Error(`The header of ${file} names "${csv.headerLocale}", which is not a wp.org locale. Name one with --locale.`)
   }
+  const header = resolveLocale(csv.headerLocale)
+  const notice =
+    opts.locale !== undefined && header?.slug !== splitLocale(opts.locale).slug
+      ? `The file's header says "${csv.headerLocale}", but the import uses ${opts.locale} as asked.`
+      : undefined
   const db = opts.db ?? openDb()
   try {
-    const counts = importGlossaryRows(db, locale, csv.rows, glossaryStamp(db, locale))
-    return { file, locale, ...counts }
+    // The stamp is read inside the import's transaction, not before it. Read
+    // outside, a sync landing between the two would fail the import with the
+    // editor's "since this page was opened; reload", which means nothing to
+    // a command that has no page. Inside, nothing can come between them.
+    const counts = db.transaction(() => importGlossaryRows(db, locale, csv.rows, glossaryStamp(db, locale)))()
+    return { file, locale, ...counts, ...(notice === undefined ? {} : { notice }) }
   } finally {
     if (opts.db === undefined) db.close()
   }

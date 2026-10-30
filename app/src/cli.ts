@@ -1795,7 +1795,9 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .option('--locale <locale>', "Glossary locale (default: the file's header)")
     .action(async (file: string, flags: { locale?: string }) => {
       const locale = flags.locale === undefined ? {} : { locale: parseLocaleArg(flags.locale) }
-      cli.out(okLine(cli.ui.out, importedLine(await cli.importGlossary({ file, ...locale }))))
+      const result = await cli.importGlossary({ file, ...locale })
+      if (result.notice !== undefined) cli.err(warnLine(cli.ui.err, result.notice))
+      cli.out(okLine(cli.ui.out, importedLine(result)))
     })
 
   program

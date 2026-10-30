@@ -254,6 +254,25 @@ describe('glossary import', () => {
     }
   })
 
+  // As in the editor: --locale is obeyed, but a header naming another
+  // language is said, since it usually means the wrong file or the wrong flag.
+  it('says on stderr when --locale overrides a header naming another locale, and imports anyway', async () => {
+    const file = join(home, 'de.csv')
+    await writeFile(file, 'en,de,pos,description\npost,Beitrag,noun,\n')
+    const { code, out, err } = await run(['glossary', 'import', file, '--locale', 'tr'])
+    expect(code).toBe(0)
+    expect(err).toContain(`The file's header says "de", but the import uses tr as asked.`)
+    expect(out).toContain('0 terms replaced, 1 added, as local edits for tr.')
+  })
+
+  it('says nothing when --locale shares the header slug, as nl/formal does with nl', async () => {
+    const file = join(home, 'nl.csv')
+    await writeFile(file, 'en,nl,pos,description\npost,bericht,noun,\n')
+    const { code, err } = await run(['glossary', 'import', file, '--locale', 'nl/formal'])
+    expect(code).toBe(0)
+    expect(err).not.toContain('header says')
+  })
+
   it('passes a normalized --locale through', async () => {
     const calls: Array<{ file: string; locale?: string }> = []
     const { code, out } = await run(['glossary', 'import', 'x.csv', '--locale', 'PT-BR'], {
