@@ -140,4 +140,25 @@ describe('SyncGlossary with local edits', () => {
     expect(flat(lastFrame())).toContain('Synced 42 glossary entries for tr; kept 3 local edits.')
     expect(flat(lastFrame())).toContain('removed local edit: archive (noun): arşivim → wp.org: arşiv')
   })
+
+  it('says one edit in the singular and names a term wp.org dropped', async () => {
+    const syncGlossary = vi.fn(async (_: { locale: string }) => ({
+      entries: 42,
+      kept: 1,
+      removed: [
+        {
+          kind: 'delete' as const,
+          term: 'archive',
+          pos: '',
+          wporg: [],
+        },
+      ],
+    }))
+    const { lastFrame, stdin } = mount(fakeCommands({ syncGlossary }))
+    await waitForText(lastFrame, 'enter to sync')
+    stdin.write(keys.enter)
+    await waitFor(() => flat(lastFrame()).includes('kept 1 local edit.'))
+    expect(flat(lastFrame())).toContain('Synced 42 glossary entries for tr; kept 1 local edit.')
+    expect(flat(lastFrame())).toContain('removed local edit: archive: deleted → wp.org: (none)')
+  })
 })

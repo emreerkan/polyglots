@@ -47,15 +47,22 @@ export async function syncGlossary(opts: SyncGlossaryOptions): Promise<SyncGloss
 
 /** The sync's one-line summary, shared by the CLI and the TUI so the two say the same thing. */
 export function syncedLine(result: SyncGlossaryResult, locale: Locale): string {
-  return `Synced ${result.entries} glossary entries for ${locale}; kept ${result.kept} local edits.`
+  const edits = result.kept === 1 ? 'local edit' : 'local edits'
+  return `Synced ${result.entries} glossary entries for ${locale}; kept ${result.kept} ${edits}.`
 }
 
 /**
  * One removed edit, local version against wp.org's. A delete has no local
  * translation, so it reads as "deleted"; wp.org lists every translation the
- * term and part of speech now have, empty when wp.org dropped the term.
+ * term and part of speech now have. When wp.org dropped the term the list is
+ * empty, and an empty list printed as is leaves the line ending on "wp.org: ",
+ * which reads as output cut short; "(none)" says the term is gone. GlotPress
+ * exports plenty of rows with no part of speech, and "post ()" reads as a
+ * formatting slip, so an empty one is left out rather than bracketed.
  */
 export function removedEditLine(r: RemovedEdit): string {
   const local = r.local?.translation ?? 'deleted'
-  return `removed local edit: ${r.term} (${r.pos}): ${local} → wp.org: ${r.wporg.map((w) => w.translation).join(', ')}`
+  const name = r.pos === '' ? r.term : `${r.term} (${r.pos})`
+  const wporg = r.wporg.length === 0 ? '(none)' : r.wporg.map((w) => w.translation).join(', ')
+  return `removed local edit: ${name}: ${local} → wp.org: ${wporg}`
 }

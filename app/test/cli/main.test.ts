@@ -392,6 +392,30 @@ describe('glossary sync', () => {
     )
   })
 
+  it('says one edit in the singular, leaves out an empty part of speech, and names a dropped term', async () => {
+    const h = harness()
+    const sync = fakeSync(
+      synced(42, {
+        kept: 1,
+        removed: [
+          {
+            kind: 'change',
+            term: 'post',
+            pos: '',
+            local: { term: 'post', pos: '', translation: 'gönderi', notes: '' },
+            wporg: [],
+          },
+        ],
+      }),
+    )
+    const code = await h.run(['glossary', 'sync', '--locale', 'tr'], { syncGlossary: sync.fn })
+    expect(code).toBe(0)
+    expect(h.stdout.text).toBe(
+      '✓ Synced 42 glossary entries for tr; kept 1 local edit.\n' +
+        '  removed local edit: post: gönderi → wp.org: (none)\n',
+    )
+  })
+
   it('exits 1 with the error message when the sync throws', async () => {
     const h = harness()
     const sync = fakeSync(new Error('No glossary entries found for locale "tr"; existing cache left untouched'))
