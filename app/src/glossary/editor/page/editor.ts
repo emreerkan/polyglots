@@ -1,7 +1,7 @@
 import { GLOSSARY_POS, normaliseGlossaryValue } from '../../csv.js'
 import type { GlossaryRow } from '../../types.js'
 import {
-  FIELDS, addRow, applyImport, createModel, currentRows, diffOf, duplicateRow, isChanged, problemsOf, revertRow,
+  FIELDS, addRow, applyImport, checkProblems, createModel, currentRows, diffOf, duplicateRow, revertRow, rowChanged,
   setCell, toggleDelete, visibleRows, type EditorModel, type EditorRow, type Field, type Filter, type Problem,
 } from '../model.js'
 import { readSidecar, sidecarKey, type SidecarRecord } from '../sidecar.js'
@@ -47,6 +47,8 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   let cursor: { id: number; field: Field } | undefined
   let editing: { id: number; field: Field; control: HTMLInputElement | HTMLSelectElement } | undefined
   let problems = new Map<number, Problem[]>()
+  // The subset that holds back a save; see blockingProblems.
+  let blocking = new Map<number, Problem[]>()
   let busy = false
   let closed = false
   let dialogReturn: HTMLElement | undefined
@@ -120,7 +122,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     data.localEdits ?? m.rows.filter((r) => r.loaded && r.loaded.origin !== 'wporg').length
 
   function stateOf(r: EditorRow): RowState {
-    const changed = isChanged(m, r.id)
+    const changed = rowChanged(r)
     const target = r.loaded?.origin === 'changed' && r.loaded.base ? r.loaded.base : r.loaded
     const canRevert = !target || r.deleted || FIELDS.some((f) => r[f] !== target[f])
     return { changed: changed && r.origin !== 'new', added: r.origin === 'new', local: m.mode === 'db' && r.origin !== 'wporg' && r.origin !== 'new', canRevert }
@@ -167,7 +169,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   function drawRows(): void {
     const hadFocus = tbody.contains(doc.activeElement)
     editing = undefined
-    problems = problemsOf(m)
+    ;({ shown: problems, blocking } = checkProblems(m))
     if (!cursor || !visible.includes(cursor.id)) {
       const first = visible[0]
       cursor = first === undefined ? undefined : { id: first, field: cursor?.field ?? 'term' }
@@ -224,7 +226,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
    */
   function changed(ids: number[], refocus = true): void {
     const before = problems
-    problems = problemsOf(m)
+    ;({ shown: problems, blocking } = checkProblems(m))
     const touched = new Set(ids)
     for (const id of new Set([...before.keys(), ...problems.keys()])) {
       if ((before.get(id) ?? []).join() !== (problems.get(id) ?? []).join()) touched.add(id)
@@ -263,10 +265,10 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     // Save with nothing to save is refused quietly; Export is not, since
     // exporting the file as opened is a reasonable thing to want.
     const nothing = host.saveLabel === 'Save' && diff.added.length + diff.changed.length + diff.deleted.length === 0
-    save.disabled = busy || problems.size > 0 || nothing
+    save.disabled = busy || blocking.size > 0 || nothing
     save.title = nothing ? 'No changes to save.' : ''
-    setHtml(reason, reasonHtml(m, problems))
-    reason.hidden = problems.size === 0
+    setHtml(reason, reasonHtml(m, blocking))
+    reason.hidden = blocking.size === 0
 
     drawNotice()
     drawPanel()
@@ -495,7 +497,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   }
 
   async function save(): Promise<void> {
-    if (busy || problems.size > 0) return
+    if (busy || blocking.size > 0) return
     setBusy(true)
     setStatus(host.saveLabel === 'Save' ? 'Saving…' : 'Exporting…')
     try {

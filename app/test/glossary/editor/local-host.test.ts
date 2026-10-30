@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { addRow, createModel, setCell } from '../../../src/glossary/editor/model.js'
-import { localHost } from '../../../src/glossary/editor/page/local-host.js'
+import { localHost, pickCsv } from '../../../src/glossary/editor/page/local-host.js'
 
 const PAGE = 'http://127.0.0.1:4100/tok123/'
 
@@ -78,5 +78,53 @@ describe('localHost', () => {
     const r = await localHost(PAGE).discard!('s1')
     expect(r).toMatchObject({ ok: false, reason: 'error' })
     if (!r.ok) expect(r.message).toMatch(/polyglots glossary edit/)
+  })
+
+  // Import CSV is offered only by a host that can open a file, so without
+  // this the button never appeared in polyglots mode.
+  it('opens a CSV picked from disk, its rows normalised, and says when its header names another locale', async () => {
+    stubFetch(200, { mode: 'db', locale: 'tr', rows: [], stamp: 's1' })
+    const pick = vi.fn(async () => ({ name: 'terms.csv', text: 'en,de,pos,description\n  lesson ,Lektion , noun,\n' }))
+    const host = localHost(PAGE, pick)
+    await host.load()
+    const file = await host.openFile!()
+    expect(pick).toHaveBeenCalledOnce()
+    expect(file).toMatchObject({ mode: 'csv', file: 'terms.csv', headerLocale: 'de' })
+    expect(file!.rows).toEqual([{ term: 'lesson', pos: 'noun', translation: 'Lektion', notes: '' }])
+    expect(file!.notice).toMatch(/"de".*tr/)
+  })
+
+  it('says nothing of a header that names the locale being edited, and returns nothing when the picker is cancelled', async () => {
+    stubFetch(200, { mode: 'db', locale: 'tr', rows: [], stamp: 's1' })
+    const texts = ['en,tr,pos,description\npost,yazı,noun,\n', undefined]
+    const host = localHost(PAGE, async () => {
+      const text = texts.shift()
+      return text === undefined ? undefined : { name: 'tr.csv', text }
+    })
+    await host.load()
+    expect((await host.openFile!())?.notice).toBeUndefined()
+    expect(await host.openFile!()).toBeUndefined()
+  })
+
+  it('throws the reader\'s message for a file that is not a glossary export', async () => {
+    const host = localHost(PAGE, async () => ({ name: 'x.csv', text: 'Term,Translation\n' }))
+    await expect(host.openFile!()).rejects.toThrow(/first column must be "en"/)
+  })
+})
+
+describe('pickCsv', () => {
+  it('reads the file chosen in a file input, and nothing when the picker is cancelled', async () => {
+    let files: File[] = [new File(['en,tr,pos,description\n'], 'tr.csv', { type: 'text/csv' })]
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function (this: HTMLInputElement) {
+      expect(this.type).toBe('file')
+      Object.defineProperty(this, 'files', { value: files })
+      this.dispatchEvent(new Event(files.length === 0 ? 'cancel' : 'change'))
+    })
+    expect(await pickCsv()).toEqual({ name: 'tr.csv', text: 'en,tr,pos,description\n' })
+    files = []
+    expect(await pickCsv()).toBeUndefined()
+    // The input is removed once it has answered, so a page that imports
+    // often does not collect them.
+    expect(document.querySelectorAll('input[type="file"]')).toHaveLength(0)
   })
 })

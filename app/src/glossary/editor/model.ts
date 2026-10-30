@@ -113,10 +113,19 @@ export function revertRow(m: EditorModel, id: number): void {
   row.deleted = false
 }
 
-export function isChanged(m: EditorModel, id: number): boolean {
-  const row = find(m, id)
+/**
+ * Whether a row differs from what the page loaded: made in this session,
+ * deleted, or edited. Read from the row alone, since the page asks it of
+ * every row on every redraw, and looking each one up by id made a redraw of a
+ * few thousand rows quadratic.
+ */
+export function rowChanged(row: EditorRow): boolean {
   if (!row.loaded) return true
   return row.deleted || !sameValues(row, row.loaded)
+}
+
+export function isChanged(m: EditorModel, id: number): boolean {
+  return rowChanged(find(m, id))
 }
 
 export function diffOf(m: EditorModel): GlossaryDiff {
@@ -138,12 +147,38 @@ export function currentRows(m: EditorModel): GlossaryRow[] {
 }
 
 export function problemsOf(m: EditorModel): Map<number, Problem[]> {
-  const out = new Map<number, Problem[]>()
-  const add = (id: number, p: Problem): void => {
+  return checkProblems(m).shown
+}
+
+/**
+ * The problems that hold back a save, a subset of problemsOf. In polyglots
+ * mode a duplicate counts only when one of its rows is the person's: a local
+ * edit, or a row changed or made in this session. wp.org's glossary carries
+ * case-only twins of its own ("Post" and "post", one translation), and
+ * refusing every save until someone deletes rows the locale team owns would
+ * make the editor unusable for a locale that has them. They are still shown.
+ * A CSV is the person's whole file, so there every duplicate blocks, and so
+ * does every other problem in both modes: those are rarely wp.org's, and a
+ * row with no translation would reach the prompt as an empty answer.
+ */
+export function blockingProblems(m: EditorModel): Map<number, Problem[]> {
+  return checkProblems(m).blocking
+}
+
+/** Both at once, for the page, which redraws from both after every change. */
+export function checkProblems(m: EditorModel): { shown: Map<number, Problem[]>; blocking: Map<number, Problem[]> } {
+  const shown = new Map<number, Problem[]>()
+  const blocking = new Map<number, Problem[]>()
+  const into = (out: Map<number, Problem[]>, id: number, p: Problem): void => {
     const list = out.get(id)
     if (list) list.push(p)
     else out.set(id, [p])
   }
+  const add = (id: number, p: Problem, blocks = true): void => {
+    into(shown, id, p)
+    if (blocks) into(blocking, id, p)
+  }
+  const touched = (r: EditorRow): boolean => r.origin !== 'wporg' || rowChanged(r)
   const live = m.rows.filter((r) => !r.deleted)
   const seen = new Map<string, EditorRow[]>()
   for (const r of live) {
@@ -156,8 +191,12 @@ export function problemsOf(m: EditorModel): Map<number, Problem[]> {
     if (group) group.push(r)
     else seen.set(key, [r])
   }
-  for (const group of seen.values()) if (group.length > 1) for (const r of group) add(r.id, 'duplicate')
-  return out
+  for (const group of seen.values()) {
+    if (group.length < 2) continue
+    const blocks = m.mode === 'csv' || group.some(touched)
+    for (const r of group) add(r.id, 'duplicate', blocks)
+  }
+  return { shown, blocking }
 }
 
 export function visibleRows(m: EditorModel, f: Filter, sidecar?: Map<string, SidecarRecord>): EditorRow[] {
@@ -167,7 +206,7 @@ export function visibleRows(m: EditorModel, f: Filter, sidecar?: Map<string, Sid
     if (q && ![r.term, r.translation, r.notes].some((v) => v.toLowerCase().includes(q))) return false
     if (f.pos !== undefined && f.pos !== '' && r.pos !== f.pos) return false
     if (problems && !problems.has(r.id)) return false
-    if (f.local && !(r.origin !== 'wporg' || isChanged(m, r.id))) return false
+    if (f.local && !(r.origin !== 'wporg' || rowChanged(r))) return false
     if (f.contested && sidecar?.get(sidecarKey(r.term, r.pos))?.confidence !== 'contested') return false
     return true
   })

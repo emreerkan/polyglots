@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addRow, applyImport, createModel, currentRows, diffOf, duplicateRow, isChanged, problemsOf,
-  revertRow, setCell, toggleDelete, visibleRows,
+  addRow, applyImport, blockingProblems, createModel, currentRows, diffOf, duplicateRow, isChanged, problemsOf,
+  revertRow, rowChanged, setCell, toggleDelete, visibleRows,
 } from '../../../src/glossary/editor/model.js'
 import { sidecarKey } from '../../../src/glossary/editor/sidecar.js'
 import type { EffectiveRow, GlossaryRow } from '../../../src/glossary/types.js'
@@ -170,6 +170,79 @@ describe('problemsOf', () => {
     const m = createModel([eff('a', 'x'), eff('a', 'x')], 'db')
     toggleDelete(m, m.rows[1]!.id)
     expect(problemsOf(m).size).toBe(0)
+  })
+})
+
+// wp.org's own glossary carries case-only twins ("Post" and "post", same
+// translation). In polyglots mode they are shown, but a save of an unrelated
+// edit must not wait on the person fixing rows that are not theirs.
+describe('blockingProblems', () => {
+  const twins = (mode: 'db' | 'csv') => createModel([eff('Post', 'yazı'), eff('post', 'yazı'), eff('quiz', 'sınav')], mode)
+
+  it('shows untouched wp.org duplicates in db mode but does not block on them', () => {
+    const m = twins('db')
+    setCell(m, m.rows[2]!.id, 'translation', 'test')
+    expect(problemsOf(m).size).toBe(2)
+    expect(blockingProblems(m).size).toBe(0)
+  })
+
+  it('blocks on the whole group once one of its rows is edited', () => {
+    const m = twins('db')
+    setCell(m, m.rows[1]!.id, 'notes', 'a note')
+    expect([...blockingProblems(m).keys()]).toEqual([m.rows[0]!.id, m.rows[1]!.id])
+  })
+
+  it('blocks when a row new in this session duplicates a wp.org row', () => {
+    const m = createModel([eff('post', 'yazı')], 'db')
+    const id = addRow(m)
+    setCell(m, id, 'term', 'Post')
+    setCell(m, id, 'pos', 'noun')
+    setCell(m, id, 'translation', 'yazı')
+    expect(blockingProblems(m).size).toBe(2)
+  })
+
+  it('blocks when a loaded local edit duplicates a wp.org row', () => {
+    const m = createModel([eff('post', 'yazı'), eff('Post', 'yazı', 'noun', 'added')], 'db')
+    expect(blockingProblems(m).size).toBe(2)
+  })
+
+  it('still blocks on an untouched row with any other problem', () => {
+    const m = createModel([eff('post', '')], 'db')
+    expect(blockingProblems(m).get(m.rows[0]!.id)).toEqual(['empty-translation'])
+  })
+
+  it('blocks on every duplicate in CSV mode, touched or not', () => {
+    const m = twins('csv')
+    expect(blockingProblems(m).size).toBe(2)
+  })
+})
+
+// The page asks this of every row on every redraw, so it reads the row alone;
+// it must still say exactly what isChanged says.
+describe('rowChanged', () => {
+  it('agrees with isChanged for every origin, edited or not, deleted or not', () => {
+    const m = createModel(
+      [eff('a', 'x'), { ...eff('b', 'y', 'noun', 'changed'), base: eff('b', 'z') }, eff('c', 'w', 'noun', 'added')],
+      'db',
+    )
+    addRow(m)
+    const variants: Array<(id: number) => void> = [
+      () => {},
+      (id) => setCell(m, id, 'notes', 'edited'),
+      (id) => toggleDelete(m, id),
+      (id) => {
+        setCell(m, id, 'notes', 'edited')
+        setCell(m, id, 'notes', '')
+      },
+    ]
+    const ids = m.rows.map((r) => r.id)
+    for (const variant of variants) {
+      for (const id of ids) variant(id)
+      for (const r of m.rows) expect([r.origin, rowChanged(r)]).toEqual([r.origin, isChanged(m, r.id)])
+      for (const id of ids) revertRow(m, id)
+      addRow(m)
+      ids.splice(0, ids.length, ...m.rows.map((r) => r.id))
+    }
   })
 })
 

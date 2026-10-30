@@ -4,6 +4,7 @@ import { GLOSSARY_POS } from '../../../src/glossary/csv.js'
 import { createModel, currentRows, diffOf, setCell, type EditorModel } from '../../../src/glossary/editor/model.js'
 import { mountEditor } from '../../../src/glossary/editor/page/editor.js'
 import type { EditorHost, LoadedGlossary, SaveResult } from '../../../src/glossary/editor/page/host.js'
+import { localHost } from '../../../src/glossary/editor/page/local-host.js'
 import type { EffectiveRow } from '../../../src/glossary/types.js'
 
 const eff = (term: string, translation: string, pos = 'noun', origin: EffectiveRow['origin'] = 'wporg', notes = ''): EffectiveRow => ({
@@ -399,5 +400,44 @@ describe('mountEditor', () => {
     byText('Import CSV').click()
     await flush()
     expect(count()).toBe('0 changed · 1 added · 1 deleted')
+  })
+
+  it('offers Import CSV on the local server\'s page in db mode, and an import marks the rows', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ mode: 'db', locale: 'tr', rows: ROWS, stamp: 's1' }), { status: 200 })))
+    const host = localHost('http://127.0.0.1:4100/tok/', async () => ({
+      name: 'terms.csv',
+      text: 'en,tr,pos,description\nlesson,konu,noun,\n',
+    }))
+    try {
+      await mountEditor(root, host)
+      byText('Import CSV').click()
+      await new Promise((r) => setTimeout(r, 10))
+      expect(count()).toBe('0 changed · 1 added · 1 deleted')
+      expect(root.querySelector('tbody tr.ge-deleted td[data-field="translation"]')?.textContent).toBe('ders')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  // wp.org's own glossary has case-only twins. Saving an unrelated edit must
+  // not wait on rows the person never touched.
+  it('shows untouched wp.org duplicates in db mode without holding back a save', async () => {
+    const host = fakeHost({ rows: [eff('Post', 'yazı'), eff('post', 'yazı'), eff('course', 'kurs')] })
+    await mountEditor(root, host)
+    edit(3, 'translation', 'eğitim')
+    expect(byText('problems 2')).toBeDefined()
+    expect(byText('Save').disabled).toBe(false)
+    expect(root.querySelector<HTMLElement>('.ge-reason')!.hidden).toBe(true)
+    edit(2, 'notes', 'a note')
+    expect(byText('Save').disabled).toBe(true)
+    expect(norm(root.querySelector('.ge-reason')?.textContent)).toContain('Fix 2 rows first')
+  })
+
+  it('holds back an export over duplicates in a CSV, touched or not', async () => {
+    const host = fakeHost({ mode: 'csv', rows: [eff('Post', 'yazı'), eff('post', 'yazı')] }, { saveLabel: 'Export' })
+    delete host.discard
+    await mountEditor(root, host)
+    expect(byText('Export').disabled).toBe(true)
   })
 })
