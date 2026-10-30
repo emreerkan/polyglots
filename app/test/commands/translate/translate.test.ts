@@ -182,10 +182,17 @@ describe('translateFile: exact TM fast path', () => {
     upsertTm(db, [{ source: 'Thank you for installing %s.', target: '%s kurduğunuz için teşekkürler.', locale: 'tr' }])
     upsertTm(db, [{ source: 'Thank you for installing %s.', target: '%s yüklediğiniz için teşekkürler.', locale: 'tr' }])
 
-    await translateFile(base({ db, engine: fakeEngine(), review: fakeReview() }))
+    const summary = await translateFile(base({ db, engine: fakeEngine(), review: fakeReview() }))
     db.close()
 
     const after = await parseFile(ws.file)
+    // Counted where the summary counts fuzzy entries: it said 10 on a file
+    // the run had left 121 fuzzy in, and the rest came from the memory.
+    expect(summary.fromTmFuzzy).toBe(1)
+    // And says which choice it is, as every other fuzzy entry this writes does.
+    expect(entryOf(after, 'Thank you for installing %s.').comments?.translator).toBe(
+      'polyglots: chosen from 2 approved wordings: "%s yüklediğiniz için teşekkürler." / "%s kurduğunuz için teşekkürler."',
+    )
     // Two wordings: filled with the newest, flagged for a human.
     expect(entryOf(after, 'Thank you for installing %s.').msgstr).toEqual(['%s yüklediğiniz için teşekkürler.'])
     // The entry already carries php-format, so the flag list gains fuzzy.

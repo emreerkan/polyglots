@@ -4,6 +4,7 @@ import type { FetchStatus } from '../wporg/projects.js'
 import type { ProjectOutcome } from './batch.js'
 import type { Fetched, Resolution } from './fetch.js'
 import type { TranslateSummary } from './translate.js'
+import { fuzzyTotal } from './translate-counts.js'
 
 export type BatchSummary = ReviewSummary | TranslateSummary
 
@@ -99,7 +100,7 @@ export function endOfJob(outcome: ProjectOutcome<BatchSummary>, wporgUsername: s
   // The entries of a batch given up, for the same reason and in the same
   // words as a review's above.
   const skipped = s.skipped > 0 ? `, ${s.skipped} in failed batches` : ''
-  const counts = `${s.translated} translated, ${s.fuzzy} fuzzy, ${s.fromTm} from TM${fixed}${skipped}`
+  const counts = `${s.translated} translated, ${fuzzyTotal(s)} fuzzy, ${s.fromTm} from TM${fixed}${skipped}`
   return s.stopped ? { tally: 'stopped', detail: `${counts}, stopped: ${s.stopped}` } : { tally: 'done', detail: counts }
 }
 

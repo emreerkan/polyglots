@@ -1,4 +1,5 @@
 import type { TranslateSummary } from '../commands/translate.js'
+import { fuzzyTotal } from '../commands/translate-counts.js'
 import type { ReviewSummary } from '../types.js'
 import type { Tally } from '../commands/fetch-report.js'
 import type { StatsSummary } from '../commands/stats.js'
@@ -21,6 +22,16 @@ export const skippedRuleText = (label: string) => `locale rule skipped (took lon
 // Kept out of cli.ts so they can be tested with colour forced on and off
 // without running a command, and so the TUI can reuse the wording later.
 
+// One count for every fuzzy entry, since each is as much to check before
+// upload, with the memory's share named: those are a choice between approved
+// wordings rather than a draft, and read differently.
+function fuzzyRow(p: Painter, s: TranslateSummary): string[] {
+  const total = fuzzyTotal(s)
+  if (total === 0) return ['fuzzy', '0', '']
+  const note = s.fromTmFuzzy ? `check before upload; ${s.fromTmFuzzy} from TM` : 'check before upload'
+  return ['fuzzy', p.paint('warn', String(total)), p.paint('muted', note)]
+}
+
 export function translateSummary(p: Painter, s: TranslateSummary, dryRun: boolean): string[] {
   const title = s.stopped
     ? `${p.paint('warn', p.glyphs.warn)} Stopped`
@@ -31,7 +42,7 @@ export function translateSummary(p: Painter, s: TranslateSummary, dryRun: boolea
     [
       ['translated', String(s.translated)],
       ['from TM', String(s.fromTm)],
-      ['fuzzy', s.fuzzy > 0 ? p.paint('warn', String(s.fuzzy)) : '0', s.fuzzy > 0 ? p.paint('muted', 'check before upload') : ''],
+      fuzzyRow(p, s),
       ['skipped', String(s.skipped)],
       // Only on a memory-only run, which is the one run that leaves entries
       // alone by design. Every other run's table is unchanged.

@@ -161,6 +161,16 @@ describe('Progress', () => {
     expect(lastFrame()).toContain('fuzzy 1')
   })
 
+  it('counts the fuzzy entries the memory filled in the totals', async () => {
+    const fromTm: TranslateEvent[] = [
+      { type: 'start', file: FILE, total: 10, pending: 4 },
+      { type: 'done', summary: { file: FILE, total: 10, pending: 4, fromTm: 3, fromTmFuzzy: 2, translated: 1, fuzzy: 1, skipped: 0 } },
+    ]
+    const { lastFrame } = render(<Progress events={fromTm} />)
+    await tick()
+    expect(lastFrame()).toContain('Done. 1 translated, 3 fuzzy, 3 from TM, 0 skipped.')
+  })
+
   it('counts the entries a locale rule changed, and says nothing when none were', async () => {
     const fixed: TranslateEvent[] = [
       { type: 'start', file: FILE, total: 10, pending: 4 },

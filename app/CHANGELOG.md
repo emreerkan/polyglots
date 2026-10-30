@@ -10,6 +10,11 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Fixed
+
+- `translate` counts the fuzzy entries it filled from the memory in its summary, history and batch report.
+- An entry filled fuzzy because the memory held several wordings names them in a translator comment.
+
 ## [1.6.0] - 2026-10-30
 
 ### Added

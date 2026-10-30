@@ -2,6 +2,7 @@ import { Box, Text } from 'ink'
 import { useState } from 'react'
 import { estimateRemainingMs, formatDuration, formatFinishTime, renderBar as bar, type BatchPhase } from '../../cli/progress.js'
 import { skippedRuleText } from '../../cli/summaries.js'
+import { fuzzyTotal } from '../../commands/translate-counts.js'
 import { useElapsed } from '../hooks/useElapsed.js'
 import { openInDefaultApp } from '../open-file.js'
 import type {
@@ -152,7 +153,7 @@ export function reduceProgress(events: TranslateEvent[]): ProgressState {
     state.remainingMs = undefined
     state.fromTm = state.summary.fromTm
     state.translated = state.summary.translated
-    state.fuzzy = state.summary.fuzzy
+    state.fuzzy = fuzzyTotal(state.summary)
     state.skipped = state.summary.skipped
   }
   state.done = state.fromTm + state.translated + state.skipped
@@ -173,7 +174,7 @@ export function formatSummary(summary: TranslateSummary): string {
   if (summary.untranslated !== undefined) {
     return `Done. ${summary.fromTm} from TM, ${summary.untranslated} left untranslated (no memory match).`
   }
-  return `Done. ${summary.translated} translated, ${summary.fuzzy} fuzzy, ${summary.fromTm} from TM, ${summary.skipped} skipped.`
+  return `Done. ${summary.translated} translated, ${fuzzyTotal(summary)} fuzzy, ${summary.fromTm} from TM, ${summary.skipped} skipped.`
 }
 
 const TRANSLATE_TONE: Record<TranslateEntryOutcome, Token> = {

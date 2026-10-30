@@ -22,6 +22,11 @@ describe('endOfJob: a translate line', () => {
     expect(end).toEqual({ tally: 'done', detail: '5 translated, 1 fuzzy, 2 from TM, 3 fixed by locale rules' })
   })
 
+  it('counts the fuzzy entries the memory filled', () => {
+    const end = endOfJob({ file: 'a.po', state: 'done', summary: translated({ fromTmFuzzy: 2 }) }, 'me')
+    expect(end.detail).toBe('5 translated, 3 fuzzy, 2 from TM')
+  })
+
   it('says nothing about locale rules when none fixed anything', () => {
     const end = endOfJob({ file: 'a.po', state: 'done', summary: translated() }, 'me')
     expect(end.detail).toBe('5 translated, 1 fuzzy, 2 from TM')

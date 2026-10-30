@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import { fuzzyTotal } from './translate-counts.js'
 import { controlSpec } from '../audit/control.js'
 import { createDraftChecker, type DraftChecker } from '../translate/checks.js'
 import { glossaryKey, type GlossaryMatch } from '../audit/rules/index.js'
@@ -109,6 +110,11 @@ export interface TranslateSummary {
   fromTm: number
   translated: number
   fuzzy: number
+  // The memory's fills written fuzzy, a part of fromTm as `fuzzy` is of
+  // `translated`. Kept apart rather than added into `fuzzy`, which the run
+  // history subtracts from `translated` for what was approvable. Absent when
+  // none was, so a run without them reads as it always has.
+  fromTmFuzzy?: number
   skipped: number
   // Entries left as they were because nothing was asked to draft them: set
   // only by --draft-engine none, which fills from the memory alone. Absent on
@@ -255,9 +261,14 @@ function tmLookup(
   const formsOf = (candidate: TmEntry): string[] => (plural ? [candidate.target, plural[0]!.target] : [candidate.target])
   const fuzzy = ambiguous(singular, locale) || (plural !== undefined && ambiguous(plural, locale))
 
+  // A choice the reader is asked to confirm names what it was chosen from,
+  // as the other two fuzzy fills below name theirs. Without it the entry
+  // looked exactly like a draft nobody had checked, and a reviewer had to look
+  // the source up in the memory to learn that it was a choice at all.
+  const choice = fuzzy ? { reason: `chosen from ${wordings(singular, locale)}` } : {}
   for (const candidate of singular) {
     const text = formsOf(candidate)
-    if (check.glossary(unit, text).length === 0) return { key: unit.key, text, fuzzy }
+    if (check.glossary(unit, text).length === 0) return { key: unit.key, text, fuzzy, ...choice }
   }
   for (const variant of findMemoryIgnoringCase(db, unit.msgid, locale, unit.msgctxt)) {
     const text = formsOf(variant)
@@ -268,6 +279,20 @@ function tmLookup(
   const text = formsOf(singular[0]!)
   const missed = check.glossary(unit, text)
   return { key: unit.key, text, fuzzy: true, reason: missed.map((f) => f.message).join('; ') }
+}
+
+// The wordings the memory offers, once each however they are capitalised, in
+// the memory's own order.
+function wordings(alternatives: readonly { target: string }[], locale: Locale): string {
+  const seen = new Set<string>()
+  const distinct: string[] = []
+  for (const { target } of alternatives) {
+    const folded = target.toLocaleLowerCase(intlTag(locale))
+    if (seen.has(folded)) continue
+    seen.add(folded)
+    distinct.push(`"${target}"`)
+  }
+  return `${distinct.length} approved wordings: ${distinct.join(' / ')}`
 }
 
 async function persist(po: PoFile, results: ApplyResult[], dryRun: boolean | undefined): Promise<boolean> {
@@ -734,6 +759,8 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
       }
       const savedHits = hits.length > 0 && (await persist(po, hits, opts.dryRun))
       summary.fromTm = hits.length
+      const tmFuzzy = hits.filter((h) => h.fuzzy).length
+      if (tmFuzzy > 0) summary.fromTmFuzzy = tmFuzzy
       emit({ type: 'tm-hit', count: hits.length })
       if (hits.length > 0) {
         const sourceOf = new Map(units.map((u) => [u.key, u.msgid]))
@@ -971,7 +998,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
           // breaker gave up on, which is precisely what `unreviewed` means:
           // recording 0 filed a run that gave up as clean and complete.
           entries: summary.pending,
-          flagged: summary.fuzzy,
+          flagged: fuzzyTotal(summary),
           repaired: summary.translated,
           unreviewed: summary.skipped,
           approvable: summary.translated - summary.fuzzy,

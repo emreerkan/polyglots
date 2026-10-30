@@ -29,6 +29,13 @@ describe('translateSummary', () => {
     expect(lines.at(-1)).toBe('› Nothing was written.')
   })
 
+  // The memory's fuzzy fills are as much to check as the engine's; counted
+  // apart, the row said 10 on a file left with 121.
+  it('counts the fuzzy entries the memory filled, and says how many they are', () => {
+    const lines = translateSummary(plainPainter, { ...base, fromTmFuzzy: 5 }, false)
+    expect(lines).toContainEqual(expect.stringMatching(/│  fuzzy\s+13  check before upload; 5 from TM\s+│/))
+  })
+
   it('drops the fuzzy note when nothing is fuzzy', () => {
     expect(translateSummary(plainPainter, { ...base, fuzzy: 0 }, false).join('\n')).not.toContain('check before upload')
   })
