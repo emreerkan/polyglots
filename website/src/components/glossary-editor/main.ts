@@ -36,6 +36,36 @@ function download(name: string, text: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+/**
+ * A Full screen button in the editor's header, which lays the editor over the
+ * whole window. The header is drawn once at mount and never redrawn, so the
+ * button lives as long as the editor does. Esc leaves full screen unless the
+ * editor has used the key itself (closing a dialog, cancelling an edit) or it
+ * was pressed in a field, where it clears the search.
+ */
+function addFullScreen(root: HTMLElement): void {
+  const head = root.querySelector('.ge-head')
+  if (!head) return
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = 'ge-btn ge-ghost ge-full'
+  const set = (on: boolean): void => {
+    root.classList.toggle('ge-fullscreen', on)
+    document.documentElement.classList.toggle('ge-locked', on)
+    btn.textContent = on ? 'Exit full screen' : 'Full screen'
+    btn.setAttribute('aria-pressed', String(on))
+    btn.title = on ? 'Exit full screen (Esc)' : 'Show the editor over the whole window'
+  }
+  set(false)
+  btn.addEventListener('click', () => set(!root.classList.contains('ge-fullscreen')))
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || ev.defaultPrevented || !root.classList.contains('ge-fullscreen')) return
+    if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLSelectElement || ev.target instanceof HTMLTextAreaElement) return
+    set(false)
+  })
+  head.append(btn)
+}
+
 export function start(): void {
   const style = document.createElement('style')
   style.textContent = EDITOR_CSS
@@ -215,6 +245,7 @@ export function start(): void {
     for (;;) {
       try {
         await mountEditor(root, webHost(env))
+        addFullScreen(root)
         return
       } catch (e) {
         showError(e instanceof Error ? e.message : String(e))

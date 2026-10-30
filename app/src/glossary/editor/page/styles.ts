@@ -18,6 +18,7 @@ export const EDITOR_CSS = `
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
   display: flex; flex-direction: column; gap: 8px;
   max-width: 1400px; margin: 0 auto; padding: 16px; box-sizing: border-box;
+  border-radius: var(--ge-radius, 8px);
 }
 .ge *, .ge *::before, .ge *::after { box-sizing: border-box; }
 .ge-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }

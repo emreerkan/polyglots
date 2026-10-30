@@ -95,6 +95,17 @@ const locales = WPORG_LOCALES.filter((l) => !seen.has(l.slug) && seen.add(l.slug
   .ge-page .gbtn:focus-within, .ge-page .gbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .ge-page .gbtn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
   .ge-page .drop.over { border-color: var(--accent); border-style: dashed; }
+  /* The editor's corners follow the site's, which rounds every panel. */
+  .ge-page { --ge-radius: var(--radius); }
+  .ge-page .ge-head .ge-full { margin-left: auto; align-self: center; }
+  /* Full screen is the same editor laid over the page, not the browser's
+     Fullscreen API: the page's own dialogs and file pickers keep working, and
+     Esc leaves it the way it leaves a dialog. */
+  .ge-page [data-ge-root].ge-fullscreen {
+    position: fixed; inset: 0; z-index: 1000; overflow: auto; background: var(--bg);
+  }
+  .ge-page [data-ge-root].ge-fullscreen .ge { max-width: none; min-height: 100%; border-radius: 0; }
+  html.ge-locked { overflow: hidden; }
 </style>
 
 <script>
