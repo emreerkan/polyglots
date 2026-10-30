@@ -1,12 +1,14 @@
 import type Database from 'better-sqlite3'
 import type { GlossaryEntry, Locale } from '../types.js'
-import type { EffectiveRow, GlossaryRow } from '../glossary/types.js'
+import type { EffectiveRow, GlossaryDiff, GlossaryRow } from '../glossary/types.js'
 import { entryToRow, rowToEntry } from '../glossary/csv.js'
+import { importDiff } from '../glossary/import.js'
 import { allGlossary } from './glossary.js'
 
-export type { EffectiveRow, GlossaryRow, RowOrigin } from '../glossary/types.js'
+export type { EffectiveRow, GlossaryDiff, GlossaryRow, RowOrigin } from '../glossary/types.js'
 
 interface EditRow {
+  id: number
   kind: string
   base_term: string | null
   base_pos: string | null
@@ -19,6 +21,25 @@ interface EditRow {
 }
 
 const key = (r: GlossaryRow): string => JSON.stringify([r.term, r.pos, r.translation, r.notes])
+
+// NULL and '' both read as empty: the writer below stores '', and a NULL is
+// what a delete leaves in the row columns and an add in the base columns.
+const editRow = (e: EditRow): GlossaryRow => ({
+  term: e.term ?? '',
+  pos: e.pos ?? '',
+  translation: e.translation ?? '',
+  notes: e.notes ?? '',
+})
+const editBase = (e: EditRow): GlossaryRow => ({
+  term: e.base_term ?? '',
+  pos: e.base_pos ?? '',
+  translation: e.base_translation ?? '',
+  notes: e.base_notes ?? '',
+})
+const plain = (r: GlossaryRow): GlossaryRow => ({ term: r.term, pos: r.pos, translation: r.translation, notes: r.notes })
+
+const selectEdits = `SELECT id, kind, base_term, base_pos, base_translation, base_notes, term, pos, translation, notes
+  FROM glossary_edits WHERE locale = ? ORDER BY id`
 
 /**
  * The setup screen reads a handle that cannot migrate, so a database last
@@ -44,27 +65,17 @@ function hasEditsTable(db: Database.Database): boolean {
 export function effectiveGlossary(db: Database.Database, locale: Locale): EffectiveRow[] {
   const edits = !hasEditsTable(db)
     ? []
-    : db
-    .prepare<[string], EditRow>(
-      `SELECT kind, base_term, base_pos, base_translation, base_notes, term, pos, translation, notes
-       FROM glossary_edits WHERE locale = ? ORDER BY id`,
-    )
-    .all(locale)
+    : db.prepare<[string], EditRow>(selectEdits).all(locale)
   const changes = new Map<string, GlossaryRow>()
   const deletes = new Set<string>()
   const adds: GlossaryRow[] = []
   for (const e of edits) {
-    const row: GlossaryRow = { term: e.term ?? '', pos: e.pos ?? '', translation: e.translation ?? '', notes: e.notes ?? '' }
+    const row = editRow(e)
     if (e.kind === 'add') {
       adds.push(row)
       continue
     }
-    const base: GlossaryRow = {
-      term: e.base_term ?? '',
-      pos: e.base_pos ?? '',
-      translation: e.base_translation ?? '',
-      notes: e.base_notes ?? '',
-    }
+    const base = editBase(e)
     if (e.kind === 'delete') deletes.add(key(base))
     else if (e.kind === 'change') changes.set(key(base), row)
   }
@@ -116,4 +127,173 @@ export function glossaryStamp(db: Database.Database, locale: Locale): string {
     )
     .get(locale)
   return `${e?.n ?? 0}|${g?.m ?? ''}|${e?.m ?? ''}`
+}
+
+/** The page's view of the glossary is older than the store's: a sync or another save ran since it loaded. */
+export class StaleGlossaryError extends Error {
+  constructor(message = 'The glossary changed since this page was opened; reload.') {
+    super(message)
+    this.name = 'StaleGlossaryError'
+  }
+}
+
+/**
+ * Applies a page's diff as edits, in one transaction, and returns the stamp
+ * the page should hold next.
+ *
+ * Every edit is resolved to a row id before anything is written. Resolving as
+ * it went would let one entry of the diff find a row an earlier entry had just
+ * written: change A to B and B to C, both added rows, and the second lookup
+ * could land on the row that was A a moment ago.
+ *
+ * A base keeps at most one edit. The schema allows two, and the reader then
+ * picks one silently, so a page that names a base that already has an edit
+ * updates that edit instead of adding a second beside it.
+ *
+ * A diff that names a row the store does not have (an added row with no add
+ * edit, a base that is not a wp.org row) is refused as stale rather than
+ * skipped: it means the page and the store disagree, and saving the rest of
+ * the diff would write half of what the person asked for.
+ */
+export function saveGlossaryEdits(
+  db: Database.Database,
+  locale: Locale,
+  diff: GlossaryDiff,
+  stamp: string,
+  now: () => Date = () => new Date(),
+): string {
+  return db.transaction(() => {
+    if (stamp !== glossaryStamp(db, locale)) throw new StaleGlossaryError()
+
+    const wporg = allGlossary(db, locale).map(entryToRow)
+    const wporgKeys = new Set(wporg.map(key))
+    const edits = db.prepare<[string], EditRow>(selectEdits).all(locale)
+    // Base key to the id of the edit on it. This save never writes a second
+    // edit on a base, so the first by id is the only one.
+    const byBase = new Map<string, number>()
+    for (const e of edits) if (e.kind !== 'add' && !byBase.has(key(editBase(e)))) byBase.set(key(editBase(e)), e.id)
+    const adds = edits.filter((e) => e.kind === 'add')
+    const claimed = new Set<number>()
+
+    // The first unclaimed add edit with this content. Twins are told apart
+    // only by claiming: deleting both of two identical added rows removes both
+    // edits, not the first one twice.
+    const claimAdd = (r: GlossaryRow): EditRow => {
+      const k = key(r)
+      const e = adds.find((a) => !claimed.has(a.id) && key(editRow(a)) === k)
+      if (!e) throw new StaleGlossaryError()
+      claimed.add(e.id)
+      return e
+    }
+    const baseOf = (r: EffectiveRow): GlossaryRow => {
+      const base = r.origin === 'changed' ? r.base : plain(r)
+      if (!base || !wporgKeys.has(key(base))) throw new StaleGlossaryError()
+      return base
+    }
+
+    // A write is one of: put an edit on a base, remove an edit, set an add.
+    type Write =
+      | { op: 'base'; base: GlossaryRow; to: GlossaryRow | null }
+      | { op: 'drop'; id: number }
+      | { op: 'add'; id: number | null; to: GlossaryRow }
+    const writes: Write[] = []
+    for (const { from, to } of diff.changed) {
+      if (from.origin === 'added') writes.push({ op: 'add', id: claimAdd(from).id, to: plain(to) })
+      else writes.push({ op: 'base', base: baseOf(from), to: plain(to) })
+    }
+    for (const r of diff.deleted) {
+      if (r.origin === 'added') writes.push({ op: 'drop', id: claimAdd(r).id })
+      else writes.push({ op: 'base', base: baseOf(r), to: null })
+    }
+    for (const r of diff.added) writes.push({ op: 'add', id: null, to: plain(r) })
+
+    const at = nextTimestamp(db, locale, now())
+    const snapshot = (r: GlossaryRow): string => {
+      const term = r.term.toLowerCase()
+      const translations = wporg.filter((w) => w.term.toLowerCase() === term && w.pos === r.pos).map((w) => w.translation)
+      return JSON.stringify(translations.sort())
+    }
+    const insert = db.prepare(
+      `INSERT INTO glossary_edits (locale, kind, base_term, base_pos, base_translation, base_notes,
+         term, pos, translation, notes, base_snapshot, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    const update = db.prepare(
+      'UPDATE glossary_edits SET kind = ?, term = ?, pos = ?, translation = ?, notes = ?, updated_at = ? WHERE id = ?',
+    )
+    const updateAdd = db.prepare(
+      `UPDATE glossary_edits SET term = ?, pos = ?, translation = ?, notes = ?, base_snapshot = ?, updated_at = ?
+       WHERE id = ?`,
+    )
+    const drop = db.prepare('DELETE FROM glossary_edits WHERE id = ?')
+    const values = (r: GlossaryRow | null): Array<string | null> =>
+      r ? [r.term, r.pos, r.translation, r.notes] : [null, null, null, null]
+
+    for (const w of writes) {
+      if (w.op === 'drop') {
+        drop.run(w.id)
+      } else if (w.op === 'add') {
+        // The snapshot is of the wp.org rows of the add's term and part of
+        // speech, so an edit that moves the add to another term or part of
+        // speech takes a fresh one; otherwise the sync would compare it
+        // against rows it was never made beside.
+        if (w.id === null) insert.run(locale, 'add', ...values(null), ...values(w.to), snapshot(w.to), at, at)
+        else updateAdd.run(...values(w.to), snapshot(w.to), at, w.id)
+      } else {
+        const k = key(w.base)
+        const existing = byBase.get(k)
+        if (w.to !== null && key(w.to) === k) {
+          // Back to the wp.org row: no edit at all, not a change to itself.
+          if (existing !== undefined) {
+            drop.run(existing)
+            byBase.delete(k)
+          }
+        } else if (existing !== undefined) {
+          update.run(w.to === null ? 'delete' : 'change', ...values(w.to), at, existing)
+        } else {
+          const kind = w.to === null ? 'delete' : 'change'
+          const id = insert.run(locale, kind, ...values(w.base), ...values(w.to), null, at, at).lastInsertRowid
+          byBase.set(k, Number(id))
+        }
+      }
+    }
+    return glossaryStamp(db, locale)
+  })()
+}
+
+/**
+ * The stamp moves only if the newest updated_at does, or the count changes.
+ * A save that updates an edit in the same millisecond as the last one (or
+ * under a fixed test clock) would leave both alone and hand an older page a
+ * stamp that still matches, so the time is pushed past the newest one.
+ */
+function nextTimestamp(db: Database.Database, locale: Locale, now: Date): string {
+  const newest = db
+    .prepare<[string], { m: string | null }>('SELECT max(updated_at) AS m FROM glossary_edits WHERE locale = ?')
+    .get(locale)?.m
+  const floor = newest ? Date.parse(newest) + 1 : -Infinity
+  return new Date(Math.max(now.getTime(), floor)).toISOString()
+}
+
+/** Deletes every local edit of the locale, leaving the wp.org copy as the glossary. */
+export function discardGlossaryEdits(db: Database.Database, locale: Locale): number {
+  return db.prepare('DELETE FROM glossary_edits WHERE locale = ?').run(locale).changes
+}
+
+/**
+ * Loads a reviewed CSV as local edits: the CSV's term wins. Counts are terms
+ * replaced (a term the glossary already had any row of) and rows added, which
+ * is what `glossary import` reports.
+ */
+export function importGlossaryRows(
+  db: Database.Database,
+  locale: Locale,
+  rows: GlossaryRow[],
+  stamp: string,
+): { replaced: number; added: number } {
+  return db.transaction(() => {
+    const diff = importDiff(effectiveGlossary(db, locale), rows)
+    saveGlossaryEdits(db, locale, diff, stamp)
+    return { replaced: new Set(diff.deleted.map((r) => r.term.toLowerCase())).size, added: diff.added.length }
+  })()
 }
