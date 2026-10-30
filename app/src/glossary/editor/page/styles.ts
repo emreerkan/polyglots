@@ -47,6 +47,7 @@ export const EDITOR_CSS = `
 .ge-btn.ge-ghost { background: var(--ge-surface); color: var(--ge-accent); }
 .ge-btn.ge-danger { background: var(--ge-warn); border-color: var(--ge-warn); color: #fff; }
 .ge-btn.ge-danger-text { color: var(--ge-warn); border-color: var(--ge-warn); }
+.ge-busy .ge-grid td.ge-cell { cursor: progress; }
 .ge-btn:disabled { opacity: .5; cursor: not-allowed; }
 .ge-btn:focus-visible, .ge-chip:focus-visible, .ge-link:focus-visible, .ge-search:focus-visible {
   outline: 2px solid var(--ge-accent); outline-offset: 1px;

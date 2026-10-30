@@ -89,6 +89,20 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   const layer = $<HTMLDivElement>('.ge-layer')
   const panel = $<HTMLElement>('.ge-panel')
 
+  /**
+   * Replace a toolbar part only when its markup changed. An edit ends on the
+   * mousedown that focuses a toolbar control, and the commit redraws the
+   * toolbar before the mouseup: a control rebuilt in between is not the one
+   * pressed, and the browser drops the click. Compared against the string last
+   * written, not innerHTML, which the parser normalises.
+   */
+  const written = new Map<Element, string>()
+  const setHtml = (el: Element, html: string): void => {
+    if (written.get(el) === html) return
+    written.set(el, html)
+    el.innerHTML = html
+  }
+
   const row = (id: number): EditorRow | undefined => m.rows.find((r) => r.id === id)
   const tr = (id: number): HTMLTableRowElement | null => tbody.querySelector(`tr[data-id="${id}"]`)
   const cellEl = (id: number, field: Field): HTMLTableCellElement | null =>
@@ -220,7 +234,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     const diff = diffOf(m)
     $<HTMLElement>('.ge-count').textContent = countText(diff)
     const live = m.rows.filter((r) => !r.deleted)
-    $<HTMLElement>('.ge-chips').innerHTML = chipsHtml({
+    setHtml($<HTMLElement>('.ge-chips'), chipsHtml({
       pos: GLOSSARY_POS.filter((p) => live.some((r) => r.pos === p)),
       activePos: filter.pos,
       problems: problems.size,
@@ -230,7 +244,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
         ? live.filter((r) => sidecar!.get(sidecarKey(r.term, r.pos))?.confidence === 'contested').length
         : undefined,
       contestedOn: filter.contested ?? false,
-    })
+    }))
 
     const files: string[] = []
     if (m.mode === 'db' && host.openFile) files.push('<button type="button" class="ge-btn ge-ghost" data-action="import">Import CSV</button>')
@@ -238,7 +252,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     if (m.mode === 'db' && host.discard && stamp !== undefined && localCount() > 0) {
       files.push('<button type="button" class="ge-btn ge-ghost ge-danger-text" data-action="discard">Discard all local edits</button>')
     }
-    $<HTMLElement>('.ge-files').innerHTML = files.join('')
+    setHtml($<HTMLElement>('.ge-files'), files.join(''))
 
     const save = $<HTMLButtonElement>('[data-action="save"]')
     const reason = $<HTMLElement>('.ge-reason')
@@ -247,7 +261,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     const nothing = host.saveLabel === 'Save' && diff.added.length + diff.changed.length + diff.deleted.length === 0
     save.disabled = busy || problems.size > 0 || nothing
     save.title = nothing ? 'No changes to save.' : ''
-    reason.innerHTML = reasonHtml(m, problems)
+    setHtml(reason, reasonHtml(m, problems))
     reason.hidden = problems.size === 0
 
     const n = $<HTMLElement>('.ge-notice')
@@ -308,7 +322,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   function startEdit(id: number, field: Field, typed?: string): void {
     const r = row(id)
     const td = cellEl(id, field)
-    if (!r || !td || r.deleted) return
+    if (!r || !td || r.deleted || busy) return
     let control: HTMLInputElement | HTMLSelectElement
     if (field === 'pos') {
       const select = doc.createElement('select')
@@ -366,6 +380,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   }
 
   function addBelow(): void {
+    if (busy) return
     const id = addRow(m, cursor?.id)
     insertVisible(id, cursor?.id)
     cursor = { id, field: 'term' }
@@ -375,7 +390,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   }
 
   function duplicate(): void {
-    if (!cursor) return
+    if (!cursor || busy) return
     const id = duplicateRow(m, cursor.id)
     insertVisible(id, cursor.id)
     // Same term, another part of speech is why rows get duplicated.
@@ -386,6 +401,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   }
 
   function toggle(id: number): void {
+    if (busy) return
     toggleDelete(m, id)
     changed([id])
     if (cursor?.id === id) drawPanel()
@@ -393,7 +409,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
 
   function revert(id: number): void {
     const r = row(id)
-    if (!r) return
+    if (!r || busy) return
     revertRow(m, id)
     if (!row(id)) {
       const i = visible.indexOf(id)
@@ -429,36 +445,55 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
 
   // ---- host calls -----------------------------------------------------------
 
+  // Busy for the load too: apply() replaces the model, so an edit made while
+  // the data is on its way would vanish with the old one.
   async function reload(text = ''): Promise<void> {
+    setBusy(true)
     try {
-      apply(await host.load())
+      const next = await host.load()
+      setBusy(false)
+      apply(next)
       setStatus(text)
     } catch (e) {
+      setBusy(false)
       setStatus(message(e), 'error')
     }
   }
 
+  /**
+   * While a save or a discard is out, the table is read-only. The host builds
+   * its request from the model as the call starts, and on return the page
+   * either rebases on the model (CSV) or replaces it with a reload (db), so an
+   * edit made during the round trip would be counted as saved without being
+   * written, or dropped. Blocking is simpler than merging, and the wait is a
+   * local round trip.
+   */
+  function setBusy(on: boolean): void {
+    busy = on
+    if (on && editing) finishEdit(true, undefined, false)
+    $<HTMLElement>('.ge').classList.toggle('ge-busy', on)
+    drawChrome()
+  }
+
   async function save(): Promise<void> {
     if (busy || problems.size > 0) return
-    busy = true
-    drawChrome()
+    setBusy(true)
     setStatus(host.saveLabel === 'Save' ? 'Saving…' : 'Exporting…')
     try {
       const result = await host.save(m, stamp)
       if (result.ok) {
         if (result.stamp !== undefined) stamp = result.stamp
-        busy = false
         if (m.mode === 'db') {
           // A save turns rows into local edits and back; only the store knows
           // the new origins, so the page reads them rather than guessing.
           await reload('Saved.')
         } else {
+          setBusy(false)
           rebase()
           setStatus(host.saveLabel === 'Save' ? 'Saved.' : 'Exported.')
         }
       } else if (result.reason === 'stale') {
-        busy = false
-        drawChrome()
+        setBusy(false)
         const n = unsavedCount()
         setStatus(
           `${result.message} Reload to see the current glossary; your edits on this page are not saved.`,
@@ -466,13 +501,11 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
           ` <button type="button" class="ge-link" data-action="reload">Reload, dropping ${n} unsaved ${n === 1 ? 'change' : 'changes'}</button>`,
         )
       } else {
-        busy = false
-        drawChrome()
+        setBusy(false)
         setStatus(result.message, 'error')
       }
     } catch (e) {
-      busy = false
-      drawChrome()
+      setBusy(false)
       setStatus(message(e), 'error')
     }
   }
@@ -485,22 +518,29 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
 
   async function discard(): Promise<void> {
     closeDialog()
-    if (!host.discard || stamp === undefined) return
+    if (!host.discard || stamp === undefined || busy) return
+    setBusy(true)
     setStatus('Discarding…')
     try {
       const result = await host.discard(stamp)
       if (result.ok) await reload('Local edits discarded.')
-      else setStatus(result.message, 'error')
+      else {
+        setBusy(false)
+        setStatus(result.message, 'error')
+      }
     } catch (e) {
+      setBusy(false)
       setStatus(message(e), 'error')
     }
   }
 
   async function importCsv(): Promise<void> {
-    if (!host.openFile) return
+    if (!host.openFile || busy) return
     try {
       const file = await host.openFile()
-      if (!file) return
+      // The picker is open for as long as the person likes; a save may have
+      // started meanwhile, and the import would land in a model being replaced.
+      if (!file || busy) return
       const rows: GlossaryRow[] = file.rows.map((r) => ({ term: r.term, pos: r.pos, translation: r.translation, notes: r.notes }))
       applyImport(m, rows)
       if (file.notice) notice = file.notice
@@ -513,10 +553,10 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   }
 
   async function openSidecar(): Promise<void> {
-    if (!host.openSidecar) return
+    if (!host.openSidecar || busy) return
     try {
       const json = await host.openSidecar()
-      if (json === undefined) return
+      if (json === undefined || busy) return
       notice = data.notice ?? ''
       loadSidecar(json)
       refilter()
@@ -528,6 +568,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   function close(): void {
     closeDialog()
     closed = true
+    win?.removeEventListener('beforeunload', onLeave)
     host.close?.()
     root.innerHTML = '<div class="ge"><p class="ge-loading">The editor is closed. You can close this tab.</p></div>'
   }
@@ -591,6 +632,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
         void openSidecar()
         break
       case 'discard': {
+        if (busy) break
         const n = localCount()
         const edits = `${n} local ${n === 1 ? 'edit' : 'edits'}`
         const unsaved = unsavedCount()

@@ -206,6 +206,78 @@ describe('mountEditor', () => {
     expect(diffOf(host.saves[0]!.m).changed[0]!.to.translation).toBe('eğitim')
   })
 
+  it('refuses edits, row operations and discard while a save is in flight, so none is lost', async () => {
+    for (const mode of ['csv', 'db'] as const) {
+      document.body.innerHTML = '<div id="root"></div>'
+      root = document.getElementById('root')!
+      let finish!: (r: SaveResult) => void
+      const host = fakeHost(mode === 'csv' ? { mode, rows: ROWS.map(({ origin: _o, ...r }) => r), stamp: undefined } : {}, {
+        save: () => new Promise<SaveResult>((r) => { finish = r }),
+      })
+      await mountEditor(root, host)
+      edit(1, 'translation', 'eğitim')
+      byText('Save').click()
+      const td = cell(3, 'translation')
+      td.focus()
+      key(td, 'Enter')
+      expect(td.querySelector('input')).toBeNull()
+      key(td, 'x')
+      expect(td.querySelector('input')).toBeNull()
+      byText('Add row').click()
+      byText('Delete row').click()
+      expect(count()).toBe('1 changed · 0 added')
+      if (mode === 'db') {
+        byText('Discard all local edits').click()
+        expect(root.querySelector('[role="alertdialog"]')).toBeNull()
+        expect(host.discards).toEqual([])
+      }
+      finish({ ok: true })
+      await flush()
+      await flush()
+      const after = cell(3, 'translation')
+      after.focus()
+      key(after, 'Enter')
+      expect(after.querySelector('input')).not.toBeNull()
+    }
+  })
+
+  it('keeps a toolbar control in place when focusing it ends an edit, so the click lands', async () => {
+    await mountEditor(root, fakeHost())
+    const td = cell(1, 'translation')
+    td.focus()
+    key(td, 'Enter')
+    td.querySelector('input')!.value = 'eğitim'
+    const verb = byText('verb')
+    verb.focus()
+    expect(count()).toBe('1 changed · 0 added')
+    expect(verb.isConnected).toBe(true)
+    verb.click()
+    expect(visibleTerms()).toEqual(['post'])
+
+    byText('all').click()
+    const again = cell(2, 'translation')
+    again.focus()
+    key(again, 'Enter')
+    again.querySelector('input')!.value = ''
+    const discard = byText('Discard all local edits')
+    discard.focus()
+    expect(discard.isConnected).toBe(true)
+    discard.click()
+    expect(root.querySelector('[role="alertdialog"]')).not.toBeNull()
+  })
+
+  it('stops warning on leaving once the editor is closed', async () => {
+    const host = fakeHost({}, { close: vi.fn() })
+    await mountEditor(root, host)
+    edit(1, 'translation', 'eğitim')
+    byText('Close').click()
+    byText('Close without saving').click()
+    expect(host.close).toHaveBeenCalled()
+    const ev = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(false)
+  })
+
   it('shows the reload message when the save is stale', async () => {
     const host = fakeHost({}, {
       save: async (): Promise<SaveResult> => ({ ok: false, reason: 'stale', message: 'The glossary changed on disk.' }),
