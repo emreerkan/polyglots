@@ -34,3 +34,6 @@ CLAUDE.local.md
 
 # Internal design notes; kept locally, not part of the project.
 notes/
+
+# Brainstorming mockups from the visual companion; local only.
+.superpowers/
