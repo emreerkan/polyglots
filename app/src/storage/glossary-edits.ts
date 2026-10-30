@@ -78,7 +78,11 @@ function hasEditsTable(db: Database.Database): boolean {
  * verbatim is skipped here rather than guessed at: the sync step that follows
  * a wp.org change decides what to do with it, and a reader must never apply an
  * edit to a row it was not made against. Two identical wp.org rows share one
- * identity, so an edit applies to the first and the twin stays as it was.
+ * identity, so an edit applies to every one of them: a change rewrites each
+ * twin and a delete removes them all. In practice there are none to meet,
+ * because the sync dedupes wp.org's export before writing it
+ * (dedupeGlossaryEntries); twins reach the table only through a direct
+ * replaceGlossary call, as tests make.
  */
 export function effectiveGlossary(db: Database.Database, locale: Locale): EffectiveRow[] {
   const edits = !hasEditsTable(db)
