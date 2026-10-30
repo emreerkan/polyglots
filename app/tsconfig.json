@@ -14,8 +14,9 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src"],
-  // The stats page's browser code is checked by tsconfig.client.json, with
-  // the DOM library, and reaches the browser through the esbuild bundle.
-  // Left in here it would be emitted into dist, where nothing loads it.
-  "exclude": ["src/stats/page/client.ts", "src/stats/page/entry.ts"]
+  // The stats page's and the glossary editor's browser code is checked by
+  // tsconfig.client.json, with the DOM library, and reaches the browser
+  // through the esbuild bundles. Left in here it would be emitted into dist,
+  // where nothing loads it.
+  "exclude": ["src/stats/page/client.ts", "src/stats/page/entry.ts", "src/glossary/editor/page/**"]
 }

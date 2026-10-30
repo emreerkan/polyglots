@@ -9,5 +9,8 @@
   "include": ["src", "test"],
   // The browser client and its test are checked by tsconfig.client.json,
   // which has the DOM library this program deliberately lacks.
-  "exclude": ["src/stats/page/client.ts", "src/stats/page/entry.ts", "test/stats/client.test.ts"]
+  "exclude": [
+    "src/stats/page/client.ts", "src/stats/page/entry.ts", "test/stats/client.test.ts",
+    "src/glossary/editor/page/**", "test/glossary/editor/page.test.ts", "test/glossary/editor/local-host.test.ts"
+  ]
 }

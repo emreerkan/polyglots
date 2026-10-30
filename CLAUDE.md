@@ -54,12 +54,16 @@ homes; follow that.
 `build`, `typecheck`, `test`, `dev`, `prepare`, `prebuild`, `release`, `prepack`.
 There is no `npm run lint`. Typecheck covers tests too (`tsconfig.test.json`).
 
-**The stats page ships a bundled client.** `src/stats/page/**` is compiled by
-esbuild into a checked-in bundle, and a test fails when the bundle is stale. After
-editing anything there, run `npm run stats-client`. `build` and `prepare` do it
-too, but tests run from source and will not. The stale-bundle test cannot fail after
-`npm ci` or `npm install`, since `prepare` regenerates the bundle first; CI's
-`git diff --exit-code` step after install is the real check.
+**The stats page and the glossary editor ship bundled clients.** `src/stats/page/**`
+and `src/glossary/editor/page/**` are each compiled by esbuild into a checked-in
+bundle, and a test fails when either bundle is stale. After editing anything
+there, run `npm run stats-client` or `npm run glossary-client` respectively.
+`build` and `prepare` do both too, but tests run from source and will not. The
+editor bundle also pulls in `src/glossary/editor/model.ts`, `sidecar.ts`,
+`src/glossary/csv.ts` and `import.ts`, so an edit to those stales it as well.
+The stale-bundle tests cannot fail after `npm ci` or `npm install`, since
+`prepare` regenerates the bundles first; CI's `git diff --exit-code` step after
+install is the real check.
 
 **The website's demos run the real CLI.** `website/scripts/snapshot.ts` calls
 `main()` with every `CliDeps` member either faked in `scripts/demos.ts` or

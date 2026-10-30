@@ -10,7 +10,8 @@ import { sidecarKey, type SidecarRecord } from './sidecar.js'
  */
 
 export type Field = 'term' | 'pos' | 'translation' | 'notes'
-const FIELDS: Field[] = ['term', 'pos', 'translation', 'notes']
+// In column order: the page draws its cells from this list.
+export const FIELDS: Field[] = ['term', 'pos', 'translation', 'notes']
 
 export interface EditorRow extends GlossaryRow {
   id: number
