@@ -49,6 +49,21 @@ export interface WebEnv {
   askLocale(file: string, header: string): Promise<string | undefined>
 }
 
+/**
+ * Throws away the work kept between visits, for the Discard button beside
+ * Continue. False when there is no storage or it refuses, so the page keeps
+ * offering the work rather than claiming it is gone.
+ */
+export function discardSaved(storage: WebEnv['storage']): boolean {
+  if (!storage) return false
+  try {
+    storage.removeItem(STORAGE_KEY)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** The glossary export GlotPress offers for a locale, the file a person starts from. */
 export const exportUrl = (slug: string): string => `https://translate.wordpress.org/locale/${slug}/default/glossary/-export/`
 

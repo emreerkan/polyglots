@@ -1,7 +1,7 @@
 import { mountEditor } from '../../../../app/src/glossary/editor/page/editor.js'
 import { EDITOR_CSS } from '../../../../app/src/glossary/editor/page/styles.js'
 import { localeDisplayName, resolveLocale } from '../../../../app/src/wporg/locales.js'
-import { exportUrl, fetchWporgGlossary, webHost, type Saved, type Start, type WebEnv } from './web-host.js'
+import { discardSaved, exportUrl, fetchWporgGlossary, webHost, type Saved, type Start, type WebEnv } from './web-host.js'
 
 // The page's behaviour: the start screen and the browser services the host
 // needs. The editor itself is the one the local server serves; only the host
@@ -151,6 +151,14 @@ export function start(): void {
         }
         const onWporgClick = (): void => void onWporg()
         const onContinue = (): void => finish({ kind: 'saved' })
+        // Asked first: the work exists nowhere else, and nothing brings it
+        // back. Once it is gone the card goes too, and the start screen is the
+        // one a first visit sees.
+        const onDiscard = (): void => {
+          if (!window.confirm('Discard the unexported work? It cannot be brought back.')) return
+          if (discardSaved(env.storage)) cont.hidden = true
+          else showError('The work could not be discarded: this browser refused the change.')
+        }
         const onOver = (e: DragEvent): void => {
           e.preventDefault()
           drop.classList.add('over')
@@ -163,10 +171,12 @@ export function start(): void {
         }
         const newBtn = $<HTMLElement>('[data-ge-new]')
         const contBtn = $<HTMLElement>('[data-ge-continue-btn]')
+        const discardBtn = $<HTMLElement>('[data-ge-discard-btn]')
         fileInput.addEventListener('change', onChange)
         newBtn.addEventListener('click', onNew)
         wporgBtn.addEventListener('click', onWporgClick)
         contBtn.addEventListener('click', onContinue)
+        discardBtn.addEventListener('click', onDiscard)
         drop.addEventListener('dragover', onOver)
         drop.addEventListener('dragleave', onLeave)
         drop.addEventListener('drop', onDrop)
@@ -175,6 +185,7 @@ export function start(): void {
           newBtn.removeEventListener('click', onNew)
           wporgBtn.removeEventListener('click', onWporgClick)
           contBtn.removeEventListener('click', onContinue)
+          discardBtn.removeEventListener('click', onDiscard)
           drop.removeEventListener('dragover', onOver)
           drop.removeEventListener('dragleave', onLeave)
           drop.removeEventListener('drop', onDrop)

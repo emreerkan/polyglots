@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readGlossaryCsv } from '../../app/src/glossary/csv.js'
 import { addRow, createModel, diffOf, setCell, toggleDelete } from '../../app/src/glossary/editor/model.js'
-import { STORAGE_KEY, exportUrl, fetchWporgGlossary, webHost, type Start, type WebEnv } from '../src/components/glossary-editor/web-host.js'
+import { STORAGE_KEY, discardSaved, exportUrl, fetchWporgGlossary, webHost, type Start, type WebEnv } from '../src/components/glossary-editor/web-host.js'
 
 const CSV = 'en,tr,pos,description\nPost,Yazı,noun,\nPage,Sayfa,noun,A static page\n'
 
@@ -241,4 +241,13 @@ test('a failed or foreign answer for the wp.org glossary is an error that names 
     throw new TypeError('Failed to fetch')
   }
   await assert.rejects(fetchWporgGlossary(offline, '/', 'tr'), /tr glossary could not be loaded/)
+})
+
+test('discarding the kept work removes it, and says whether it could', () => {
+  const kept = memory(JSON.stringify({ locale: 'tr', model: { mode: 'csv', rows: [] } }))
+  assert.equal(discardSaved(kept.storage), true)
+  assert.equal(kept.map.has(STORAGE_KEY), false)
+  const blocked = { ...memory().storage, removeItem: () => { throw new Error('blocked') } }
+  assert.equal(discardSaved(blocked), false)
+  assert.equal(discardSaved(undefined), false)
 })

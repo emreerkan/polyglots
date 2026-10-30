@@ -38,7 +38,10 @@ const locales = WPORG_LOCALES.filter((l) => !seen.has(l.slug) && seen.add(l.slug
       <p class="start-error" data-ge-error role="alert" hidden></p>
       <div class="start-continue" data-ge-continue hidden>
         <p><strong>You have unexported work.</strong> <span data-ge-continue-text></span></p>
-        <button type="button" class="gbtn primary" data-ge-continue-btn>Continue</button>
+        <div class="row">
+          <button type="button" class="gbtn primary" data-ge-continue-btn>Continue</button>
+          <button type="button" class="gbtn" data-ge-discard-btn>Discard</button>
+        </div>
       </div>
       <div class="start-grid">
         <div class="start-card">
