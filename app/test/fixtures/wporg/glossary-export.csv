@@ -1,0 +1,10 @@
+﻿en,tr,pos,description
+plugin,eklenti,noun,
+theme,tema,noun,"Visual look, set by a theme"
+save,kaydet,verb,"Use ""Save"" for buttons"
+draft,,noun,Not translated yet
+identifier,kimlik,noun,Dotless ı and İstanbul
+fast,hızlı,adjective,
+slug,kısa ad,noun,"Line one
+line two"
+CSS,CSS,abbreviation,

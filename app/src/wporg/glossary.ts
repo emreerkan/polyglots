@@ -1,6 +1,7 @@
 import { splitLocale } from './locales.js'
 import type { GlossaryEntry, Locale } from '../types.js'
 import { fetchHtml } from './http.js'
+import { csvRecords, normaliseGlossaryValue as clean } from '../glossary/csv.js'
 
 const ORIGIN = 'https://translate.wordpress.org'
 
@@ -24,45 +25,6 @@ export function glossaryUrl(locale: Locale): string {
  */
 export function glossaryExportUrl(locale: Locale): string {
   return `${glossaryUrl(locale)}-export/`
-}
-
-const clean = (text: string): string => text.replace(/\s+/g, ' ').trim()
-
-/**
- * The records of an RFC 4180 file: quoted fields may hold commas, line breaks
- * and doubled quotes. Small enough to keep rather than add a dependency for
- * one four-column file.
- */
-function csvRecords(text: string): string[][] {
-  const records: string[][] = []
-  let record: string[] = []
-  let field = ''
-  let quoted = false
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]
-    if (quoted) {
-      if (c !== '"') field += c
-      else if (text[i + 1] === '"') {
-        field += '"'
-        i++
-      } else quoted = false
-    } else if (c === '"') quoted = true
-    else if (c === ',') {
-      record.push(field)
-      field = ''
-    } else if (c === '\n' || c === '\r') {
-      if (c === '\r' && text[i + 1] === '\n') i++
-      record.push(field)
-      records.push(record)
-      record = []
-      field = ''
-    } else field += c
-  }
-  if (field !== '' || record.length > 0) {
-    record.push(field)
-    records.push(record)
-  }
-  return records
 }
 
 /**
