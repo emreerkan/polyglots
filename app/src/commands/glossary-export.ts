@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type Database from 'better-sqlite3'
 import type { GlossaryEntry, Locale } from '../types.js'
-import { allGlossary, openDb } from '../storage/index.js'
+import { effectiveEntries, openDb } from '../storage/index.js'
 
 export type CsvDelimiter = ';' | ','
 
@@ -48,10 +48,10 @@ function toCsv(entries: GlossaryEntry[], delimiter: CsvDelimiter): string {
 }
 
 function read(locale: Locale, injected?: Database.Database): GlossaryEntry[] {
-  if (injected) return allGlossary(injected, locale)
+  if (injected) return effectiveEntries(injected, locale)
   const db = openDb()
   try {
-    return allGlossary(db, locale)
+    return effectiveEntries(db, locale)
   } finally {
     db.close()
   }

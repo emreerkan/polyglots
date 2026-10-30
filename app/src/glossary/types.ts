@@ -12,3 +12,12 @@ export interface GlossaryRow {
   translation: string
   notes: string
 }
+
+/** Where an effective row came from: the wp.org copy, a local change of one, or a local addition. */
+export type RowOrigin = 'wporg' | 'changed' | 'added'
+
+/** A glossary row with its origin; `base` is the wp.org row a 'changed' row replaced. */
+export interface EffectiveRow extends GlossaryRow {
+  origin: RowOrigin
+  base?: GlossaryRow
+}

@@ -45,7 +45,7 @@ import { logRunEvent, openRunLog, withRunLog, type RunLog } from '../logs/run-lo
 import { VERSION } from '../version.js'
 import { loadPo, type ApplyResult, type PoFile } from '../po/po-file.js'
 import { reviewBatch } from '../review/draft-review.js'
-import { allGlossary, findMemory, findMemoryIgnoringCase, openDb } from '../storage/index.js'
+import { effectiveEntries, findMemory, findMemoryIgnoringCase, openDb } from '../storage/index.js'
 import { normalizeLocale } from '../tmx/parse.js'
 import { takeSkipped } from '../rules/sandbox.js'
 import type {
@@ -712,7 +712,7 @@ export async function translateFile(opts: TranslateOptions): Promise<TranslateSu
     await withRunLog(runLog, async () => {
       const hits: ApplyResult[] = []
       const rest: TranslationUnit[] = []
-      const glossaryRows = allGlossary(db, locale)
+      const glossaryRows = effectiveEntries(db, locale)
       // Its own checker, built over every unit, rather than the drafting one
       // below, which is built over what the memory leaves: that one's context
       // learns proper nouns from its units, and its findings key the draft

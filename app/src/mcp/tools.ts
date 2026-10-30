@@ -4,7 +4,7 @@ import type Database from 'better-sqlite3'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { ConsistencyEntry, ConsistencyScope, Locale } from '../types.js'
-import { getConsistency, lookupGlossary, searchTm, setConsistency } from '../storage/index.js'
+import { getConsistency, lookupEffectiveGlossary, searchTm, setConsistency } from '../storage/index.js'
 import { normalizeLocale } from '../tmx/parse.js'
 import { mcpLogPath, pruneLogs } from '../logs/paths.js'
 import { fetchConsistency as defaultFetchConsistency } from '../wporg/consistency-scraper.js'
@@ -139,14 +139,14 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
     'glossary_lookup',
     {
       description:
-        'Look up the official translate.wordpress.org glossary for a source term; call it whenever a draft contains a WordPress term whose approved translation you are not certain of.',
+        "Look up the locale glossary (translate.wordpress.org plus the person's local edits) for a source term; call it whenever a draft contains a WordPress term whose approved translation you are not certain of.",
       inputSchema: {
         term: z.string().min(1).describe('English source term or phrase to look up.'),
         locale: localeArg,
       },
     },
     logged('glossary_lookup', ({ term, locale }: { term: string; locale?: string | undefined }) =>
-      lookupGlossary(deps.db, term, resolveLocale(locale)),
+      lookupEffectiveGlossary(deps.db, term, resolveLocale(locale)),
     ),
   )
 

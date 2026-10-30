@@ -3,7 +3,7 @@ import { configuredLocale } from '../config.js'
 import { usableProviders, type AgentStatus } from '../agent/discover.js'
 import { loadLocaleRules } from '../rules/load.js'
 import { configFile, dbFile } from '../paths.js'
-import { allGlossary } from '../storage/glossary.js'
+import { effectiveEntries } from '../storage/glossary-edits.js'
 import type { Manifest } from '../data/manifest.js'
 import type { GlossaryEntry, Locale, PolyglotsConfig, Secrets } from '../types.js'
 import { LOCALE_STEPS, localeWizard, SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
@@ -155,7 +155,7 @@ export function glossaryCount(locale: Locale, path: string = dbFile()): number |
  * than without a trial.
  */
 export function glossaryRows(locale: Locale, path: string = dbFile()): GlossaryEntry[] {
-  return readOnly(path, (db) => allGlossary(db, locale), [])
+  return readOnly(path, (db) => effectiveEntries(db, locale), [])
 }
 
 /**

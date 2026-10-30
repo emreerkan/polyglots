@@ -45,7 +45,7 @@ import { loadConfig } from '../config.js'
 import { languageOf } from '../wporg/locales.js'
 import { tmKey } from '../audit/rules/index.js'
 import { FIX_SUSPECT_RULE } from '../audit/repair.js'
-import { allGlossary, findMemory, openDb } from '../storage/index.js'
+import { effectiveEntries, findMemory, openDb } from '../storage/index.js'
 import { isSkipFinding } from '../rules/custom.js'
 import { takeSkipped } from '../rules/sandbox.js'
 import type {
@@ -125,10 +125,10 @@ export function isReviewOutput(file: string): boolean {
 }
 
 function readGlossary(locale: Locale, injected?: Database.Database) {
-  if (injected) return allGlossary(injected, locale)
+  if (injected) return effectiveEntries(injected, locale)
   const db = openDb()
   try {
-    return allGlossary(db, locale)
+    return effectiveEntries(db, locale)
   } finally {
     db.close()
   }

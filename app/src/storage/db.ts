@@ -55,6 +55,19 @@ CREATE TABLE IF NOT EXISTS consistency_cache (
   fetched_at TEXT NOT NULL,
   PRIMARY KEY (source_text, locale, scope)
 );
+
+CREATE TABLE IF NOT EXISTS glossary_edits (
+  id INTEGER PRIMARY KEY,
+  locale TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  base_term TEXT, base_pos TEXT, base_translation TEXT, base_notes TEXT,
+  term TEXT, pos TEXT, translation TEXT, notes TEXT,
+  base_snapshot TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS glossary_edits_locale ON glossary_edits (locale);
 `
 
 // Rows cached before `scope` existed hold unfiltered all-project results under what is now
