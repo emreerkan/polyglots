@@ -112,8 +112,11 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     return d.added.length + d.changed.length + d.deleted.length
   }
   const dirty = (): boolean => unsavedCount() > 0
-  // Rows that are already local edits in polyglots.db: what Discard removes.
-  const localCount = (): number => m.rows.filter((r) => r.loaded && r.loaded.origin !== 'wporg').length
+  // What Discard removes. The server's count when it sends one, since a local
+  // delete is an edit with no row on the page; otherwise the loaded rows that
+  // are local edits, which misses those deletes.
+  const localCount = (): number =>
+    data.localEdits ?? m.rows.filter((r) => r.loaded && r.loaded.origin !== 'wporg').length
 
   function stateOf(r: EditorRow): RowState {
     const changed = isChanged(m, r.id)

@@ -7,6 +7,9 @@ import type { EditorModel } from '../model.js'
  * hands back, so a page loaded before a sync cannot overwrite it. `sidecar`
  * is the raw analysis JSON, read by readSidecar on the page rather than by the
  * host, so the local server and the website show the same notice for a bad one.
+ * `localEdits` is how many local edits the store holds for the locale, sent
+ * by the local server in db mode: a local delete of a wp.org row is one of
+ * them but leaves no row behind, so the page cannot count them from `rows`.
  */
 export interface LoadedGlossary {
   mode: 'db' | 'csv'
@@ -16,6 +19,7 @@ export interface LoadedGlossary {
   file?: string
   rows: Array<EffectiveRow | GlossaryRow>
   stamp?: string
+  localEdits?: number
   sidecar?: unknown
 }
 

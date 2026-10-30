@@ -304,6 +304,16 @@ describe('mountEditor', () => {
     expect(host.discards).toEqual(['s1'])
   })
 
+  // A local delete of a wp.org row is an edit too, but leaves no row on the
+  // page to count: the server's count is the one Discard removes.
+  it('names the count the server gives, which includes deletes the rows cannot show', async () => {
+    const host = fakeHost({ rows: ROWS.map((r) => ({ ...r, origin: 'wporg' as const })), localEdits: 3 })
+    await mountEditor(root, host)
+    byText('Discard all local edits').click()
+    const dialog = root.querySelector('[role="alertdialog"]')!
+    expect(norm(dialog.textContent)).toContain('3 local edits')
+  })
+
   it('offers no discard or local edits chip for a CSV', async () => {
     await mountEditor(root, fakeHost({ mode: 'csv', rows: ROWS.map(({ origin: _o, ...r }) => r), stamp: undefined }))
     expect(byText('Discard all local edits')).toBeUndefined()
