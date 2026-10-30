@@ -321,6 +321,34 @@ describe('importGlossaryCsv', () => {
     }
   })
 
+  // The editor trims what is typed; a CSV written by hand or by a script is
+  // read the same way, so a padded term is the term and a blank one is empty.
+  it('stores a padded term trimmed', async () => {
+    const file = join(home, 'de.csv')
+    await writeFile(file, 'en,de,pos,description\n  post ,  Beitrag ,noun , a   note \n')
+    const db = openDb(':memory:')
+    try {
+      await importGlossaryCsv({ file, db })
+      expect(effectiveGlossary(db, 'de').map((r) => [r.term, r.pos, r.translation, r.notes])).toEqual([
+        ['post', 'noun', 'Beitrag', 'a note'],
+      ])
+    } finally {
+      db.close()
+    }
+  })
+
+  it('refuses a whitespace-only term as empty', async () => {
+    const file = join(home, 'de.csv')
+    await writeFile(file, 'en,de,pos,description\n   ,Beitrag,noun,\n')
+    const db = openDb(':memory:')
+    try {
+      await expect(importGlossaryCsv({ file, db })).rejects.toThrow(/nothing was imported[\s\S]*Row 1/)
+      expect(countGlossaryEdits(db, 'de')).toBe(0)
+    } finally {
+      db.close()
+    }
+  })
+
   it('refuses a file that is not a glossary export', async () => {
     const file = join(home, 'x.csv')
     await writeFile(file, 'Term,Translation\npost,yazı\n')

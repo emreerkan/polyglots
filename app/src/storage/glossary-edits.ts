@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
 import type { GlossaryEntry, Locale } from '../types.js'
 import type { EffectiveRow, GlossaryDiff, GlossaryRow } from '../glossary/types.js'
-import { entryToRow, rowToEntry } from '../glossary/csv.js'
+import { entryToRow, normaliseGlossaryRow, rowToEntry } from '../glossary/csv.js'
 import { importDiff } from '../glossary/import.js'
 import { allGlossary } from './glossary.js'
 
@@ -308,11 +308,14 @@ export function importGlossaryRows(
   rows: GlossaryRow[],
   stamp: string,
 ): { replaced: number; added: number } {
+  // Normalised here as well as by the command, since this is where rows meet
+  // the store whoever calls it; doing it twice changes nothing.
+  const clean = rows.map(normaliseGlossaryRow)
   return db.transaction(() => {
     const current = effectiveGlossary(db, locale)
-    saveGlossaryEdits(db, locale, importDiff(current, rows), stamp)
+    saveGlossaryEdits(db, locale, importDiff(current, clean), stamp)
     const present = new Set(current.map((r) => r.term.toLowerCase()))
-    const terms = new Set(rows.map((r) => r.term.toLowerCase()))
+    const terms = new Set(clean.map((r) => r.term.toLowerCase()))
     let replaced = 0
     for (const t of terms) if (present.has(t)) replaced++
     return { replaced, added: terms.size - replaced }

@@ -306,6 +306,33 @@ describe('importing glossary rows', () => {
     })
   })
 
+  // A value is stored as the editor would have stored it: a padded cell is the
+  // same term, and an untrimmed one would sit beside the wp.org row as a twin.
+  it('stores every field trimmed and collapsed, the way the editor does', () => {
+    importGlossaryRows(db, 'tr', [row('  quiz ', ' noun', ' sınav \n kısa ', '  a   note ')], glossaryStamp(db, 'tr'))
+    const quiz = effectiveGlossary(db, 'tr').filter((r) => r.term.toLowerCase() === 'quiz')
+    expect(quiz.map((r) => [r.term, r.pos, r.translation, r.notes])).toEqual([['quiz', 'noun', 'sınav kısa', 'a note']])
+  })
+
+  // "A term that is already a local edit is replaced the same way": the CSV
+  // wins over the person's own edit as it does over wp.org's row.
+  it('replaces a term that is already a local add', () => {
+    edit(db, 'add', null, ['lesson', 'noun', 'ders', ''])
+    const result = importGlossaryRows(db, 'tr', [row('Lesson', 'noun', 'eğitim')], glossaryStamp(db, 'tr'))
+    expect(result).toEqual({ replaced: 1, added: 0 })
+    const lesson = effectiveGlossary(db, 'tr').filter((r) => r.term.toLowerCase() === 'lesson')
+    expect(lesson.map((r) => [r.term, r.translation, r.origin])).toEqual([['Lesson', 'eğitim', 'added']])
+  })
+
+  it('replaces a term that is already a local change, wp.org row and all', () => {
+    edit(db, 'change', ['page', 'noun', 'sayfa', ''], ['page', 'noun', 'sayfacık', ''])
+    expect(effectiveGlossary(db, 'tr').find((r) => r.term === 'page')).toMatchObject({ origin: 'changed' })
+    const result = importGlossaryRows(db, 'tr', [row('page', 'noun', 'yaprak')], glossaryStamp(db, 'tr'))
+    expect(result).toEqual({ replaced: 1, added: 0 })
+    const page = effectiveGlossary(db, 'tr').filter((r) => r.term === 'page')
+    expect(page.map((r) => [r.translation, r.origin])).toEqual([['yaprak', 'added']])
+  })
+
   it('builds the diff without touching storage', () => {
     const current: EffectiveRow[] = [
       { ...row('Quiz', 'noun', 'test'), origin: 'wporg' },

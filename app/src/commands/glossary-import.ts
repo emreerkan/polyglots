@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import type Database from 'better-sqlite3'
-import { readGlossaryCsv } from '../glossary/csv.js'
+import { normaliseGlossaryRow, readGlossaryCsv } from '../glossary/csv.js'
 import { problemLines } from '../glossary/editor/server.js'
 import { openDb } from '../storage/db.js'
 import { glossaryStamp, importGlossaryRows } from '../storage/glossary-edits.js'
@@ -47,7 +47,10 @@ export const importedLine = (r: ImportGlossaryResult): string =>
 export async function importGlossaryCsv(opts: ImportGlossaryOptions): Promise<ImportGlossaryResult> {
   const { file } = opts
   const csv = readGlossaryCsv(await readFile(file, 'utf8'))
-  const problems = problemLines(csv.rows)
+  // Normalised before the problems are looked for, so a cell of spaces is
+  // refused as empty rather than imported as a term nobody can match.
+  const rows = csv.rows.map(normaliseGlossaryRow)
+  const problems = problemLines(rows)
   if (problems.length > 0) {
     throw new Error(
       `${file} has problems, so nothing was imported. Rows are counted from the first one after the header:\n` +
@@ -69,7 +72,7 @@ export async function importGlossaryCsv(opts: ImportGlossaryOptions): Promise<Im
     // outside, a sync landing between the two would fail the import with the
     // editor's "since this page was opened; reload", which means nothing to
     // a command that has no page. Inside, nothing can come between them.
-    const counts = db.transaction(() => importGlossaryRows(db, locale, csv.rows, glossaryStamp(db, locale)))()
+    const counts = db.transaction(() => importGlossaryRows(db, locale, rows, glossaryStamp(db, locale)))()
     return { file, locale, ...counts, ...(notice === undefined ? {} : { notice }) }
   } finally {
     if (opts.db === undefined) db.close()

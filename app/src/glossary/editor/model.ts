@@ -1,4 +1,4 @@
-import { GLOSSARY_POS, normaliseGlossaryValue } from '../csv.js'
+import { GLOSSARY_POS, normaliseGlossaryRow, normaliseGlossaryValue } from '../csv.js'
 import { importDiff } from '../import.js'
 import type { EffectiveRow, GlossaryDiff, GlossaryRow, RowOrigin } from '../types.js'
 import { sidecarKey, type SidecarRecord } from './sidecar.js'
@@ -188,7 +188,9 @@ export function applyImport(m: EditorModel, rows: GlossaryRow[]): void {
       r,
     )
   }
-  const diff = importDiff([...asEffective.keys()], rows)
+  // Normalised as setCell normalises a typed cell, so an imported row is held
+  // to the same rules as one typed in, and a padded term finds its rows.
+  const diff = importDiff([...asEffective.keys()], rows.map(normaliseGlossaryRow))
   for (const gone of diff.deleted) asEffective.get(gone)!.deleted = true
   for (const r of diff.added) insert(m, { ...plain(r), origin: 'new', deleted: false })
 }

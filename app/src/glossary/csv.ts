@@ -36,6 +36,21 @@ export class GlossaryCsvError extends Error {
 export const normaliseGlossaryValue = (text: string): string => text.replace(/\s+/g, ' ').trim()
 
 /**
+ * A row as the editor would hold it had each cell been typed: every field
+ * trimmed and its runs of whitespace collapsed. The reader keeps a CSV's cells
+ * as written, so an export round-trips byte for byte; anything that writes
+ * rows into the glossary runs them through this first, or a whitespace-only
+ * term passes as present and a padded one sits beside the wp.org row it was
+ * meant to replace.
+ */
+export const normaliseGlossaryRow = (r: GlossaryRow): GlossaryRow => ({
+  term: normaliseGlossaryValue(r.term),
+  pos: normaliseGlossaryValue(r.pos),
+  translation: normaliseGlossaryValue(r.translation),
+  notes: normaliseGlossaryValue(r.notes),
+})
+
+/**
  * The records of an RFC 4180 file: quoted fields may hold commas, line breaks
  * and doubled quotes. Small enough to keep rather than add a dependency for
  * one four-column file.

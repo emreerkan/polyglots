@@ -211,4 +211,31 @@ describe('applyImport', () => {
     expect(d.added).toHaveLength(1)
     expect(currentRows(m).map((r) => r.translation)).toEqual(['sınav', 'gönderi'])
   })
+
+  // An imported row lands as a cell typed by hand would: trimmed, so a padded
+  // term matches the row it replaces and a blank one shows as a problem.
+  it('normalises every field of an imported row', () => {
+    const m = createModel([eff('post', 'yazı')], 'db')
+    applyImport(m, [
+      { term: '  post ', pos: ' noun', translation: ' gönderi \n yeni ', notes: '  a   note ' },
+      { term: '   ', pos: '', translation: 'boş', notes: '' },
+    ])
+    expect(m.rows[0]!.deleted).toBe(true)
+    expect(m.rows.slice(1).map((r) => [r.term, r.pos, r.translation, r.notes])).toEqual([
+      ['post', 'noun', 'gönderi yeni', 'a note'],
+      ['', '', 'boş', ''],
+    ])
+    expect([...problemsOf(m).values()]).toEqual([['empty-term']])
+  })
+
+  it('replaces a term that is already a local add or change', () => {
+    const m = createModel([eff('lesson', 'ders', 'noun', 'added'), { ...eff('page', 'sayfacık', 'noun', 'changed'), base: eff('page', 'sayfa') }], 'db')
+    applyImport(m, [
+      { term: 'Lesson', pos: 'noun', translation: 'eğitim', notes: '' },
+      { term: 'page', pos: 'noun', translation: 'yaprak', notes: '' },
+    ])
+    const d = diffOf(m)
+    expect(d.deleted.map((r) => [r.translation, r.origin])).toEqual([['ders', 'added'], ['sayfacık', 'changed']])
+    expect(d.added.map((r) => r.translation)).toEqual(['eğitim', 'yaprak'])
+  })
 })
