@@ -397,14 +397,26 @@ describe('mountEditor', () => {
     expect(dirty.defaultPrevented).toBe(true)
   })
 
-  it('shows the focused row in the evidence panel, with its sidecar record and a contested chip', async () => {
-    const sidecar = {
-      version: 1,
-      rows: [{ en: 'quiz', pos: 'noun', proposed: 'sınav', confidence: 'contested', occurrences: { 'a.po': 3 },
-        currentRenderings: [{ text: 'test', count: 80 }], glossary: [], otherPlugins: [{ project: 'tutor', tr: 'sınav' }],
-        tm: [], examples: ['Start Quiz'], reason: '' }],
-    }
-    await mountEditor(root, fakeHost({ sidecar }))
+  // The analysis is the maintainer's own tool, so nothing on the page offers
+  // it: it arrives only as a polyglots:analysis event on the root, which the
+  // console snippet in ~/Downloads dispatches.
+  const ANALYSIS = {
+    version: 1,
+    rows: [{ en: 'quiz', pos: 'noun', proposed: 'sınav', confidence: 'contested', occurrences: { 'a.po': 3 },
+      currentRenderings: [{ text: 'test', count: 80 }], glossary: [], otherPlugins: [{ project: 'tutor', tr: 'sınav' }],
+      tm: [], examples: ['Start Quiz'], reason: '' }],
+  }
+  const sendAnalysis = (detail: unknown) => root.dispatchEvent(new CustomEvent('polyglots:analysis', { detail }))
+
+  it('offers no analysis control of its own', async () => {
+    await mountEditor(root, fakeHost({ mode: 'csv' }))
+    expect(root.querySelector('[data-action="sidecar"]')).toBeNull()
+    expect(root.textContent).not.toContain('Open analysis')
+  })
+
+  it('shows an analysis sent as an event in the evidence panel, with a contested chip', async () => {
+    await mountEditor(root, fakeHost())
+    sendAnalysis(ANALYSIS)
     cell(2, 'translation').focus()
     const panel = norm(root.querySelector('.ge-panel')?.textContent)
     expect(panel).toContain('contested')
@@ -413,6 +425,18 @@ describe('mountEditor', () => {
     expect(panel).toMatch(/local edit/i)
     byText('contested 1').click()
     expect(visibleTerms()).toEqual(['quiz'])
+  })
+
+  it('keeps the analysis across the reload a save makes, and words a bad one as a notice', async () => {
+    await mountEditor(root, fakeHost())
+    sendAnalysis(ANALYSIS)
+    edit(1, 'translation', 'eğitim')
+    byText('Save').click()
+    await flush()
+    await flush()
+    expect(byText('contested 1')).toBeDefined()
+    sendAnalysis({ version: 2, rows: [] })
+    expect(norm(root.querySelector('.ge-notice')?.textContent)).toContain('The analysis file was not loaded')
   })
 
   it('shows an imported CSV as unsaved edits', async () => {

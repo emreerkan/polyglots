@@ -4,9 +4,7 @@ import type { EditorModel } from '../model.js'
 /**
  * What the editor is opened on. `rows` are effective rows in polyglots mode
  * (db) and plain rows for a CSV; `stamp` is the freshness token a db save
- * hands back, so a page loaded before a sync cannot overwrite it. `sidecar`
- * is the raw analysis JSON, read by readSidecar on the page rather than by the
- * host, so the local server and the website show the same notice for a bad one.
+ * hands back, so a page loaded before a sync cannot overwrite it.
  * `stamp` is also sent for a CSV, as the file the page loaded, so a save over
  * a newer copy of the file is refused the same way.
  * `localEdits` is how many local edits the store holds for the locale, sent
@@ -22,7 +20,6 @@ export interface LoadedGlossary {
   rows: Array<EffectiveRow | GlossaryRow>
   stamp?: string
   localEdits?: number
-  sidecar?: unknown
   /**
    * A table restored as it stood, edits and as-opened values included. The page
    * uses it instead of building one from `rows`, which would treat everything
@@ -45,7 +42,6 @@ export interface EditorHost {
   discard?(stamp: string): Promise<SaveResult>
   saveLabel: 'Save' | 'Export'
   openFile?(): Promise<LoadedGlossary | undefined>
-  openSidecar?(): Promise<unknown>
   // Returns a warning when the work could not be kept, which the page shows.
   persist?(m: EditorModel): string | void
   // Tells a server that stops when idle that the page is still open. Editing

@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { configuredLocale, loadConfig } from '../../config.js'
 import { openDb } from '../../storage/db.js'
@@ -247,8 +247,6 @@ function readText(file: string): string | undefined {
   }
 }
 
-/** g.csv → g.analysis.json beside it. */
-const sidecarFile = (file: string): string => join(dirname(file), `${basename(file, extname(file))}.analysis.json`)
 
 export async function startGlossaryEditor(opts: GlossaryEditorOptions): Promise<GlossaryEditorServer> {
   const { source } = opts
@@ -372,29 +370,14 @@ export async function startGlossaryEditor(opts: GlossaryEditorOptions): Promise<
     }
     const text = readText(source.file)
     const csv = readCsv(source.file, text)
-    const notices = csv.notice === undefined ? [] : [csv.notice]
-    let sidecar: unknown
-    const sidecarPath = sidecarFile(source.file)
-    if (existsSync(sidecarPath)) {
-      // Passed through as parsed JSON: readSidecar on the page judges its
-      // shape, so the website and this server word a bad one the same. Only
-      // a file that is not JSON at all is caught here, since there is nothing
-      // to pass.
-      try {
-        sidecar = JSON.parse(readFileSync(sidecarPath, 'utf8'))
-      } catch {
-        notices.push(`${basename(sidecarPath)} is not valid JSON, so no analysis is shown.`)
-      }
-    }
     return {
       mode: 'csv',
       locale: csv.locale,
       ...(csv.headerLocale === undefined ? {} : { headerLocale: csv.headerLocale }),
-      ...(notices.length === 0 ? {} : { notice: notices.join(' ') }),
+      ...(csv.notice === undefined ? {} : { notice: csv.notice }),
       file: source.file,
       rows: csv.rows,
       stamp: textStamp(text),
-      ...(sidecar === undefined ? {} : { sidecar }),
     }
   }
 

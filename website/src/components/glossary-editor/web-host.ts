@@ -41,8 +41,6 @@ export interface WebEnv {
   /** Shows the start screen and resolves with the choice. `saved` is offered as "continue". */
   start(saved: Saved | undefined): Promise<Start>
   download(name: string, text: string): void
-  /** A file picked from disk, or undefined when the picker was cancelled. */
-  pick(accept: string): Promise<{ name: string; text: string } | undefined>
   /**
    * The locale of an opened file whose header names none, or one wp.org does
    * not list, asked with the picker New uses. Undefined when the person
@@ -239,11 +237,6 @@ export function webHost(env: WebEnv): EditorHost {
         }
       }
       return { ok: true }
-    },
-
-    async openSidecar() {
-      const picked = await env.pick('.json,application/json')
-      return picked ? JSON.parse(picked.text) : undefined
     },
 
     // Runs on the person's first edit, not at load, so choosing New or Open

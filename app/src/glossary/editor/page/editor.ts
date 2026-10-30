@@ -133,8 +133,8 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     m = next.model ?? createModel(next.rows, next.mode)
     stamp = next.stamp
     notice = next.notice ?? ''
-    sidecar = undefined
-    if (next.sidecar !== undefined) loadSidecar(next.sidecar)
+    // The analysis stays across the reload a save makes: it describes the
+    // terms, not this copy of them, and only the console sends it again.
     $<HTMLElement>('.ge-title').textContent =
       next.mode === 'db' ? `${next.locale} glossary, with your local edits` : `${next.locale} glossary`
     $<HTMLElement>('.ge-file').textContent = next.file ?? ''
@@ -254,7 +254,6 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
 
     const files: string[] = []
     if (m.mode === 'db' && host.openFile) files.push('<button type="button" class="ge-btn ge-ghost" data-action="import">Import CSV</button>')
-    if (host.openSidecar) files.push('<button type="button" class="ge-btn ge-ghost" data-action="sidecar">Open analysis</button>')
     if (m.mode === 'db' && host.discard && stamp !== undefined && localCount() > 0) {
       files.push('<button type="button" class="ge-btn ge-ghost ge-danger-text" data-action="discard">Discard all local edits</button>')
     }
@@ -576,18 +575,21 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     }
   }
 
-  async function openSidecar(): Promise<void> {
-    if (!host.openSidecar || busy) return
-    try {
-      const json = await host.openSidecar()
-      if (json === undefined || busy) return
-      notice = data.notice ?? ''
-      loadSidecar(json)
-      refilter()
-    } catch (e) {
-      setStatus(message(e), 'error')
-    }
-  }
+  /**
+   * The analysis a terminology pass writes (see sidecar.ts) is the
+   * maintainer's own tool, not part of the released editor: nobody else has a
+   * way to produce one. So no control offers it, and no host reads it. It
+   * arrives only as a polyglots:analysis event on the root, carrying the
+   * parsed JSON, which a snippet run in the browser console dispatches. The
+   * panel, the contested filter and the notice for a bad file are the same as
+   * when it was a button.
+   */
+  root.addEventListener('polyglots:analysis', (ev) => {
+    if (closed) return
+    notice = data.notice ?? ''
+    loadSidecar((ev as CustomEvent<unknown>).detail)
+    refilter()
+  })
 
   function close(): void {
     closeDialog()
@@ -653,8 +655,6 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
       case 'import':
         void importCsv()
         break
-      case 'sidecar':
-        void openSidecar()
         break
       case 'discard': {
         if (busy) break

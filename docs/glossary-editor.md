@@ -49,10 +49,6 @@ A leading byte order mark is accepted, and is not written back. A part of speech
 is one of `noun`, `verb`, `adjective`, `adverb`, `interjection`, `conjunction`,
 `preposition`, `pronoun`, `expression` or `abbreviation`.
 
-If a file named `glossary.analysis.json` is beside the CSV, the editor shows its
-evidence for each row: how often each wording appears in existing translations,
-and whether the choice is settled or contested.
-
 ## Importing a reviewed CSV
 
 ```

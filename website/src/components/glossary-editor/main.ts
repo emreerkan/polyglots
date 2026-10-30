@@ -24,21 +24,6 @@ function storage(): WebEnv['storage'] {
 
 const readText = (file: File): Promise<string> => file.text()
 
-function pickFile(accept: string): Promise<{ name: string; text: string } | undefined> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = accept
-    input.addEventListener('change', () => {
-      const file = input.files?.[0]
-      if (!file) return resolve(undefined)
-      readText(file).then((text) => resolve({ name: file.name, text }), () => resolve(undefined))
-    })
-    input.addEventListener('cancel', () => resolve(undefined))
-    input.click()
-  })
-}
-
 function download(name: string, text: string): void {
   // No BOM: the CSV is written as GlotPress writes it.
   const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }))
@@ -76,7 +61,6 @@ export function start(): void {
   const env: WebEnv = {
     storage: storage(),
     download,
-    pick: pickFile,
     // The start screen again, with only the New card's locale picker and its
     // button relabelled: the same list a new glossary is started from, so the
     // header written on export is one wp.org lists. Cancel throws the file

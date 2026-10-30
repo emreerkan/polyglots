@@ -397,24 +397,16 @@ describe('startGlossaryEditor: CSV mode', () => {
     await expect(startGlossaryEditor({ source: { kind: 'csv', file: join(dir, 'new.csv') } })).rejects.toThrow(/--locale/)
   })
 
-  it('passes the analysis sidecar through when it is there, and leaves it out when it is not', async () => {
-    const file = join(dir, 'g.csv')
-    writeFileSync(file, csv)
-    server = await startGlossaryEditor({ source: { kind: 'csv', file } })
-    expect(JSON.parse((await call(`${server.url}data`)).body).sidecar).toBeUndefined()
-    const sidecar = { version: 1, rows: [{ en: 'post', pos: 'noun', proposed: 'yazı', confidence: 'contested' }] }
-    writeFileSync(join(dir, 'g.analysis.json'), JSON.stringify(sidecar))
-    expect(JSON.parse((await call(`${server.url}data`)).body).sidecar).toEqual(sidecar)
-  })
-
-  it('says so when the sidecar is not JSON, rather than dropping it silently', async () => {
+  // The analysis is not part of the released editor: a file beside the CSV is
+  // never read, and reaches the page only through the console snippet.
+  it('leaves an analysis file beside the CSV alone', async () => {
     const file = join(dir, 'g.csv')
     writeFileSync(file, csv)
     writeFileSync(join(dir, 'g.analysis.json'), '{oops')
     server = await startGlossaryEditor({ source: { kind: 'csv', file } })
     const data = JSON.parse((await call(`${server.url}data`)).body)
     expect(data.sidecar).toBeUndefined()
-    expect(data.notice).toMatch(/g\.analysis\.json/)
+    expect(data.notice).toBeUndefined()
   })
 
   it('answers a file that is not a glossary export with its reason, for the page to show', async () => {

@@ -44,7 +44,6 @@ function env(
     download: (name, text) => {
       seen.downloads.push({ name, text })
     },
-    pick: async () => ({ name: 'analysis.json', text: '{"a":1}' }),
   }
 }
 
@@ -213,12 +212,9 @@ test('persist says so when the work cannot be kept', async () => {
   assert.equal(fine.persist!(m), undefined)
 })
 
-test('the analysis picker returns parsed JSON, and nothing when cancelled', async () => {
-  const seen = { downloads: [] as { name: string; text: string }[] }
-  const host = webHost(env({ kind: 'new', locale: 'tr' }, memory().storage, seen))
-  assert.deepEqual(await host.openSidecar!(), { a: 1 })
-  const none = webHost({ ...env({ kind: 'new', locale: 'tr' }, memory().storage, seen), pick: async () => undefined })
-  assert.equal(await none.openSidecar!(), undefined)
+test('the website host offers no analysis picker', () => {
+  const host = webHost(env({ kind: 'new', locale: 'tr' }, memory().storage, { downloads: [] }))
+  assert.equal('openSidecar' in host, false)
 })
 
 test('the wp.org export link uses the locale slug', () => {
