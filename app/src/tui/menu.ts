@@ -19,6 +19,7 @@ export type ScreenId =
   | 'import-tm'
   | 'export-tm'
   | 'sync-glossary'
+  | 'edit-glossary'
   | 'locale-rules'
   | 'reply-templates'
   | 'agents'
@@ -83,6 +84,15 @@ export const CONFIGURATION: MenuNode[] = [
     icon: '[≡]',
     asciiIcon: '[=]',
     help: "Downloads the locale's glossary from translate.wordpress.org. Reviews check terms against it and drafts follow it.",
+  },
+  {
+    id: 'edit-glossary',
+    key: 'e',
+    label: 'Edit glossary',
+    description: 'Open the glossary in the browser',
+    icon: '[✎]',
+    asciiIcon: '[/]',
+    help: "Opens the locale's glossary in a spreadsheet in the browser, served from this machine while the screen is open. Changes are saved as local edits, which a sync keeps unless wp.org changes the same row.",
   },
   {
     id: 'locale-rules',

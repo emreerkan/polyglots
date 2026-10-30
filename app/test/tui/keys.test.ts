@@ -113,6 +113,7 @@ const FILES: Record<string, ScreenId[]> = {
   'screens/ImportTm.tsx': ['import-tm'],
   'screens/ExportTm.tsx': ['export-tm'],
   'screens/SyncGlossary.tsx': ['sync-glossary'],
+  'screens/EditGlossary.tsx': ['edit-glossary'],
   'screens/Stats.tsx': ['stats'],
   'screens/LocaleRules.tsx': ['locale-rules'],
   'screens/ReplyTemplates.tsx': ['reply-templates'],

@@ -273,6 +273,11 @@ export const KEYS = {
   statsExport: {
     open: { keys: 'o', does: 'open the written copy', match: char('o') },
   },
+  editGlossary: {
+    open: { keys: 'o', does: 'open the editor in a browser', match: char('o') },
+    stop: { keys: 'x', does: 'stop the editor', match: char('x') },
+    serve: { keys: 's', does: 'start it again once stopped or closed', match: char('s') },
+  },
   exportFormat: {
     format: { keys: '↑↓  space', does: 'switch format', match: any(vertical, space) },
     next: { keys: 'enter', does: 'continue', match: enter },
@@ -540,6 +545,10 @@ export const SCREENS: Record<ScreenId, ScreenKeys> = {
     more: [fields.write, picker.sort, finished.close, retry.again, KEYS.needsLocale.setup],
   },
   'sync-glossary': { shown: [fields.sync], more: [KEYS.syncGlossary.start, finished.close, retry.again] },
+  'edit-glossary': {
+    shown: [KEYS.editGlossary.open, KEYS.editGlossary.stop, KEYS.editGlossary.serve],
+    more: [KEYS.needsLocale.setup],
+  },
   'locale-rules': {
     shown: [KEYS.localeRules.move, KEYS.localeRules.open],
     more: [
@@ -606,8 +615,9 @@ export const SCREEN_KEYS = Object.fromEntries(
 // globals that matter most. The `?` overlay has the rest.
 export function footerKeys(screen: ScreenId, serving = false, stage?: string): KeyHelp[] {
   // While the stats server runs, x stops it from any screen; the stats screen
-  // lists x among its own keys already.
-  const stats = serving && screen !== 'stats' ? [{ keys: 'x', does: 'stop stats' }] : []
+  // lists x among its own keys already. The glossary editor's screen takes x
+  // for its own server, so there it does not stop stats.
+  const stats = serving && screen !== 'stats' && screen !== 'edit-glossary' ? [{ keys: 'x', does: 'stop stats' }] : []
   if (screen === 'home') {
     return [
       ...stats,

@@ -295,9 +295,12 @@ export function discardGlossaryEdits(db: Database.Database, locale: Locale): num
 }
 
 /**
- * Loads a reviewed CSV as local edits: the CSV's term wins. Counts are terms
- * replaced (a term the glossary already had any row of) and rows added, which
- * is what `glossary import` reports.
+ * Loads a reviewed CSV as local edits: the CSV's term wins. Both counts are of
+ * distinct terms, case-insensitively, read before the import: replaced is a
+ * CSV term the effective glossary already had, added one it did not. So the
+ * two add up to the terms in the CSV, which is what `glossary import`
+ * reports. A replaced term may have needed no edit at all, when the CSV
+ * repeats what is there (see importDiff).
  */
 export function importGlossaryRows(
   db: Database.Database,
@@ -306,9 +309,13 @@ export function importGlossaryRows(
   stamp: string,
 ): { replaced: number; added: number } {
   return db.transaction(() => {
-    const diff = importDiff(effectiveGlossary(db, locale), rows)
-    saveGlossaryEdits(db, locale, diff, stamp)
-    return { replaced: new Set(diff.deleted.map((r) => r.term.toLowerCase())).size, added: diff.added.length }
+    const current = effectiveGlossary(db, locale)
+    saveGlossaryEdits(db, locale, importDiff(current, rows), stamp)
+    const present = new Set(current.map((r) => r.term.toLowerCase()))
+    const terms = new Set(rows.map((r) => r.term.toLowerCase()))
+    let replaced = 0
+    for (const t of terms) if (present.has(t)) replaced++
+    return { replaced, added: terms.size - replaced }
   })()
 }
 

@@ -63,6 +63,8 @@ const INJECTABLE = {
   importTmx: true,
   syncGlossary: true,
   exportGlossary: true,
+  editGlossary: true,
+  importGlossary: true,
   exportTm: true,
   reviewFile: true,
   splitPo: true,

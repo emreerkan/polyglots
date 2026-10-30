@@ -7,7 +7,9 @@ import { Writable } from 'node:stream'
 import { text } from 'node:stream/consumers'
 import { fileURLToPath } from 'node:url'
 import { Command, CommanderError } from 'commander'
+import { editGlossary, editorReadyLine } from './commands/glossary-edit.js'
 import { exportGlossary } from './commands/glossary-export.js'
+import { importedLine, importGlossaryCsv } from './commands/glossary-import.js'
 import { exportTm, type TmExportFormat } from './commands/tm-export.js'
 import { fetchProjects, resolveProjects } from './commands/fetch.js'
 import { runFetch, type FetchFlags } from './cli/fetch.js'
@@ -110,6 +112,8 @@ export interface CliDeps {
   importTmx?: typeof importTmx
   syncGlossary?: typeof syncGlossary
   exportGlossary?: typeof exportGlossary
+  editGlossary?: typeof editGlossary
+  importGlossary?: typeof importGlossaryCsv
   exportTm?: typeof exportTm
   reviewFile?: typeof reviewFile
   splitPo?: typeof splitPo
@@ -167,6 +171,8 @@ interface Cli {
   importTmx: typeof importTmx
   syncGlossary: typeof syncGlossary
   exportGlossary: typeof exportGlossary
+  editGlossary: typeof editGlossary
+  importGlossary: typeof importGlossaryCsv
   exportTm: typeof exportTm
   reviewFile: typeof reviewFile
   splitPo: typeof splitPo
@@ -226,6 +232,8 @@ function createCli(deps: CliDeps): Cli {
     importTmx: deps.importTmx ?? importTmx,
     syncGlossary: deps.syncGlossary ?? syncGlossary,
     exportGlossary: deps.exportGlossary ?? exportGlossary,
+    editGlossary: deps.editGlossary ?? editGlossary,
+    importGlossary: deps.importGlossary ?? importGlossaryCsv,
     exportTm: deps.exportTm ?? exportTm,
     reviewFile: deps.reviewFile ?? reviewFile,
     splitPo: deps.splitPo ?? splitPo,
@@ -1748,6 +1756,46 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
       const result = await cli.exportGlossary({ locale, file, delimiter })
       if (result.file) cli.out(okLine(cli.ui.out, `Exported ${result.entries} glossary terms (${locale}) to ${result.file}`))
       else cli.streams.stdout.write(result.csv)
+    })
+  glossary
+    .command('edit')
+    .description('Edit the glossary, or a glossary CSV, in the browser; local edits survive a sync')
+    .option('--locale <locale>', `Glossary locale (${localeDefaultHelp(shown)}; for --csv, default: the file's header)`)
+    .option('--csv <file>', 'Edit this CSV instead of the polyglots glossary; created on the first save if missing')
+    .action(async (flags: { locale?: string; csv?: string }) => {
+      // A CSV names its own locale, so --locale is only passed on when given;
+      // polyglots.db has one glossary per locale and needs one named.
+      const source =
+        flags.csv === undefined
+          ? { kind: 'db' as const, locale: requireLocale(flags.locale, cli.config()) }
+          : { kind: 'csv' as const, file: flags.csv, ...(flags.locale === undefined ? {} : { locale: parseLocaleArg(flags.locale) }) }
+      const onError = (err: Error) => cli.err(errorLine(cli.ui.err, `glossary editor: ${err.message}`))
+      const end = await cli.editGlossary({ source, onError, openBrowser: cli.openBrowser }, (serving) => {
+        cli.out(okLine(cli.ui.out, editorReadyLine(serving)))
+        if (!serving.opened) cli.err(hintLine(cli.ui.err, 'No browser opened here; open the address above in yours.'))
+      })
+      // Closed by the page or the idle wait: the address is dead now, and
+      // the person may come back to a tab that cannot save.
+      if (end === 'closed') {
+        // Shell-quoted, so a CSV path with a space can be pasted back as it is.
+        const arg = (v: string) => (/[\s'"$`\\]/.test(v) ? `'${v.replace(/'/g, `'\\''`)}'` : v)
+        const again = [
+          'polyglots glossary edit',
+          ...(flags.csv === undefined ? [] : ['--csv', arg(flags.csv)]),
+          ...(flags.locale === undefined ? [] : ['--locale', arg(flags.locale)]),
+        ]
+        cli.out(okLine(cli.ui.out, `The glossary editor closed. Reopen it with: ${again.join(' ')}`))
+      } else {
+        cli.out(okLine(cli.ui.out, 'Stopped'))
+      }
+    })
+  glossary
+    .command('import <file>')
+    .description("Load a reviewed glossary CSV as local edits; the CSV's terms replace the glossary's")
+    .option('--locale <locale>', "Glossary locale (default: the file's header)")
+    .action(async (file: string, flags: { locale?: string }) => {
+      const locale = flags.locale === undefined ? {} : { locale: parseLocaleArg(flags.locale) }
+      cli.out(okLine(cli.ui.out, importedLine(await cli.importGlossary({ file, ...locale }))))
     })
 
   program

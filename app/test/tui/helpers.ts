@@ -425,6 +425,12 @@ export function fakeCommands(overrides: Partial<TuiCommands> = {}): TuiCommands 
     }),
     runTmFetch: vi.fn(async () => ({ units: 0, added: 0, present: 0, projects: 0, ms: 0 })),
     startStatsServer: vi.fn(async () => ({ url: 'http://127.0.0.1:4321/t0k3n/', port: 4321, close: vi.fn(async () => {}) })),
+    // Never a listening server: one that stays up until the screen closes it.
+    startGlossaryEditor: vi.fn(async () => {
+      let finish!: () => void
+      const done = new Promise<void>((resolve) => (finish = resolve))
+      return { url: 'http://127.0.0.1:4555/g10ss/', port: 4555, done, close: vi.fn(async () => finish()) }
+    }),
     stopOwnRuns: vi.fn(() => 0),
     openInBrowser: vi.fn(async () => true),
     // Never the real agy: unknown, which changes nothing on screen and never

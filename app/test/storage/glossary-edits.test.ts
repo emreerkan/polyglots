@@ -257,14 +257,53 @@ describe('importing glossary rows', () => {
 
   it('replaces every row of a term the CSV names, case-insensitively', () => {
     const result = importGlossaryRows(db, 'tr', [row('quiz', 'noun', 'sınav')], glossaryStamp(db, 'tr'))
-    expect(result).toEqual({ replaced: 1, added: 1 })
+    expect(result).toEqual({ replaced: 1, added: 0 })
     const quiz = effectiveGlossary(db, 'tr').filter((r) => r.term.toLowerCase() === 'quiz')
     expect(quiz.map((r) => [r.term, r.pos, r.translation])).toEqual([['quiz', 'noun', 'sınav']])
+  })
+
+  // Both counts are of terms, so they add up to the distinct terms in the
+  // CSV and can be said in one sentence: two rows of a new term are one added.
+  it('counts replaced and added as distinct terms, case-insensitively', () => {
+    const result = importGlossaryRows(
+      db,
+      'tr',
+      [row('QUIZ', 'noun', 'sınav'), row('quiz', 'verb', 'sına'), row('lesson', 'noun', 'ders'), row('Lesson', 'verb', 'öğret')],
+      glossaryStamp(db, 'tr'),
+    )
+    expect(result).toEqual({ replaced: 1, added: 1 })
+  })
+
+  // Re-importing the same reviewed CSV must not churn every row into a
+  // delete and an add of itself.
+  it('writes no edit for a CSV row identical to the row already there', () => {
+    const result = importGlossaryRows(db, 'tr', [row('quiz', 'noun', 'test')], glossaryStamp(db, 'tr'))
+    expect(result).toEqual({ replaced: 1, added: 0 })
+    expect(db.prepare('SELECT count(*) AS n FROM glossary_edits').get()).toEqual({ n: 0 })
+    expect(effectiveGlossary(db, 'tr').find((r) => r.term === 'Quiz')).toMatchObject({ translation: 'test', origin: 'wporg' })
   })
 
   it('leaves terms the CSV does not name untouched', () => {
     importGlossaryRows(db, 'tr', [row('quiz', 'noun', 'sınav')], glossaryStamp(db, 'tr'))
     expect(effectiveGlossary(db, 'tr').find((r) => r.term === 'page')).toMatchObject({ translation: 'sayfa', origin: 'wporg' })
+  })
+
+  it('leaves an identical row alone, pairing rows one to one', () => {
+    const current: EffectiveRow[] = [
+      { ...row('Quiz', 'noun', 'test'), origin: 'wporg' },
+      { ...row('Quiz', 'noun', 'test'), origin: 'wporg' },
+      { ...row('quiz', 'noun', 'sınav'), origin: 'changed', base: row('quiz', 'noun', 'kısa sınav') },
+      { ...row('page', 'noun', 'sayfa'), origin: 'wporg' },
+    ]
+    const csv = [row('quiz', 'noun', 'test'), row('quiz', 'noun', 'sınav'), row('quiz', 'verb', 'sına')]
+    // The first CSV row keeps one of the two wp.org twins, not both: the CSV
+    // names that row once, so the glossary keeps it once. The changed row is
+    // kept as the local edit it already is.
+    expect(importDiff(current, csv)).toEqual({
+      added: [row('quiz', 'verb', 'sına')],
+      changed: [],
+      deleted: [current[1]],
+    })
   })
 
   it('builds the diff without touching storage', () => {

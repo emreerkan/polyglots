@@ -204,8 +204,12 @@ function diffProblemLines(diff: GlossaryDiff): string[] {
   return lines
 }
 
-/** The problems the page would show, one line per row, numbered as the posted rows are. */
-function problemLines(rows: GlossaryRow[]): string[] {
+/**
+ * The problems the page would show, one line per row, numbered as the rows
+ * are given: from 1, so for a CSV the first row after the header. Also what
+ * `glossary import` refuses with.
+ */
+export function problemLines(rows: GlossaryRow[]): string[] {
   // createModel numbers rows from 1 in order, so an id is a row number.
   const found = problemsOf(createModel(rows, 'csv'))
   return [...found.entries()]

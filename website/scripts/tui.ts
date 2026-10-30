@@ -81,6 +81,7 @@ const COMMANDS = {
   planTmFetch: true,
   runTmFetch: true,
   startStatsServer: true,
+  startGlossaryEditor: true,
   openInBrowser: true,
   stopOwnRuns: true,
   checkProvider: true,

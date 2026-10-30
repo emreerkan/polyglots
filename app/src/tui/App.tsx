@@ -39,6 +39,7 @@ import { Review } from './screens/Review.js'
 import { Split } from './screens/Split.js'
 import { Stats } from './screens/Stats.js'
 import { SyncGlossary } from './screens/SyncGlossary.js'
+import { EditGlossary } from './screens/EditGlossary.js'
 import { Translate } from './screens/Translate.js'
 import { UsageStats } from './screens/UsageStats.js'
 import { Wizard } from './screens/Wizard.js'
@@ -493,8 +494,12 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
       // Not on setup, whose first step is choosing the locale.
       locale: framed && screen !== 'setup' ? unlessTyping(openLocale) : undefined,
       // Stops the stats server from anywhere, since it keeps serving after its
-      // screen is left. The stats screen binds x itself, to show that it stopped.
-      stopStats: framed && statsUrl !== undefined && screen !== 'stats' ? unlessTyping(() => void services.stopStats()) : undefined,
+      // screen is left. The stats screen binds x itself, to show that it
+      // stopped, and the glossary editor's screen binds it for its own server.
+      stopStats:
+        framed && statsUrl !== undefined && screen !== 'stats' && screen !== 'edit-glossary'
+          ? unlessTyping(() => void services.stopStats())
+          : undefined,
       // The Help page pages through its own text with the same keys.
       scroll: framed && screen !== 'help' ? (_input, key) => pageBody.current?.(key.pageUp ? -1 : 1) : undefined,
     },
@@ -591,6 +596,8 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
         return <Stats cwd={cwd} onBack={back} />
       case 'sync-glossary':
         return <SyncGlossary onBack={back} />
+      case 'edit-glossary':
+        return <EditGlossary onBack={back} onSetup={openLocaleSetup} />
       case 'locale-rules':
         return <LocaleRules onBack={back} />
       case 'reply-templates':

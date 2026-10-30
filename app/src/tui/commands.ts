@@ -12,6 +12,7 @@ import { planTmFetch, runTmFetch } from '../commands/tm-fetch.js'
 import { dataClient, type DataClient } from '../data/download.js'
 import { splitPo } from '../commands/split.js'
 import { writeStats } from '../commands/stats.js'
+import { startGlossaryEditor } from '../glossary/editor/server.js'
 import { translateFile } from '../commands/translate.js'
 import { openJobsDb } from '../jobs/db.js'
 import { stopOwnRuns } from '../jobs/runs.js'
@@ -57,6 +58,9 @@ export interface TuiCommands {
   planTmFetch: typeof planTmFetch
   runTmFetch: typeof runTmFetch
   startStatsServer: StartStatsServer
+  // The glossary editor's server, which the Edit glossary screen owns for as
+  // long as it is open. Handed in so no test, and no website demo, listens.
+  startGlossaryEditor: typeof startGlossaryEditor
   openInBrowser: typeof openInBrowser
   // Ends this process's in-flight runs as stopped; returns how many.
   stopOwnRuns: () => number
@@ -99,6 +103,7 @@ export const defaultCommands: TuiCommands = {
   planTmFetch,
   runTmFetch,
   startStatsServer,
+  startGlossaryEditor,
   openInBrowser,
   stopOwnRuns: () => {
     const db = openJobsDb()
