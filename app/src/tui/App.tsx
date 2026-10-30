@@ -353,7 +353,7 @@ function Shell({ cwd = process.cwd(), onExit, update, version = VERSION, whatsNe
     // over one locale's steps ends when it is left.
     if (screen === 'setup' || next === 'setup') setWizardSteps(undefined)
     setSetupEpoch((e) => e + 1)
-    if (screen === 'sync-glossary' || screen === 'setup') refreshGlossary()
+    if (screen === 'sync-glossary' || screen === 'edit-glossary' || screen === 'setup') refreshGlossary()
     if (screen === 'import-tm' || screen === 'setup') refreshMemory()
     setStatusFocus(undefined)
     if (next === 'setup') {

@@ -225,6 +225,20 @@ describe('glossaryCount', () => {
     expect(glossaryCount('tr', path)).toBe(2)
     expect(glossaryCount('fr', path)).toBe(0)
   })
+
+  // The step asks whether the locale has a glossary, and one built only in
+  // the editor or by an import is one, before any sync has happened.
+  it('counts local edits beside the synced rows', () => {
+    const path = join(home.path, 'g.db')
+    const db = new Database(path)
+    db.exec('CREATE TABLE glossary (locale TEXT, source_term TEXT)')
+    db.exec('CREATE TABLE glossary_edits (locale TEXT, kind TEXT)')
+    db.prepare('INSERT INTO glossary_edits VALUES (?, ?)').run('tr', 'add')
+    db.prepare('INSERT INTO glossary_edits VALUES (?, ?)').run('de', 'add')
+    db.close()
+    expect(glossaryCount('tr', path)).toBe(1)
+    expect(glossaryCount('fr', path)).toBe(0)
+  })
 })
 
 describe('tui.json', () => {

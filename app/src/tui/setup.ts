@@ -3,7 +3,7 @@ import { configuredLocale } from '../config.js'
 import { usableProviders, type AgentStatus } from '../agent/discover.js'
 import { loadLocaleRules } from '../rules/load.js'
 import { configFile, dbFile } from '../paths.js'
-import { effectiveEntries } from '../storage/glossary-edits.js'
+import { effectiveEntries, hasEditsTable } from '../storage/glossary-edits.js'
 import type { Manifest } from '../data/manifest.js'
 import type { GlossaryEntry, Locale, PolyglotsConfig, Secrets } from '../types.js'
 import { LOCALE_STEPS, localeWizard, SETUP_STEPS, type SetupStep, type TuiState } from './state.js'
@@ -139,11 +139,19 @@ export function localeConfigured(): boolean {
  * Glossary rows for a locale, counted without writing (see readOnly).
  * Undefined when there is no database or it cannot be read, which the status
  * shows as not synced.
+ *
+ * Local edits count beside the synced rows, so a glossary built in the editor
+ * or by an import passes the step before any sync. The sum is not the size of
+ * the effective glossary, since a change or a delete counts once more rather
+ * than replacing its row; nothing here reads it as one, only as zero or not.
  */
 export function glossaryCount(locale: Locale, path: string = dbFile()): number | undefined {
   return readOnly(
     path,
-    (db) => (db.prepare('SELECT COUNT(*) AS n FROM glossary WHERE locale = ?').get(locale) as { n: number }).n,
+    (db) => {
+      const count = (table: string) => (db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE locale = ?`).get(locale) as { n: number }).n
+      return count('glossary') + (hasEditsTable(db) ? count('glossary_edits') : 0)
+    },
     undefined,
   )
 }

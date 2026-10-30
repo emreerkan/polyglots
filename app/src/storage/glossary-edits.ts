@@ -64,7 +64,7 @@ function addSnapshot(wporg: GlossaryRow[], r: GlossaryRow): string {
  * opened by an older build has no edits table yet. That reads as no edits,
  * not as an error that would hide the wp.org rows too.
  */
-function hasEditsTable(db: Database.Database): boolean {
+export function hasEditsTable(db: Database.Database): boolean {
   return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'glossary_edits'").get() !== undefined
 }
 

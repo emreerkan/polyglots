@@ -87,6 +87,18 @@ describe('the glossary editor screen', () => {
     await waitFor(() => editor.close.mock.calls.length === 1)
   })
 
+  // A save here can give a locale its first glossary, so the setup step is
+  // counted again on the way out, as it is after a sync.
+  it('counts the glossary again when the screen is left', async () => {
+    const editor = fakeEditor()
+    const glossaryCount = vi.fn(() => 0)
+    const view = await open(fakeCommands({ startGlossaryEditor: editor.startGlossaryEditor, glossaryCount }))
+    await waitForText(view.lastFrame, 'http://127.0.0.1:4555/g10ss/')
+    const before = glossaryCount.mock.calls.length
+    view.stdin.write('q')
+    await waitFor(() => glossaryCount.mock.calls.length > before)
+  })
+
   // The locale key is live on this screen. A server left on the old locale
   // under a heading naming the new one would write the wrong glossary.
   it('restarts the editor on the new locale when the locale is switched', async () => {
