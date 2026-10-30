@@ -610,3 +610,41 @@ describe('startGlossaryEditor: ending', () => {
     expect(ended).toBe(true)
   })
 })
+
+describe('startGlossaryEditor: settings', () => {
+  const file = () => join(process.env.POLYGLOTS_HOME!, 'config', 'glossary-editor.json')
+
+  it('serves the defaults when nothing is kept, and keeps what the page saves across servers', async () => {
+    server = await startGlossaryEditor(dbSource())
+    const first = await call(`${server.url}settings`)
+    expect(first.status).toBe(200)
+    expect(JSON.parse(first.body)).toMatchObject({ sort: 'file', wrap: true })
+    expect(existsSync(file())).toBe(false)
+
+    expect((await post(server, 'save-settings', { sort: 'term-desc', density: 'compact', junk: 1 })).status).toBe(200)
+    expect(JSON.parse(readFileSync(file(), 'utf8'))).toMatchObject({ sort: 'term-desc', density: 'compact' })
+    expect(JSON.parse(readFileSync(file(), 'utf8'))).not.toHaveProperty('junk')
+    await server.close()
+
+    // A new run is a new port, and so a new origin to the browser: this file,
+    // not localStorage, is what carries the settings to it.
+    server = await startGlossaryEditor(dbSource())
+    expect(JSON.parse((await call(`${server.url}settings`)).body)).toMatchObject({ sort: 'term-desc', density: 'compact' })
+  })
+
+  it('serves the defaults over a kept file that is not JSON', async () => {
+    server = await startGlossaryEditor(dbSource())
+    await post(server, 'save-settings', {})
+    writeFileSync(file(), '{ not json')
+    expect(JSON.parse((await call(`${server.url}settings`)).body)).toMatchObject({ sort: 'file' })
+  })
+
+  it('keeps settings behind the same fences as any other write', async () => {
+    server = await startGlossaryEditor(dbSource())
+    expect((await post(server, 'save-settings', {}, { origin: 'https://evil.example' })).status).toBe(403)
+    expect((await post(server, 'save-settings', {}, { 'content-type': 'text/plain' })).status).toBe(415)
+    expect((await call(`${server.url}save-settings`)).status).toBe(405)
+    expect((await post(server, 'settings', {})).status).toBe(405)
+    expect(existsSync(file())).toBe(false)
+  })
+})

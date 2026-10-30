@@ -10,6 +10,11 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Added
+
+- The glossary editor sorts by term or translation from the column headers, and has a Settings dialog: sort, the filter it opens with, row height, wrapping, hidden columns, search scope, and what Enter and Tab do.
+- `glossary edit` keeps those settings in `glossary-editor.json` in the config directory; the website keeps them in the browser.
+
 ## [1.5.0] - 2026-10-30
 
 ### Added

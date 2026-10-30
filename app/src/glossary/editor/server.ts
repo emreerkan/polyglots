@@ -1,9 +1,10 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { configuredLocale, loadConfig } from '../../config.js'
+import { glossaryEditorSettingsFile } from '../../paths.js'
 import { openDb } from '../../storage/db.js'
 import {
   countGlossaryEdits,
@@ -15,6 +16,7 @@ import {
 } from '../../storage/glossary-edits.js'
 import type { Locale } from '../../types.js'
 import { resolveLocale, splitLocale } from '../../wporg/locales.js'
+import { readSettings, type EditorSettings } from './settings.js'
 import { formatGlossaryCsv, GLOSSARY_POS, GlossaryCsvError, readGlossaryCsv } from '../csv.js'
 import type { EffectiveRow, GlossaryDiff, GlossaryRow } from '../types.js'
 import { renderEditorDocument } from './document.js'
@@ -121,6 +123,8 @@ const ROUTES: Record<string, 'GET' | 'POST'> = {
   discard: 'POST',
   close: 'POST',
   ping: 'POST',
+  settings: 'GET',
+  'save-settings': 'POST',
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -448,6 +452,31 @@ export async function startGlossaryEditor(opts: GlossaryEditorOptions): Promise<
     })()
   }
 
+  // Read on each request rather than once, so a second editor open on another
+  // locale sees a setting changed in the first on its next load.
+  function loadSettings(): EditorSettings {
+    try {
+      return readSettings(JSON.parse(readFileSync(glossaryEditorSettingsFile(), 'utf8')))
+    } catch {
+      return readSettings(undefined)
+    }
+  }
+
+  // Through readSettings first, so only known keys and values reach the disk
+  // whatever the body held; written aside and renamed, as tui.json is.
+  function saveSettings(settings: EditorSettings): void {
+    const path = glossaryEditorSettingsFile()
+    mkdirSync(dirname(path), { recursive: true })
+    const tmp = `${path}.${process.pid}.tmp`
+    try {
+      writeFileSync(tmp, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 })
+      renameSync(tmp, path)
+    } catch (error) {
+      rmSync(tmp, { force: true })
+      throw error
+    }
+  }
+
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const head = req.method === 'HEAD'
     const host = req.headers.host
@@ -504,6 +533,8 @@ export async function startGlossaryEditor(opts: GlossaryEditorOptions): Promise<
             // frame-ancestors only works as a header, never in a meta tag.
             'content-security-policy': `${doc.csp}; frame-ancestors 'none'`,
           })
+        } else if (route === 'settings') {
+          sendJson(res, head, 200, loadSettings())
         } else {
           sendJson(res, head, 200, loadData())
         }
@@ -536,6 +567,11 @@ export async function startGlossaryEditor(opts: GlossaryEditorOptions): Promise<
       // A ping only proves the page is open; the token check above has
       // already restarted the idle wait.
       if (route === 'ping') {
+        sendJson(res, false, 200, {})
+        return
+      }
+      if (route === 'save-settings') {
+        saveSettings(readSettings(body))
         sendJson(res, false, 200, {})
         return
       }

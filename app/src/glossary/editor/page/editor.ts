@@ -4,10 +4,14 @@ import {
   FIELDS, addRow, applyImport, checkProblems, createModel, currentRows, diffOf, duplicateRow, revertRow, rowChanged,
   setCell, toggleDelete, visibleRows, type EditorModel, type EditorRow, type Field, type Filter, type Problem,
 } from '../model.js'
+import {
+  DEFAULT_SETTINGS, collatorFor, nextHeaderSort, readSettings, sortRows, type EditorSettings,
+} from '../settings.js'
 import { readSidecar, sidecarKey, type SidecarRecord } from '../sidecar.js'
 import type { EditorHost, LoadedGlossary } from './host.js'
 import {
-  FIELD_LABEL, changesHtml, chipsHtml, confirmHtml, countText, esc, panelHtml, reasonHtml, rowHtml, type RowState,
+  FIELD_LABEL, changesHtml, chipsHtml, confirmHtml, countText, esc, headHtml, panelHtml, reasonHtml, rowHtml, settingsHtml,
+  type RowState,
 } from './render.js'
 
 /**
@@ -26,6 +30,10 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   const win = doc.defaultView
   root.innerHTML = '<div class="ge"><p class="ge-loading">Loading the glossary…</p></div>'
 
+  // Asked beside the glossary, not after it. A host that cannot answer costs
+  // the person their preferences for this visit, never the page: the defaults
+  // are a working editor.
+  const settingsLoad = (host.settings?.load() ?? Promise.resolve(undefined)).then(readSettings, () => DEFAULT_SETTINGS)
   let data: LoadedGlossary
   try {
     data = await host.load()
@@ -39,7 +47,15 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   let sidecar: Map<string, SidecarRecord> | undefined
   let notice = ''
   let keepWarning = ''
-  let filter: Filter = { query: '' }
+  let settings: EditorSettings = await settingsLoad
+  let collator = collatorFor(data.locale)
+  // The start filter applies once, on opening: a save's reload keeps whatever
+  // filter the person has moved to since.
+  let filter: Filter = {
+    query: '',
+    ...(settings.startFilter === 'problems' ? { problems: true } : {}),
+    ...(settings.startFilter === 'edits' ? { local: true } : {}),
+  }
   // Ids in display order. Recomputed when the filter changes, not on every
   // edit: a row that stops matching the search while it is being fixed stays
   // put instead of vanishing under the person's cursor.
@@ -56,7 +72,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   root.innerHTML = `<div class="ge">
   <header class="ge-head"><h1 class="ge-title"></h1><span class="ge-file"></span></header>
   <div class="ge-bar">
-    <input type="search" class="ge-search" placeholder="Search term, translation or comment" aria-label="Search term, translation or comment">
+    <input type="search" class="ge-search">
     <div class="ge-chips" role="group" aria-label="Filter rows"></div>
     <span class="ge-count" aria-live="polite"></span>
     <span class="ge-group">
@@ -65,6 +81,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
       <button type="button" class="ge-btn ge-ghost" data-action="delete" title="Delete or restore the focused row (Ctrl+Backspace)">Delete row</button>
     </span>
     <span class="ge-group ge-files"></span>
+    <button type="button" class="ge-btn ge-ghost" data-action="settings">Settings</button>
     <button type="button" class="ge-btn ge-ghost" data-action="changes">Changes</button>
     <button type="button" class="ge-btn ge-primary" data-action="save">${esc(host.saveLabel)}</button>
     ${host.close ? '<button type="button" class="ge-btn ge-ghost" data-action="close">Close</button>' : ''}
@@ -75,7 +92,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   <div class="ge-body">
     <div class="ge-scroll">
       <table class="ge-grid" role="grid" aria-label="Glossary">
-        <thead><tr>${FIELDS.map((f) => `<th scope="col" class="ge-${f}">${FIELD_LABEL[f]}</th>`).join('')}<th class="ge-acts"><span class="ge-sr">Row actions</span></th></tr></thead>
+        <thead></thead>
         <tbody></tbody>
       </table>
       <p class="ge-empty" hidden>No rows match.</p>
@@ -91,6 +108,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   const search = $<HTMLInputElement>('.ge-search')
   const layer = $<HTMLDivElement>('.ge-layer')
   const panel = $<HTMLElement>('.ge-panel')
+  const thead = $<HTMLTableSectionElement>('thead')
 
   /**
    * Replace a toolbar part only when its markup changed. An edit ends on the
@@ -125,7 +143,16 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     const changed = rowChanged(r)
     const target = r.loaded?.origin === 'changed' && r.loaded.base ? r.loaded.base : r.loaded
     const canRevert = !target || r.deleted || FIELDS.some((f) => r[f] !== target[f])
-    return { changed: changed && r.origin !== 'new', added: r.origin === 'new', local: m.mode === 'db' && r.origin !== 'wporg' && r.origin !== 'new', canRevert }
+    // Against the row as opened, not the wp.org row under a local edit: the
+    // tint answers "what did I change here", which a reload starts again.
+    const changedFields = settings.markCells && r.loaded && !r.deleted ? FIELDS.filter((f) => r[f] !== r.loaded![f]) : []
+    return {
+      changed: changed && r.origin !== 'new',
+      added: r.origin === 'new',
+      local: m.mode === 'db' && r.origin !== 'wporg' && r.origin !== 'new',
+      canRevert,
+      changedFields,
+    }
   }
 
   function apply(next: LoadedGlossary): void {
@@ -139,11 +166,12 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
       next.mode === 'db' ? `${next.locale} glossary, with your local edits` : `${next.locale} glossary`
     $<HTMLElement>('.ge-file').textContent = next.file ?? ''
     $<HTMLElement>('.ge-key-local').hidden = next.mode !== 'db'
+    collator = collatorFor(next.locale)
     // Ids are per model, so a reload keeps the place by position instead: after
     // a save the person carries on from the row they were on.
     const at = cursor ? visible.indexOf(cursor.id) : 0
     const field = cursor?.field ?? 'term'
-    visible = visibleRows(m, filter, sidecar).map((r) => r.id)
+    visible = visibleIds()
     const id = visible[Math.max(0, Math.min(at, visible.length - 1))]
     cursor = id === undefined ? undefined : { id, field }
     drawRows()
@@ -161,9 +189,46 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
 
   // ---- drawing --------------------------------------------------------------
 
+  // The order is fixed here and nowhere else, so a row whose sorted value is
+  // being edited stays under the cursor until the filter or the sort moves.
+  function visibleIds(): number[] {
+    const shown = visibleRows(m, { ...filter, searchIn: settings.searchIn, wholeWord: settings.wholeWord }, sidecar)
+    return sortRows(shown, settings.sort, collator).map((r) => r.id)
+  }
+
   function refilter(): void {
-    visible = visibleRows(m, filter, sidecar).map((r) => r.id)
+    visible = visibleIds()
     drawRows()
+  }
+
+  /** The columns the keys move through: the hidden ones are skipped, not merely not shown. */
+  const columns = (): Field[] =>
+    FIELDS.filter((f) => (f === 'pos' ? settings.columns.pos : f === 'notes' ? settings.columns.notes : true))
+
+  /** Everything the settings change that is not a row: the table's classes, the header and the search's words. */
+  function drawSettings(): void {
+    const ge = $<HTMLElement>('.ge')
+    ge.classList.toggle('ge-compact', settings.density === 'compact')
+    ge.classList.toggle('ge-nowrap', !settings.wrap)
+    ge.classList.toggle('ge-hide-pos', !settings.columns.pos)
+    ge.classList.toggle('ge-hide-notes', !settings.columns.notes)
+    setHtml(thead, headHtml(settings.sort))
+    const words = settings.searchIn === 'term' ? 'Search term' : 'Search term, translation or comment'
+    search.placeholder = words
+    search.setAttribute('aria-label', words)
+    if (cursor && !columns().includes(cursor.field)) cursor = { id: cursor.id, field: 'term' }
+  }
+
+  function changeSettings(next: EditorSettings): void {
+    settings = next
+    drawSettings()
+    refilter()
+    host.settings?.save(settings).then(
+      (warning) => {
+        if (typeof warning === 'string') setStatus(warning, 'error')
+      },
+      (e) => setStatus(`The settings were not kept: ${message(e)}`, 'error'),
+    )
   }
 
   function drawRows(): void {
@@ -245,7 +310,8 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
       activePos: filter.pos,
       problems: problems.size,
       problemsOn: filter.problems ?? false,
-      local: m.mode === 'db' ? (filter.local ?? false) : undefined,
+      local: filter.local ?? false,
+      localLabel: m.mode === 'db' ? 'local edits' : 'changed',
       contested: sidecar
         ? live.filter((r) => sidecar!.get(sidecarKey(r.term, r.pos))?.confidence === 'contested').length
         : undefined,
@@ -330,13 +396,14 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   /** The cell a move lands on, or undefined at the edge of the table. */
   function step(dRow: number, dField: number, wrap: boolean): { id: number; field: Field } | undefined {
     if (!cursor) return undefined
+    const cols = columns()
     let ri = visible.indexOf(cursor.id)
-    let fi = FIELDS.indexOf(cursor.field) + dField
-    if (wrap && fi >= FIELDS.length) [ri, fi] = [ri + 1, 0]
-    if (wrap && fi < 0) [ri, fi] = [ri - 1, FIELDS.length - 1]
+    let fi = cols.indexOf(cursor.field) + dField
+    if (wrap && fi >= cols.length) [ri, fi] = [ri + 1, 0]
+    if (wrap && fi < 0) [ri, fi] = [ri - 1, cols.length - 1]
     ri += dRow
-    if (ri < 0 || ri >= visible.length || fi < 0 || fi >= FIELDS.length) return undefined
-    return { id: visible[ri]!, field: FIELDS[fi]! }
+    if (ri < 0 || ri >= visible.length || fi < 0 || fi >= cols.length) return undefined
+    return { id: visible[ri]!, field: cols[fi]! }
   }
 
   function startEdit(id: number, field: Field, typed?: string): void {
@@ -643,6 +710,14 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
       case 'changes':
         openDialog(changesHtml(diffOf(m)))
         break
+      case 'settings':
+        openDialog(settingsHtml(settings, m.mode, host.saveLabel))
+        break
+      case 'sort': {
+        const column = el.dataset.column === 'translation' ? 'translation' : 'term'
+        changeSettings({ ...settings, sort: nextHeaderSort(settings.sort, column) })
+        break
+      }
       case 'close-dialog':
         closeDialog()
         break
@@ -654,7 +729,6 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
         break
       case 'import':
         void importCsv()
-        break
         break
       case 'discard': {
         if (busy) break
@@ -687,6 +761,19 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
         close()
         break
     }
+  })
+
+  // A control in the settings dialog: its data-setting names the key, with a
+  // dot for a nested one, and readSettings has the last word on the value.
+  root.addEventListener('change', (ev) => {
+    const el = (ev.target as Element).closest<HTMLInputElement | HTMLSelectElement>('[data-setting]')
+    if (!el || !layer.contains(el)) return
+    const value = el instanceof HTMLInputElement && el.type === 'checkbox' ? el.checked : el.value
+    const [key, sub] = el.dataset.setting!.split('.') as [string, string | undefined]
+    const raw: Record<string, unknown> = { ...settings, columns: { ...settings.columns } }
+    if (sub) (raw[key] as Record<string, unknown>)[sub] = value
+    else raw[key] = value
+    changeSettings(readSettings(raw))
   })
 
   root.addEventListener('dblclick', (ev) => {
@@ -741,7 +828,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
       if (ev.isComposing) return
       if (ev.key === 'Enter') {
         ev.preventDefault()
-        finishEdit(true, step(1, 0, false))
+        finishEdit(true, settings.enterMoves === 'down' ? step(1, 0, false) : undefined)
       } else if (ev.key === 'Escape') {
         ev.preventDefault()
         finishEdit(false)
@@ -754,6 +841,12 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
         const to = step(0, ev.shiftKey ? -1 : 1, true)
         finishEdit(true, to)
         if (to) startEdit(to.id, to.field)
+        // Past the last cell of the table, a new row, opened, when the
+        // settings ask: typing a list of terms in without reaching for Ctrl+Enter.
+        else if (!ev.shiftKey && settings.tabAddsRow && cursor && cursor.id === visible.at(-1)) {
+          addBelow()
+          if (cursor) startEdit(cursor.id, 'term')
+        }
       }
       return
     }
@@ -765,8 +858,8 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
       case 'ArrowDown': to = step(1, 0, false); break
       case 'ArrowLeft': to = step(0, -1, false); break
       case 'ArrowRight': to = step(0, 1, false); break
-      case 'Home': to = { id: cursor.id, field: FIELDS[0]! }; break
-      case 'End': to = { id: cursor.id, field: FIELDS[FIELDS.length - 1]! }; break
+      case 'Home': to = { id: cursor.id, field: columns()[0]! }; break
+      case 'End': to = { id: cursor.id, field: columns().at(-1)! }; break
       case 'Tab':
         to = step(0, ev.shiftKey ? -1 : 1, true)
         // At either end of the table Tab leaves it, so the grid is no trap.
@@ -832,6 +925,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
       }, PING_MS)
     : undefined
 
+  drawSettings()
   apply(data)
   return { model: () => m }
 }

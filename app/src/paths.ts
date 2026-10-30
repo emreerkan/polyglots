@@ -20,6 +20,13 @@ export function configFile(): string {
   return join(configDir(), 'config.json')
 }
 
+// The glossary editor's display preferences. Kept by the CLI rather than in
+// the browser, because each run serves the page on a new port, and a new port
+// is a new origin with empty storage.
+export function glossaryEditorSettingsFile(): string {
+  return join(configDir(), 'glossary-editor.json')
+}
+
 export function secretsFile(): string {
   return join(configDir(), '.env')
 }

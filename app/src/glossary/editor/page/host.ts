@@ -1,5 +1,6 @@
 import type { EffectiveRow, GlossaryRow } from '../../types.js'
 import type { EditorModel } from '../model.js'
+import type { EditorSettings } from '../settings.js'
 
 /**
  * What the editor is opened on. `rows` are effective rows in polyglots mode
@@ -48,4 +49,14 @@ export interface EditorHost {
   // makes no requests, so without it a long edit outlives the server.
   ping?(): void
   close?(): void
+  /**
+   * Where the editor's settings are kept. The page reads what load returns
+   * through readSettings, so a host hands back whatever it stored. save
+   * returns a warning when they could not be kept, which the page shows.
+   * Without it the page still offers the settings, for this visit only.
+   */
+  settings?: {
+    load(): Promise<unknown>
+    save(s: EditorSettings): Promise<string | void>
+  }
 }

@@ -39,6 +39,9 @@ export interface Filter {
   problems?: boolean
   local?: boolean
   contested?: boolean
+  /** Which fields the query is looked for in; all of them unless the settings say the term alone. */
+  searchIn?: 'all' | 'term'
+  wholeWord?: boolean
 }
 
 const plain = (r: GlossaryRow): GlossaryRow => ({ term: r.term, pos: r.pos, translation: r.translation, notes: r.notes })
@@ -199,11 +202,32 @@ export function checkProblems(m: EditorModel): { shown: Map<number, Problem[]>; 
   return { shown, blocking }
 }
 
+const WORD = /[\p{L}\p{N}\p{M}]/u
+
+/**
+ * Whether the search text is in a value, ignoring case. A whole-word match
+ * needs no letter, digit or combining mark on either side, so Turkish ç or ş
+ * counts as part of a word the way a and z do, which \b would not.
+ */
+export function textMatches(value: string, query: string, wholeWord: boolean): boolean {
+  const v = value.toLowerCase()
+  const q = query.toLowerCase()
+  if (!wholeWord) return v.includes(q)
+  for (let at = v.indexOf(q); at !== -1; at = v.indexOf(q, at + 1)) {
+    const before = at > 0 ? v[at - 1]! : ''
+    const after = v[at + q.length] ?? ''
+    if (!WORD.test(before) && !WORD.test(after)) return true
+  }
+  return false
+}
+
 export function visibleRows(m: EditorModel, f: Filter, sidecar?: Map<string, SidecarRecord>): EditorRow[] {
-  const q = f.query.trim().toLowerCase()
+  const q = f.query.trim()
+  const whole = f.wholeWord ?? false
   const problems = f.problems ? problemsOf(m) : undefined
   return m.rows.filter((r) => {
-    if (q && ![r.term, r.translation, r.notes].some((v) => v.toLowerCase().includes(q))) return false
+    const fields = f.searchIn === 'term' ? [r.term] : [r.term, r.translation, r.notes]
+    if (q && !fields.some((v) => textMatches(v, q, whole))) return false
     if (f.pos !== undefined && f.pos !== '' && r.pos !== f.pos) return false
     if (problems && !problems.has(r.id)) return false
     if (f.local && !(r.origin !== 'wporg' || rowChanged(r))) return false

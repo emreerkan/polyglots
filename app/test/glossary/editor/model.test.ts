@@ -312,3 +312,25 @@ describe('applyImport', () => {
     expect(d.added.map((r) => r.translation)).toEqual(['eğitim', 'yaprak'])
   })
 })
+
+describe('visibleRows search options', () => {
+  const m = createModel(
+    [
+      { term: 'post', pos: 'noun', translation: 'yazı', notes: '' },
+      { term: 'repost', pos: 'verb', translation: 'yeniden paylaş', notes: 'not a post' },
+    ],
+    'csv',
+  )
+  const terms = (f: Parameters<typeof visibleRows>[1]) => visibleRows(m, f).map((r) => r.term)
+
+  it('searches the term alone when asked, not the comment', () => {
+    expect(terms({ query: 'post' })).toEqual(['post', 'repost'])
+    expect(terms({ query: 'post', searchIn: 'term' })).toEqual(['post', 'repost'])
+    expect(terms({ query: 'not', searchIn: 'term' })).toEqual([])
+  })
+
+  it('matches whole words only when asked', () => {
+    expect(terms({ query: 'post', searchIn: 'term', wholeWord: true })).toEqual(['post'])
+    expect(terms({ query: 'post', wholeWord: true })).toEqual(['post', 'repost'])
+  })
+})

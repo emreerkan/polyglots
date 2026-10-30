@@ -15,6 +15,9 @@ import { resolveLocale } from '../../../../app/src/wporg/locales.js'
  */
 
 export const STORAGE_KEY = 'polyglots-glossary-editor'
+// The editor's settings, under a key of their own: Discard and an export clear
+// the work, and neither should take the person's preferences with it.
+export const SETTINGS_KEY = 'polyglots-glossary-editor-settings'
 
 /**
  * The work kept between visits: the whole table, not just its current values.
@@ -176,6 +179,7 @@ function readStored(storage: WebEnv['storage']): Saved | undefined {
 }
 
 const NOT_KEPT = 'This browser is not keeping your work. Export before you close the tab.'
+const SETTINGS_NOT_KEPT = 'This browser is not keeping your settings; they last until the tab closes.'
 
 export function webHost(env: WebEnv): EditorHost {
   let locale = ''
@@ -253,6 +257,26 @@ export function webHost(env: WebEnv): EditorHost {
         }
       }
       return { ok: true }
+    },
+
+    // Read as stored; the page's readSettings repairs what it cannot use.
+    settings: {
+      async load(): Promise<unknown> {
+        try {
+          const text = env.storage?.getItem(SETTINGS_KEY)
+          return text == null ? undefined : JSON.parse(text)
+        } catch {
+          return undefined
+        }
+      },
+      async save(settings): Promise<string | void> {
+        if (!env.storage) return SETTINGS_NOT_KEPT
+        try {
+          env.storage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+        } catch {
+          return SETTINGS_NOT_KEPT
+        }
+      },
     },
 
     // Runs on the person's first edit, not at load, so choosing New or Open

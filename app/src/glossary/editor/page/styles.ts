@@ -12,7 +12,7 @@ export const EDITOR_CSS = `
   --ge-line: #dcdcde; --ge-line-soft: #f0f0f1; --ge-border: #c3c4c7;
   --ge-accent: #2271b1; --ge-accent-soft: #f0f6fc; --ge-ring: #c5d9ed;
   --ge-changed: #dba617; --ge-added: #00a32a; --ge-local: #72aee6;
-  --ge-warn: #b32d2e; --ge-warn-soft: #fcf0f1;
+  --ge-warn: #b32d2e; --ge-warn-soft: #fcf0f1; --ge-changed-soft: #fcf9e8;
   color-scheme: light;
   color: var(--ge-text); background: var(--ge-bg);
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -75,6 +75,7 @@ export const EDITOR_CSS = `
 .ge-grid th.ge-pos, .ge-grid td.ge-pos { width: 130px; }
 .ge-grid th.ge-acts, .ge-grid td.ge-acts { width: 70px; text-align: right; }
 .ge-grid td.ge-cell { cursor: cell; }
+.ge-grid td.ge-cell-changed { background: var(--ge-changed-soft); }
 .ge-grid td.ge-cell:focus { outline: 2px solid var(--ge-accent); outline-offset: -2px; background: var(--ge-accent-soft); }
 .ge-grid tr:focus-within td { background: var(--ge-accent-soft); }
 .ge-grid td.ge-editing { outline: 2px solid var(--ge-accent); outline-offset: -2px; background: var(--ge-surface) !important; padding: 3px 4px; }
@@ -86,6 +87,29 @@ export const EDITOR_CSS = `
 .ge-grid td.ge-changed { box-shadow: inset 3px 0 0 var(--ge-changed); }
 .ge-grid td.ge-added { box-shadow: inset 3px 0 0 var(--ge-added); }
 .ge-grid td.ge-local { box-shadow: inset 3px 0 0 var(--ge-local); }
+.ge-sort {
+  all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-radius: 2px;
+}
+.ge-sort:focus-visible { outline: 2px solid var(--ge-accent); outline-offset: 1px; }
+.ge-sort:hover { color: var(--ge-text); }
+/* The direction as a drawn triangle, not a glyph that may render as an emoji. */
+th[aria-sort] .ge-sort::after { content: ""; border: 4px solid transparent; }
+th[aria-sort="ascending"] .ge-sort::after { border-bottom-color: currentColor; margin-top: -4px; }
+th[aria-sort="descending"] .ge-sort::after { border-top-color: currentColor; margin-top: 4px; }
+th[aria-sort] { color: var(--ge-text); }
+.ge-compact .ge-grid td { padding: 2px 6px; }
+.ge-compact .ge-grid td.ge-editing { padding: 0 2px; }
+/* Cut at the cell's edge: a fixed layout, or the longest comment sets the column. */
+.ge-nowrap .ge-grid { table-layout: fixed; }
+.ge-nowrap .ge-grid td.ge-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.ge-hide-pos .ge-grid .ge-pos, .ge-hide-notes .ge-grid .ge-notes { display: none; }
+.ge-settings fieldset { border: 0; padding: 0; margin: 0 0 12px; display: grid; gap: 8px; }
+.ge-settings legend { font-size: 12px; text-transform: uppercase; color: var(--ge-muted); padding: 0; margin-bottom: 6px; }
+.ge-field { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; font-size: 13px; }
+.ge-field select { font: inherit; color: var(--ge-text); background: var(--ge-surface); border: 1px solid var(--ge-border); border-radius: 4px; padding: 3px 6px; }
+.ge-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.ge-check input { margin: 0; accent-color: var(--ge-accent); }
+.ge-field select:focus-visible, .ge-check input:focus-visible { outline: 2px solid var(--ge-accent); outline-offset: 1px; }
 .ge-grid tr.ge-deleted td.ge-cell { text-decoration: line-through; color: var(--ge-faint); }
 .ge-warn { color: var(--ge-warn); }
 .ge-muted { color: var(--ge-faint); }

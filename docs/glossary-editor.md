@@ -59,6 +59,30 @@ loads a CSV as local edits without opening the editor. It refuses a CSV with
 problems and names the rows. When `--locale` differs from the locale in the
 CSV's header, it says so after it imports.
 
+## Sorting and settings
+
+Click the **Term** or **Translation** header to sort by it. Each click goes from
+A to Z, to Z to A, and back to the file's order. The sort follows your locale's
+alphabet, so Turkish puts `ç` after `c` and `ı` before `i`. The sort changes only
+what you see: **Save** and **Export** keep the glossary's own order, so the file
+you give to wp.org differs only where you changed it. A row you edit stays where
+it is until you sort or filter again.
+
+**Settings** holds the rest:
+
+- **Sort**: also by part of speech, or changed rows first.
+- **Show when opened**: all rows, the rows with problems, or your changes.
+- **Wrap long text**, **Row height**, and whether to show the **Part of speech**
+  and **Comment** columns. The arrow keys and Tab skip a hidden column.
+- **Tint each changed cell**, as well as the mark at the left of the row.
+- **Search in** the term only, and **Whole words only**.
+- **After Enter saves a cell**: move down, or stay on the cell.
+- **Tab on the last cell adds a row**, and opens it.
+
+`polyglots glossary edit` keeps the settings in `glossary-editor.json` in its
+config directory (`~/.config/polyglots/`), so the next run opens the same way.
+The website keeps them in your browser.
+
 ## In the browser, without polyglots
 
 The [glossary editor on the website](https://ada.tools/polyglots/glossary-editor/)

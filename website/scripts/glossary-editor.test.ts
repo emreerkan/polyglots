@@ -2,7 +2,8 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readGlossaryCsv } from '../../app/src/glossary/csv.js'
 import { addRow, createModel, diffOf, setCell, toggleDelete } from '../../app/src/glossary/editor/model.js'
-import { STORAGE_KEY, discardSaved, exportUrl, fetchWporgGlossary, webHost, type Start, type WebEnv } from '../src/components/glossary-editor/web-host.js'
+import { DEFAULT_SETTINGS } from '../../app/src/glossary/editor/settings.js'
+import { SETTINGS_KEY, STORAGE_KEY, discardSaved, exportUrl, fetchWporgGlossary, webHost, type Start, type WebEnv } from '../src/components/glossary-editor/web-host.js'
 
 const CSV = 'en,tr,pos,description\nPost,Yazı,noun,\nPage,Sayfa,noun,A static page\n'
 
@@ -251,3 +252,29 @@ test('discarding the kept work removes it, and says whether it could', () => {
   assert.equal(discardSaved(blocked), false)
   assert.equal(discardSaved(undefined), false)
 })
+
+test('keeps the editor settings in their own storage key, apart from the work', async () => {
+  const kept = memory()
+  const host = webHost(env({ kind: 'new', locale: 'tr' }, kept.storage, { downloads: [] }))
+  assert.equal(await host.settings!.load(), undefined)
+  assert.equal(await host.settings!.save({ ...DEFAULT_SETTINGS, sort: 'term-desc' }), undefined)
+  assert.equal(JSON.parse(kept.map.get(SETTINGS_KEY)!).sort, 'term-desc')
+  assert.equal(kept.map.has(STORAGE_KEY), false)
+  assert.deepEqual(await host.settings!.load(), { ...DEFAULT_SETTINGS, sort: 'term-desc' })
+  // Discarding the work leaves the settings: they are the person's, not the file's.
+  discardSaved(kept.storage)
+  assert.equal(kept.map.has(SETTINGS_KEY), true)
+})
+
+test('reads unusable kept settings as none, and says when the browser keeps no settings', async () => {
+  const kept = memory()
+  kept.map.set(SETTINGS_KEY, '{ not json')
+  const host = webHost(env({ kind: 'new', locale: 'tr' }, kept.storage, { downloads: [] }))
+  assert.equal(await host.settings!.load(), undefined)
+  const blocked = webHost(env({ kind: 'new', locale: 'tr' }, memory(undefined, true).storage, { downloads: [] }))
+  assert.equal(await blocked.settings!.load(), undefined)
+  assert.match((await blocked.settings!.save(DEFAULT_SETTINGS)) ?? '', /not keeping your settings/)
+  const none = webHost(env({ kind: 'new', locale: 'tr' }, undefined, { downloads: [] }))
+  assert.match((await none.settings!.save(DEFAULT_SETTINGS)) ?? '', /not keeping your settings/)
+})
+

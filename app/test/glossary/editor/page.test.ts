@@ -5,6 +5,7 @@ import { createModel, currentRows, diffOf, setCell, type EditorModel } from '../
 import { mountEditor } from '../../../src/glossary/editor/page/editor.js'
 import type { EditorHost, LoadedGlossary, SaveResult } from '../../../src/glossary/editor/page/host.js'
 import { localHost } from '../../../src/glossary/editor/page/local-host.js'
+import { DEFAULT_SETTINGS, type EditorSettings } from '../../../src/glossary/editor/settings.js'
 import type { EffectiveRow } from '../../../src/glossary/types.js'
 
 const eff = (term: string, translation: string, pos = 'noun', origin: EffectiveRow['origin'] = 'wporg', notes = ''): EffectiveRow => ({
@@ -486,5 +487,183 @@ describe('mountEditor', () => {
     delete host.discard
     await mountEditor(root, host)
     expect(byText('Export').disabled).toBe(true)
+  })
+
+  describe('settings', () => {
+    /** A host that keeps settings, starting from `initial`, and records each save. */
+    function withSettings(initial: Partial<EditorSettings> | undefined, loaded: Partial<LoadedGlossary> = {}) {
+      const saved: EditorSettings[] = []
+      const host = fakeHost(loaded, {
+        settings: {
+          load: async () => (initial === undefined ? undefined : { ...DEFAULT_SETTINGS, ...initial }),
+          save: async (s) => {
+            saved.push(s)
+          },
+        },
+      })
+      return { host, saved }
+    }
+    const header = (text: string) =>
+      [...root.querySelectorAll<HTMLElement>('thead th')].find((th) => norm(th.textContent).startsWith(text))!
+    const openSettings = () => {
+      byText('Settings').click()
+      return root.querySelector<HTMLElement>('.ge-dialog')!
+    }
+    const choose = (dialog: HTMLElement, name: string, value: string | boolean) => {
+      const el = dialog.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-setting="${name}"]`)!
+      if (el instanceof HTMLInputElement && el.type === 'checkbox') el.checked = value as boolean
+      else el.value = String(value)
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+
+    it('opens with the defaults when the host keeps no settings, or loading them fails', async () => {
+      await mountEditor(root, fakeHost({}, { settings: { load: async () => Promise.reject(new Error('gone')), save: async () => {} } }))
+      expect(visibleTerms()).toEqual(['course', 'quiz', 'lesson', 'post', 'post'])
+      document.body.innerHTML = '<div id="root"></div>'
+      root = document.getElementById('root')!
+      await mountEditor(root, fakeHost())
+      expect(visibleTerms()).toEqual(['course', 'quiz', 'lesson', 'post', 'post'])
+      expect(byText('Settings')).toBeDefined()
+    })
+
+    it('sorts on a click of the Term header, ascending, descending, then the file order, saving each choice', async () => {
+      const { host, saved } = withSettings({})
+      const ed = await mountEditor(root, host)
+      header('Term').querySelector('button')!.click()
+      expect(visibleTerms()).toEqual(['course', 'lesson', 'post', 'post', 'quiz'])
+      expect(header('Term').getAttribute('aria-sort')).toBe('ascending')
+      header('Term').querySelector('button')!.click()
+      expect(visibleTerms()).toEqual(['quiz', 'post', 'post', 'lesson', 'course'])
+      expect(header('Term').getAttribute('aria-sort')).toBe('descending')
+      header('Term').querySelector('button')!.click()
+      expect(visibleTerms()).toEqual(['course', 'quiz', 'lesson', 'post', 'post'])
+      expect(header('Term').hasAttribute('aria-sort')).toBe(false)
+      expect(saved.map((s) => s.sort)).toEqual(['term-asc', 'term-desc', 'file'])
+      // Display only: the model, and so the export, keeps the file order.
+      header('Translation').querySelector('button')!.click()
+      expect(ed.model().rows.map((r) => r.term)).toEqual(['course', 'quiz', 'lesson', 'post', 'post'])
+    })
+
+    it('keeps an edited row in place under a sort until the next sort', async () => {
+      await mountEditor(root, withSettings({ sort: 'term-asc' }).host)
+      expect(visibleTerms()).toEqual(['course', 'lesson', 'post', 'post', 'quiz'])
+      edit(1, 'term', 'zebra')
+      expect(visibleTerms()).toEqual(['zebra', 'lesson', 'post', 'post', 'quiz'])
+    })
+
+    it('opens with the saved start filter, density, wrap and hidden columns', async () => {
+      const { host } = withSettings({ startFilter: 'edits', density: 'compact', wrap: false, columns: { pos: false, notes: true } })
+      await mountEditor(root, host)
+      expect(visibleTerms()).toEqual(['quiz'])
+      const ge = root.querySelector('.ge')!
+      expect(ge.classList.contains('ge-compact')).toBe(true)
+      expect(ge.classList.contains('ge-nowrap')).toBe(true)
+      expect(ge.classList.contains('ge-hide-pos')).toBe(true)
+      expect(ge.classList.contains('ge-hide-notes')).toBe(false)
+    })
+
+    it('opens on the problems when the start filter says so', async () => {
+      await mountEditor(root, withSettings({ startFilter: 'problems' }, { rows: [eff('a', ''), eff('b', 'x')] }).host)
+      expect(visibleTerms()).toEqual(['a'])
+    })
+
+    it('offers a changed chip for a CSV, which the edits start filter turns on', async () => {
+      const rows = [eff('a', 'x'), eff('b', 'y')].map(({ origin: _o, ...r }) => r)
+      await mountEditor(root, withSettings({ startFilter: 'edits' }, { mode: 'csv', rows }).host)
+      expect(visibleTerms()).toEqual([])
+      byText('changed').click()
+      expect(visibleTerms()).toEqual(['a', 'b'])
+    })
+
+    it('changes a setting in the dialog, saves it and redraws at once', async () => {
+      const { host, saved } = withSettings({})
+      await mountEditor(root, host)
+      const dialog = openSettings()
+      expect(dialog.getAttribute('role')).toBe('dialog')
+      expect(norm(dialog.textContent)).toContain('Save keeps the glossary\'s own order.')
+      choose(dialog, 'sort', 'translation-asc')
+      expect(visibleTerms()).toEqual(['lesson', 'course', 'quiz', 'post', 'post'])
+      choose(dialog, 'density', 'compact')
+      expect(root.querySelector('.ge')!.classList.contains('ge-compact')).toBe(true)
+      choose(dialog, 'columns.notes', false)
+      expect(root.querySelector('.ge')!.classList.contains('ge-hide-notes')).toBe(true)
+      expect(saved.at(-1)).toMatchObject({ sort: 'translation-asc', density: 'compact', columns: { pos: true, notes: false } })
+      key(dialog, 'Escape')
+      expect(root.querySelector('.ge-dialog')).toBeNull()
+    })
+
+    it('names the host\'s own save button in the dialog, Save for the CLI\'s CSV page', async () => {
+      const rows = [eff('a', 'x')].map(({ origin: _o, ...r }) => r)
+      await mountEditor(root, withSettings({}, { mode: 'csv', rows }).host)
+      expect(norm(openSettings().textContent)).toContain('Save keeps the glossary\'s own order.')
+    })
+
+    it('searches the term alone, by whole word, when set', async () => {
+      await mountEditor(root, withSettings({ searchIn: 'term', wholeWord: true }, { rows: [eff('post', 'yazı'), eff('repost', 'x', 'verb', 'wporg', 'a post')] }).host)
+      const search = root.querySelector<HTMLInputElement>('.ge-search')!
+      search.value = 'post'
+      search.dispatchEvent(new Event('input'))
+      expect(visibleTerms()).toEqual(['post'])
+      expect(search.placeholder).toBe('Search term')
+    })
+
+    it('skips a hidden column when moving with the arrow keys and Tab', async () => {
+      await mountEditor(root, withSettings({ columns: { pos: false, notes: false } }).host)
+      const td = cell(1, 'term')
+      td.focus()
+      key(td, 'ArrowRight')
+      expect(document.activeElement).toBe(cell(1, 'translation'))
+      key(document.activeElement!, 'Tab')
+      expect(document.activeElement).toBe(cell(2, 'term'))
+      key(document.activeElement!, 'End')
+      expect(document.activeElement).toBe(cell(2, 'translation'))
+    })
+
+    it('stays on the cell after Enter commits when set', async () => {
+      await mountEditor(root, withSettings({ enterMoves: 'stay' }).host)
+      edit(1, 'translation', 'eğitim')
+      expect(document.activeElement).toBe(cell(1, 'translation'))
+    })
+
+    it('adds a row on Tab out of the last cell of the table when set, and opens its term', async () => {
+      const { host } = withSettings({ tabAddsRow: true })
+      const ed = await mountEditor(root, host)
+      const last = cell(5, 'notes')
+      last.focus()
+      key(last, 'Enter')
+      key(last.querySelector('input')!, 'Tab')
+      expect(ed.model().rows).toHaveLength(6)
+      const added = ed.model().rows[5]!
+      expect(document.activeElement).toBe(cell(added.id, 'term').querySelector('input'))
+    })
+
+    it('leaves the table on Tab out of the last cell when not set', async () => {
+      const ed = await mountEditor(root, withSettings({}).host)
+      const last = cell(5, 'notes')
+      last.focus()
+      key(last, 'Enter')
+      key(last.querySelector('input')!, 'Tab')
+      expect(ed.model().rows).toHaveLength(5)
+    })
+
+    it('tints each changed cell when set, and only the row edge when not', async () => {
+      await mountEditor(root, withSettings({}).host)
+      edit(1, 'translation', 'eğitim')
+      expect(cell(1, 'translation').classList.contains('ge-cell-changed')).toBe(true)
+      expect(cell(1, 'notes').classList.contains('ge-cell-changed')).toBe(false)
+      document.body.innerHTML = '<div id="root"></div>'
+      root = document.getElementById('root')!
+      await mountEditor(root, withSettings({ markCells: false }).host)
+      edit(1, 'translation', 'eğitim')
+      expect(cell(1, 'translation').classList.contains('ge-cell-changed')).toBe(false)
+      expect(cell(1, 'term').classList.contains('ge-changed')).toBe(true)
+    })
+
+    it('says so when the host cannot keep a setting', async () => {
+      await mountEditor(root, fakeHost({}, { settings: { load: async () => undefined, save: async () => 'Settings are not kept.' } }))
+      header('Term').querySelector('button')!.click()
+      await flush()
+      expect(norm(root.querySelector('.ge-status')?.textContent)).toBe('Settings are not kept.')
+    })
   })
 })

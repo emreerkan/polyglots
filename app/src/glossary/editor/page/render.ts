@@ -1,5 +1,6 @@
 import type { GlossaryDiff, GlossaryRow } from '../../types.js'
 import { FIELDS, type EditorModel, type EditorRow, type Field, type Problem } from '../model.js'
+import type { EditorSettings, SortKey } from '../settings.js'
 import type { SidecarRecord } from '../sidecar.js'
 
 /**
@@ -35,13 +36,15 @@ export interface RowState {
   /** A local edit already saved in polyglots.db (db mode only). */
   local: boolean
   canRevert: boolean
+  /** The cells to tint as changed; empty unless the settings ask for it. */
+  changedFields: Field[]
 }
 
 export function rowHtml(row: EditorRow, state: RowState, problems: Problem[] | undefined, cursor: Field | undefined): string {
   const has = (p: Problem): boolean => problems?.includes(p) ?? false
   const termMark = state.added ? ' ge-added' : state.changed ? ' ge-changed' : state.local ? ' ge-local' : ''
   const td = (field: Field, cls: string, inner: string, title = ''): string =>
-    `<td data-field="${field}" tabindex="${cursor === field ? 0 : -1}" class="ge-cell ge-${field}${cls}"` +
+    `<td data-field="${field}" tabindex="${cursor === field ? 0 : -1}" class="ge-cell ge-${field}${cls}${state.changedFields.includes(field) ? ' ge-cell-changed' : ''}"` +
     `${title ? ` title="${esc(title)}"` : ''}>${inner}</td>`
   const warn = (text: string): string => `<span class="ge-warn">${text}</span>`
 
@@ -80,6 +83,8 @@ export interface ChipState {
   problems: number
   problemsOn: boolean
   local: boolean | undefined
+  /** What the local filter's chip says: local edits in polyglots mode, changed for a CSV. */
+  localLabel: string
   contested: number | undefined
   contestedOn: boolean
 }
@@ -93,7 +98,7 @@ export function chipsHtml(c: ChipState): string {
   // The problems chip stays while it is on, so filtering down to the last
   // problem and fixing it does not take away the control that undoes the filter.
   if (c.problems > 0 || c.problemsOn) out.push(chip('problems', `problems ${c.problems}`, c.problemsOn))
-  if (c.local !== undefined) out.push(chip('local', 'local edits', c.local))
+  if (c.local !== undefined) out.push(chip('local', c.localLabel, c.local))
   if (c.contested !== undefined) out.push(chip('contested', `contested ${c.contested}`, c.contestedOn))
   return out.join('')
 }
@@ -195,4 +200,80 @@ function originText(row: EditorRow, state: RowState | undefined): string {
     return `A local edit of a wp.org row.${was}${unsaved}`
   }
   return `A wp.org row.${unsaved}`
+}
+
+/**
+ * The header cells. Term and Translation sort on a click, through a button so
+ * the keyboard reaches it; aria-sort says which way the table runs, and is
+ * absent in the file order, which is no sort at all.
+ */
+export function headHtml(sort: SortKey): string {
+  const cells = FIELDS.map((f) => {
+    if (f !== 'term' && f !== 'translation') return `<th scope="col" class="ge-${f}">${FIELD_LABEL[f]}</th>`
+    const dir = sort === `${f}-asc` ? 'ascending' : sort === `${f}-desc` ? 'descending' : undefined
+    return (
+      `<th scope="col" class="ge-${f}"${dir ? ` aria-sort="${dir}"` : ''}>` +
+      `<button type="button" class="ge-sort" data-action="sort" data-column="${f}" title="Sort by ${FIELD_LABEL[f].toLowerCase()}">${FIELD_LABEL[f]}</button></th>`
+    )
+  })
+  return `<tr>${cells.join('')}<th class="ge-acts"><span class="ge-sr">Row actions</span></th></tr>`
+}
+
+const SORT_LABEL: Record<SortKey, string> = {
+  file: 'File order',
+  'term-asc': 'Term, A to Z',
+  'term-desc': 'Term, Z to A',
+  'translation-asc': 'Translation, A to Z',
+  'translation-desc': 'Translation, Z to A',
+  pos: 'Part of speech',
+  changed: 'Changed rows first',
+}
+
+/**
+ * The settings dialog. Every control carries data-setting with the key it
+ * sets (a dot for a nested one), and a change applies at once: there is no
+ * Apply, so what the person sees is what is kept. A div, not a form, so Enter
+ * in a field cannot submit and reload the page under unsaved work.
+ */
+export function settingsHtml(s: EditorSettings, mode: 'db' | 'csv', saveLabel: 'Save' | 'Export'): string {
+  const select = (key: string, label: string, value: string, options: Array<[string, string]>): string =>
+    `<label class="ge-field"><span>${label}</span><select data-setting="${key}">` +
+    options.map(([v, l]) => `<option value="${v}"${v === value ? ' selected' : ''}>${esc(l)}</option>`).join('') +
+    '</select></label>'
+  const check = (key: string, label: string, on: boolean): string =>
+    `<label class="ge-check"><input type="checkbox" data-setting="${key}"${on ? ' checked' : ''}> ${label}</label>`
+  const group = (legend: string, body: string): string => `<fieldset><legend>${legend}</legend>${body}</fieldset>`
+  return (
+    `<div class="ge-dialog ge-small ge-settings" role="dialog" aria-modal="true" aria-labelledby="ge-settings-title" tabindex="-1">` +
+    `<h2 id="ge-settings-title">Settings</h2>` +
+    group(
+      'Rows',
+      select('sort', 'Sort', s.sort, Object.entries(SORT_LABEL) as Array<[string, string]>) +
+        select('startFilter', 'Show when opened', s.startFilter, [
+          ['none', 'All rows'],
+          ['problems', 'Rows with problems'],
+          ['edits', mode === 'db' ? 'Local edits and changes' : 'Changed rows'],
+        ]),
+    ) +
+    group(
+      'Display',
+      check('wrap', 'Wrap long text', s.wrap) +
+        select('density', 'Row height', s.density, [['comfortable', 'Comfortable'], ['compact', 'Compact']]) +
+        check('columns.pos', `Show ${FIELD_LABEL.pos}`, s.columns.pos) +
+        check('columns.notes', `Show ${FIELD_LABEL.notes}`, s.columns.notes) +
+        check('markCells', 'Tint each changed cell', s.markCells),
+    ) +
+    group(
+      'Search',
+      select('searchIn', 'Search in', s.searchIn, [['all', 'Term, translation and comment'], ['term', 'Term only']]) +
+        check('wholeWord', 'Whole words only', s.wholeWord),
+    ) +
+    group(
+      'Keys',
+      select('enterMoves', 'After Enter saves a cell', s.enterMoves, [['down', 'Move down'], ['stay', 'Stay on the cell']]) +
+        check('tabAddsRow', 'Tab on the last cell adds a row', s.tabAddsRow),
+    ) +
+    `<p class="ge-muted">Sorting changes only what you see. ${saveLabel} keeps the glossary's own order.</p>` +
+    `<div class="ge-dialog-actions"><button type="button" class="ge-btn" data-action="close-dialog">Done</button></div></div>`
+  )
 }

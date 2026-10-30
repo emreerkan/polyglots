@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { addRow, createModel, setCell } from '../../../src/glossary/editor/model.js'
 import { localHost, pickCsv } from '../../../src/glossary/editor/page/local-host.js'
+import { DEFAULT_SETTINGS } from '../../../src/glossary/editor/settings.js'
 
 const PAGE = 'http://127.0.0.1:4100/tok123/'
 
@@ -17,6 +18,27 @@ afterEach(() => {
 })
 
 describe('localHost', () => {
+  it('reads the settings beside the page, and posts them to save-settings', async () => {
+    const fetch = stubFetch(200, { sort: 'term-asc' })
+    const host = localHost(PAGE)
+    expect(await host.settings!.load()).toEqual({ sort: 'term-asc' })
+    expect(fetch.mock.calls[0]![0]).toBe('http://127.0.0.1:4100/tok123/settings')
+    expect(await host.settings!.save(DEFAULT_SETTINGS)).toBeUndefined()
+    const [url, init] = fetch.mock.calls[1]!
+    expect(url).toBe('http://127.0.0.1:4100/tok123/save-settings')
+    expect(init!.method).toBe('POST')
+    expect(JSON.parse(init!.body as string)).toEqual(DEFAULT_SETTINGS)
+  })
+
+  it('words a refused or failed settings save as a warning, and a failed read as a rejection', async () => {
+    stubFetch(500, { message: 'disk full' })
+    const host = localHost(PAGE)
+    expect(await host.settings!.save(DEFAULT_SETTINGS)).toBe('The settings were not kept: disk full')
+    await expect(host.settings!.load()).rejects.toThrow()
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))))
+    expect(await host.settings!.save(DEFAULT_SETTINGS)).toMatch(/^The settings were not kept: The editor server is not answering/)
+  })
+
   it('loads from data beside the page, under the token', async () => {
     const fetch = stubFetch(200, { mode: 'db', locale: 'tr', rows: [], stamp: 's1' })
     const loaded = await localHost(PAGE).load()

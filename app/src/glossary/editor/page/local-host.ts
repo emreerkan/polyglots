@@ -100,6 +100,20 @@ export function localHost(page: string = location.href, pick: PickFile = pickCsv
       void post('ping', {}).catch(() => {})
     },
 
+    // In the CLI's config directory, not localStorage: each run is a new port,
+    // so the page's origin, and with it the browser's storage, is new each time.
+    settings: {
+      async load(): Promise<unknown> {
+        const res = await fetch(url('settings'))
+        if (!res.ok) throw new Error(`Could not read the settings (HTTP ${res.status}).`)
+        return res.json()
+      },
+      async save(settings): Promise<string | void> {
+        const result = await send(() => post('save-settings', settings))
+        if (!result.ok) return `The settings were not kept: ${result.message}`
+      },
+    },
+
     close(): void {
       // Fire and forget: the server exits on it, so there is nothing to read.
       void fetch(url('close'), {
