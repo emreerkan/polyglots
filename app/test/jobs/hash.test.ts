@@ -150,9 +150,22 @@ describe('auditSrcHash', () => {
       rows: [{ translation: 'gönderi', pos: 'noun', note }],
     })
     const keyed = (note: string) => auditSrcHash(entry(), context({ glossary: [glossaryKey(post(note))] }))
-    expect(glossaryKey(post('a'))).toBe('post=gönderi/noun/a')
+    expect(glossaryKey(post('a'))).toBe('post=[["gönderi","noun","a"]]')
     expect(keyed('a')).toBe(keyed('a'))
     expect(keyed('a')).not.toBe(keyed('b'))
+  })
+
+  // Translations hold "/" (nl's "waarschuwing/waarschuwingen") and notes are
+  // free text, so fields joined with "/" and rows with "|" could spell two
+  // different glossaries the same way, and the draft review key, which
+  // configHash does not cover, would serve one's verdicts for the other.
+  it('keeps row sets apart that a slash-and-bar join would merge', () => {
+    const key = (rows: { translation: string; pos?: string; note?: string }[]) =>
+      glossaryKey({ term: 'post', translations: rows.map((r) => r.translation), rows })
+    expect(key([{ translation: 'a/b', pos: '', note: '' }])).not.toBe(key([{ translation: 'a', pos: 'b', note: '/' }]))
+    expect(key([{ translation: 'a', pos: 'noun', note: 'x|y' }])).not.toBe(
+      key([{ translation: 'a', pos: 'noun', note: 'x' }, { translation: 'y' }]),
+    )
   })
 
   it('changes when nplurals changes, which the prompt states outright', () => {

@@ -849,9 +849,16 @@ export function glossaryPayload(matches: readonly GlossaryMatch[]): Record<strin
  * renders for it, so a part of speech or note edited on one row re-asks the
  * entries that carry that term and no others. Shared by the audit key and the
  * draft review key so the two cannot drift from the prompt, or from each other.
+ *
+ * The rows are written as JSON rather than joined with separators. A first
+ * version joined fields with "/" and rows with "|", but translations carry "/"
+ * (nl writes "waarschuwing/waarschuwingen") and notes are free text, so two
+ * different glossaries could spell the same key. The audit key would still
+ * part them through configHash's glossary hash; the draft review key has no
+ * such second look, and would serve one glossary's verdicts for the other.
  */
 export function glossaryKey(match: GlossaryMatch): string {
-  return `${match.term}=${match.rows.map((r) => [r.translation, r.pos ?? '', r.note ?? ''].join('/')).join('|')}`
+  return `${match.term}=${JSON.stringify(match.rows.map((r) => [r.translation, r.pos ?? '', r.note ?? '']))}`
 }
 
 /**
