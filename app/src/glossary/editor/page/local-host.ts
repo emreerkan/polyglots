@@ -30,11 +30,17 @@ export function localHost(page: string = location.href): EditorHost {
     },
 
     // A db save sends only what changed, with the stamp it loaded under; a CSV
-    // save sends the whole table, since the file is rewritten whole anyway.
+    // save sends the whole table, since the file is rewritten whole anyway,
+    // with the stamp of the file it loaded, so a newer copy is not overwritten.
     save: (m, stamp) =>
-      send(() => post('save', m.mode === 'db' ? { diff: diffOf(m), stamp } : { rows: currentRows(m) })),
+      send(() => post('save', m.mode === 'db' ? { diff: diffOf(m), stamp } : { rows: currentRows(m), stamp })),
 
     discard: (stamp) => send(() => post('discard', { stamp })),
+
+    ping(): void {
+      // Nothing to read, and a failure shows soon enough on the next save.
+      void post('ping', {}).catch(() => {})
+    },
 
     close(): void {
       // Fire and forget: the server exits on it, so there is nothing to read.

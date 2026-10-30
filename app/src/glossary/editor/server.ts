@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { basename, dirname, extname, join } from 'node:path'
@@ -15,7 +15,7 @@ import {
 } from '../../storage/glossary-edits.js'
 import type { Locale } from '../../types.js'
 import { resolveLocale, splitLocale } from '../../wporg/locales.js'
-import { formatGlossaryCsv, GlossaryCsvError, readGlossaryCsv } from '../csv.js'
+import { formatGlossaryCsv, GLOSSARY_POS, GlossaryCsvError, readGlossaryCsv } from '../csv.js'
 import type { EffectiveRow, GlossaryDiff, GlossaryRow } from '../types.js'
 import { renderEditorDocument } from './document.js'
 import { createModel, problemsOf, type Problem } from './model.js'
@@ -51,7 +51,8 @@ import type { LoadedGlossary } from './page/host.js'
 // hand the token to the browser some way other than a command line.
 //
 // The server ends itself: when the page sends close, or after idleMs with no
-// request that carried the token. done resolves then, and the caller closes.
+// request that carried the token. The page pings while it is open, since
+// editing alone makes no requests. done resolves then, and the caller closes.
 // A request without the token does not count, or any page probing 127.0.0.1
 // could keep the server alive indefinitely.
 
@@ -119,6 +120,7 @@ const ROUTES: Record<string, 'GET' | 'POST'> = {
   save: 'POST',
   discard: 'POST',
   close: 'POST',
+  ping: 'POST',
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -177,6 +179,31 @@ const PROBLEM_TEXT: Record<Problem, (r: GlossaryRow) => string> = {
   duplicate: () => 'the same term, part of speech and translation as another row',
 }
 
+const rowName = (r: GlossaryRow): string => (r.term === '' ? '' : ` (${r.term})`)
+
+/**
+ * The single-row problems of what a db save would write: the added rows and
+ * the new values of changed ones. Duplicates are not checked here, since they
+ * need the whole effective glossary with the diff applied; the page catches
+ * those. The page refuses all of these itself, so this is for a page that did
+ * not, and it runs before anything is written.
+ */
+function diffProblemLines(diff: GlossaryDiff): string[] {
+  const written = [
+    ...diff.added.map((r, i) => ({ r, where: `Added row ${i + 1}` })),
+    ...diff.changed.map((c, i) => ({ r: c.to, where: `Changed row ${i + 1}` })),
+  ]
+  const lines: string[] = []
+  for (const { r, where } of written) {
+    const list: Problem[] = []
+    if (r.term === '') list.push('empty-term')
+    if (r.translation === '') list.push('empty-translation')
+    if (r.pos !== '' && !(GLOSSARY_POS as readonly string[]).includes(r.pos)) list.push('bad-pos')
+    if (list.length > 0) lines.push(`${where}${rowName(r)}: ${list.map((p) => PROBLEM_TEXT[p](r)).join(', ')}`)
+  }
+  return lines
+}
+
 /** The problems the page would show, one line per row, numbered as the posted rows are. */
 function problemLines(rows: GlossaryRow[]): string[] {
   // createModel numbers rows from 1 in order, so an id is a row number.
@@ -185,8 +212,7 @@ function problemLines(rows: GlossaryRow[]): string[] {
     .sort(([a], [b]) => a - b)
     .map(([id, list]) => {
       const row = rows[id - 1]!
-      const name = row.term === '' ? '' : ` (${row.term})`
-      return `Row ${id}${name}: ${list.map((p) => PROBLEM_TEXT[p](row)).join(', ')}`
+      return `Row ${id}${rowName(row)}: ${list.map((p) => PROBLEM_TEXT[p](row)).join(', ')}`
     })
 }
 
@@ -196,6 +222,26 @@ const sameRows = (a: GlossaryRow[], b: GlossaryRow[]): boolean =>
     const o = b[i]!
     return r.term === o.term && r.pos === o.pos && r.translation === o.translation && r.notes === o.notes
   })
+
+// What a CSV page loaded: the file's exact text, hashed, or that there was no
+// file. Compared on save, so a save over a file that changed since (the
+// GlotPress export downloaded again under the same name, a header that now
+// names another locale, the file deleted or created) is refused as stale
+// instead of erasing what is there now. The hash is of the bytes, not of the
+// parsed rows, so a change the reader would not show still counts.
+const ABSENT = 'absent'
+const textStamp = (text: string | undefined): string =>
+  text === undefined ? ABSENT : `sha256:${createHash('sha256').update(text, 'utf8').digest('base64url')}`
+
+/** The file's text, or undefined when there is none. */
+function readText(file: string): string | undefined {
+  try {
+    return readFileSync(file, 'utf8')
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw err
+  }
+}
 
 /** g.csv → g.analysis.json beside it. */
 const sidecarFile = (file: string): string => join(dirname(file), `${basename(file, extname(file))}.analysis.json`)
@@ -273,14 +319,13 @@ export async function startGlossaryEditor(opts: GlossaryEditorOptions): Promise<
   }
 
   /** The CSV as the page should see it, with the locale in use and why it differs from the header. */
-  function readCsv(file: string): { rows: GlossaryRow[]; headerLocale?: string; locale: Locale; notice?: string } {
-    let text: string
-    try {
-      text = readFileSync(file, 'utf8')
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
-      return { rows: [], locale: newFileLocale(file) }
-    }
+  // Takes the text already read, so the stamp a caller computes and the rows
+  // it reads come from the same read of the file.
+  function readCsv(
+    file: string,
+    text: string | undefined,
+  ): { rows: GlossaryRow[]; headerLocale?: string; locale: Locale; notice?: string } {
+    if (text === undefined) return { rows: [], locale: newFileLocale(file) }
     let parsed: ReturnType<typeof readGlossaryCsv>
     try {
       parsed = readGlossaryCsv(text)
@@ -321,7 +366,8 @@ export async function startGlossaryEditor(opts: GlossaryEditorOptions): Promise<
         localEdits: countGlossaryEdits(db!, source.locale),
       }))()
     }
-    const csv = readCsv(source.file)
+    const text = readText(source.file)
+    const csv = readCsv(source.file, text)
     const notices = csv.notice === undefined ? [] : [csv.notice]
     let sidecar: unknown
     const sidecarPath = sidecarFile(source.file)
@@ -343,24 +389,35 @@ export async function startGlossaryEditor(opts: GlossaryEditorOptions): Promise<
       ...(notices.length === 0 ? {} : { notice: notices.join(' ') }),
       file: source.file,
       rows: csv.rows,
+      stamp: textStamp(text),
       ...(sidecar === undefined ? {} : { sidecar }),
     }
   }
 
-  function saveCsv(file: string, body: unknown): Record<string, never> {
+  function saveCsv(file: string, body: unknown): { stamp: string } {
     const rows = isObject(body) ? listOf(body.rows, asRow) : undefined
-    if (!rows) throw new Refusal(400, NOT_A_SAVE)
+    if (!rows || !isObject(body) || typeof body.stamp !== 'string') throw new Refusal(400, NOT_A_SAVE)
     const problems = problemLines(rows)
     if (problems.length > 0) {
       throw new Refusal(400, 'The glossary was not saved: fix these rows first.', { problems })
     }
-    // A file that stopped being an export since the page loaded is refused by
-    // readCsv here, rather than overwritten with what the page holds.
-    const { locale } = readCsv(file)
+    const current = readText(file)
+    if (textStamp(current) !== body.stamp) {
+      throw new StaleGlossaryError(`${basename(file)} changed on disk since this page was opened; reload.`)
+    }
+    const { locale } = readCsv(file, current)
     const text = formatGlossaryCsv(rows, splitLocale(locale).slug)
     const part = `${file}.part`
+    // A .part left by a crash is removed first, and the new one is created
+    // exclusively: a .part that is a symlink, planted or left, would
+    // otherwise send the write to wherever it points.
     try {
-      writeFileSync(part, text)
+      unlinkSync(part)
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+    }
+    try {
+      writeFileSync(part, text, { flag: 'wx' })
       // Read back what reached the disk, as the reader will next time: a
       // write that does not round trip must not replace the file.
       if (!sameRows(readGlossaryCsv(readFileSync(part, 'utf8')).rows, rows)) {
@@ -368,19 +425,27 @@ export async function startGlossaryEditor(opts: GlossaryEditorOptions): Promise<
       }
       renameSync(part, file)
     } catch (err) {
-      try {
-        unlinkSync(part)
-      } catch {
-        // ignored: there may be no .part to remove
+      // Only a .part this save created; a wx that failed because one appeared
+      // in between is not ours to remove.
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+        try {
+          unlinkSync(part)
+        } catch {
+          // ignored: there may be no .part to remove
+        }
       }
       throw err
     }
-    return {}
+    return { stamp: textStamp(text) }
   }
 
   function saveDb(locale: Locale, body: unknown): { stamp: string } {
     const diff = isObject(body) ? asDiff(body.diff) : undefined
     if (!diff || !isObject(body) || typeof body.stamp !== 'string') throw new Refusal(400, NOT_A_SAVE)
+    const problems = diffProblemLines(diff)
+    if (problems.length > 0) {
+      throw new Refusal(400, 'The glossary was not saved: fix these rows first.', { problems })
+    }
     return { stamp: saveGlossaryEdits(db!, locale, diff, body.stamp) }
   }
 
@@ -481,6 +546,12 @@ export async function startGlossaryEditor(opts: GlossaryEditorOptions): Promise<
         throw new Refusal(400, 'The request body is not JSON.')
       }
 
+      // A ping only proves the page is open; the token check above has
+      // already restarted the idle wait.
+      if (route === 'ping') {
+        sendJson(res, false, 200, {})
+        return
+      }
       if (route === 'close') {
         // done resolves once the answer has gone out, so the caller closing
         // the server on it cannot cut the page's request off.

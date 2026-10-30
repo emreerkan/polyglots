@@ -43,10 +43,23 @@ describe('localHost', () => {
     const m = createModel([], 'csv')
     const id = addRow(m)
     setCell(m, id, 'term', 'quiz')
-    await localHost(PAGE).save(m)
+    await localHost(PAGE).save(m, 'sha256:abc')
+    // The stamp is the file as the page loaded it, so a save over a newer
+    // download of the same file is refused rather than written.
     expect(JSON.parse(fetch.mock.calls[0]![1]!.body as string)).toEqual({
       rows: [{ term: 'quiz', pos: '', translation: '', notes: '' }],
+      stamp: 'sha256:abc',
     })
+  })
+
+  it('pings beside the page as a JSON POST', async () => {
+    const fetch = stubFetch(200, {})
+    localHost(PAGE).ping!()
+    const [url, init] = fetch.mock.calls[0]!
+    expect(url).toBe('http://127.0.0.1:4100/tok123/ping')
+    expect(init!.method).toBe('POST')
+    expect(new Headers(init!.headers).get('Content-Type')).toBe('application/json')
+    expect(init!.body).toBe('{}')
   })
 
   it('reads a 409 as stale and a 400 as problems', async () => {

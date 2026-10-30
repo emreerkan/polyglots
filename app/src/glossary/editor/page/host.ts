@@ -7,6 +7,8 @@ import type { EditorModel } from '../model.js'
  * hands back, so a page loaded before a sync cannot overwrite it. `sidecar`
  * is the raw analysis JSON, read by readSidecar on the page rather than by the
  * host, so the local server and the website show the same notice for a bad one.
+ * `stamp` is also sent for a CSV, as the file the page loaded, so a save over
+ * a newer copy of the file is refused the same way.
  * `localEdits` is how many local edits the store holds for the locale, sent
  * by the local server in db mode: a local delete of a wp.org row is one of
  * them but leaves no row behind, so the page cannot count them from `rows`.
@@ -39,5 +41,8 @@ export interface EditorHost {
   openFile?(): Promise<LoadedGlossary | undefined>
   openSidecar?(): Promise<unknown>
   persist?(m: EditorModel): void
+  // Tells a server that stops when idle that the page is still open. Editing
+  // makes no requests, so without it a long edit outlives the server.
+  ping?(): void
   close?(): void
 }

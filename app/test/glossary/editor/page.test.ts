@@ -314,6 +314,28 @@ describe('mountEditor', () => {
     expect(norm(dialog.textContent)).toContain('3 local edits')
   })
 
+  // Editing makes no requests, and the server stops after its idle time with
+  // none; the ping is what keeps a long edit's Save from finding it gone.
+  it('pings the host every five minutes while open, and stops once closed', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      const ping = vi.fn()
+      const host = fakeHost({}, { ping, close: () => {} })
+      await mountEditor(root, host)
+      vi.advanceTimersByTime(5 * 60_000 - 1)
+      expect(ping).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(ping).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(5 * 60_000)
+      expect(ping).toHaveBeenCalledTimes(2)
+      byText('Close').click()
+      vi.advanceTimersByTime(15 * 60_000)
+      expect(ping).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('offers no discard or local edits chip for a CSV', async () => {
     await mountEditor(root, fakeHost({ mode: 'csv', rows: ROWS.map(({ origin: _o, ...r }) => r), stamp: undefined }))
     expect(byText('Discard all local edits')).toBeUndefined()

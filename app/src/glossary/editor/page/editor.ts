@@ -571,6 +571,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   function close(): void {
     closeDialog()
     closed = true
+    if (pinger !== undefined) win?.clearInterval(pinger)
     win?.removeEventListener('beforeunload', onLeave)
     host.close?.()
     root.innerHTML = '<div class="ge"><p class="ge-loading">The editor is closed. You can close this tab.</p></div>'
@@ -790,8 +791,24 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   }
   win?.addEventListener('beforeunload', onLeave)
 
+  // The local server stops after a while with no request, and editing makes
+  // none: an hour in the grid would end in a Save with nothing to answer it.
+  // Five minutes is far inside the server's thirty. A detached root stops it,
+  // as it does the leave warning.
+  const pinger = host.ping
+    ? win?.setInterval(() => {
+        if (!root.isConnected || closed) {
+          if (pinger !== undefined) win?.clearInterval(pinger)
+          return
+        }
+        host.ping?.()
+      }, PING_MS)
+    : undefined
+
   apply(data)
   return { model: () => m }
 }
+
+const PING_MS = 5 * 60 * 1000
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e))

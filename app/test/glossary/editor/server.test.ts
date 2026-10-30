@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { request } from 'node:http'
 import { createConnection } from 'node:net'
@@ -86,6 +86,11 @@ function post(s: GlossaryEditorServer, path: string, body: unknown, headers: Rec
     headers: { 'content-type': 'application/json', origin: origin(s), 'sec-fetch-site': 'same-origin', ...headers },
     body: JSON.stringify(body),
   })
+}
+
+/** The stamp the page holds after loading, which a save hands back. */
+async function stampOf(s: GlossaryEditorServer): Promise<string> {
+  return JSON.parse((await call(`${s.url}data`)).body).stamp
 }
 
 const dbSource = () => ({ source: { kind: 'db' as const, locale: 'tr', db } })
@@ -279,6 +284,31 @@ describe('startGlossaryEditor: polyglots mode', () => {
     expect(glossaryStamp(db, 'tr')).toBe(before)
   })
 
+  // The page refuses these itself; the store must not depend on it. Duplicates
+  // need the whole effective glossary and stay the page's to catch.
+  it('refuses an added or changed row with no term, no translation or an unknown part of speech, writing nothing', async () => {
+    server = await startGlossaryEditor(dbSource())
+    const loaded = JSON.parse((await call(`${server.url}data`)).body)
+    const diff: GlossaryDiff = {
+      added: [
+        { term: 'quiz', pos: 'noun', translation: 'sınav', notes: '' },
+        { term: 'lesson', pos: 'noun', translation: '', notes: '' },
+      ],
+      changed: [{ from: loaded.rows[0], to: { term: 'post', pos: 'thing', translation: 'yazı', notes: '' } }],
+      deleted: [],
+    }
+    const res = await post(server, 'save', { diff, stamp: loaded.stamp })
+    expect(res.status).toBe(400)
+    const body = JSON.parse(res.body)
+    expect(body.problems).toHaveLength(2)
+    expect(body.problems.join('\n')).toMatch(/lesson.*no translation/)
+    expect(body.problems.join('\n')).toMatch(/post.*"thing"/)
+    expect(countGlossaryEdits(db, 'tr')).toBe(0)
+    const blank: GlossaryDiff = { added: [{ term: '', pos: '', translation: 'x', notes: '' }], changed: [], deleted: [] }
+    expect((await post(server, 'save', { diff: blank, stamp: loaded.stamp })).status).toBe(400)
+    expect(countGlossaryEdits(db, 'tr')).toBe(0)
+  })
+
   it('discards every local edit under the current stamp, and refuses a stale one', async () => {
     server = await startGlossaryEditor(dbSource())
     const loaded = JSON.parse((await call(`${server.url}data`)).body)
@@ -319,7 +349,7 @@ describe('startGlossaryEditor: CSV mode', () => {
     const data = JSON.parse((await call(`${server.url}data`)).body)
     expect(data).toMatchObject({ mode: 'csv', locale: 'tr', headerLocale: 'tr', file })
     expect(data.notice).toBeUndefined()
-    expect(data.stamp).toBeUndefined()
+    expect(data.stamp).toEqual(expect.any(String))
     expect(data.rows).toEqual([
       { term: 'post', translation: 'yazı', pos: 'noun', notes: '' },
       { term: 'course', translation: 'kurs', pos: 'noun', notes: 'Not "ders".' },
@@ -399,17 +429,25 @@ describe('startGlossaryEditor: CSV mode', () => {
       { term: 'post', pos: 'noun', translation: 'gönderi', notes: 'a, "b"' },
       { term: 'İstanbul', pos: '', translation: 'ıı', notes: '' },
     ]
-    const res = await post(server, 'save', { rows })
+    const res = await post(server, 'save', { rows, stamp: await stampOf(server) })
     expect(res.status).toBe(200)
-    expect(JSON.parse(res.body)).toEqual({})
     expect(existsSync(`${file}.part`)).toBe(false)
     expect(readFileSync(file, 'utf8')).toBe('en,tr,pos,description\npost,gönderi,noun,"a, ""b"""\nİstanbul,ıı,,\n')
+    // The stamp of what was written, so the next save from the same page works.
+    const next = JSON.parse(res.body).stamp
+    expect(next).toBe(await stampOf(server))
+    const second = await post(server, 'save', { rows: rows.slice(1), stamp: next })
+    expect(second.status).toBe(200)
+    expect(readFileSync(file, 'utf8')).toBe('en,tr,pos,description\nİstanbul,ıı,,\n')
+    // The first stamp is spent once the second save has written.
+    expect((await post(server, 'save', { rows, stamp: next })).status).toBe(409)
   })
 
   it('writes the slug of the locale in use into the header of a new file', async () => {
     const file = join(dir, 'new.csv')
     server = await startGlossaryEditor({ source: { kind: 'csv', file, locale: 'nl/formal' } })
-    expect((await post(server, 'save', { rows: [{ term: 'post', pos: 'noun', translation: 'bericht', notes: '' }] })).status).toBe(200)
+    const stamp = await stampOf(server)
+    expect((await post(server, 'save', { rows: [{ term: 'post', pos: 'noun', translation: 'bericht', notes: '' }], stamp })).status).toBe(200)
     expect(readFileSync(file, 'utf8')).toBe('en,nl,pos,description\npost,bericht,noun,\n')
   })
 
@@ -422,6 +460,7 @@ describe('startGlossaryEditor: CSV mode', () => {
         { term: 'post', pos: 'noun', translation: 'yazı', notes: '' },
         { term: 'quiz', pos: 'noun', translation: '', notes: '' },
       ],
+      stamp: await stampOf(server),
     })
     expect(res.status).toBe(400)
     const body = JSON.parse(res.body)
@@ -429,6 +468,75 @@ describe('startGlossaryEditor: CSV mode', () => {
     expect(body.problems[0]).toMatch(/Row 2/)
     expect(body.problems[0]).toMatch(/quiz/)
     expect(readFileSync(file, 'utf8')).toBe(csv)
+    expect(existsSync(`${file}.part`)).toBe(false)
+  })
+
+  // The realistic case: the GlotPress export downloaded again under the same
+  // name while the editor is open. The page's save must not erase it.
+  it('refuses with 409 a save over a file that changed since the page loaded, and leaves it as it is', async () => {
+    const file = join(dir, 'g.csv')
+    writeFileSync(file, csv)
+    server = await startGlossaryEditor({ source: { kind: 'csv', file } })
+    const stamp = await stampOf(server)
+    const newer = 'en,tr,pos,description\npost,gönderi,noun,\n'
+    writeFileSync(file, newer)
+    const res = await post(server, 'save', { rows: [{ term: 'post', pos: 'noun', translation: 'yazı', notes: '' }], stamp })
+    expect(res.status).toBe(409)
+    expect(JSON.parse(res.body)).toMatchObject({ reason: 'stale', message: expect.any(String) })
+    expect(readFileSync(file, 'utf8')).toBe(newer)
+  })
+
+  // A header that now names another locale would otherwise be written over
+  // with the locale the page loaded under.
+  it('refuses a save after the header changed to another locale', async () => {
+    const file = join(dir, 'g.csv')
+    writeFileSync(file, csv)
+    server = await startGlossaryEditor({ source: { kind: 'csv', file } })
+    const stamp = await stampOf(server)
+    const other = csv.replace('en,tr,', 'en,de,')
+    writeFileSync(file, other)
+    expect((await post(server, 'save', { rows: [{ term: 'post', pos: 'noun', translation: 'yazı', notes: '' }], stamp })).status).toBe(409)
+    expect(readFileSync(file, 'utf8')).toBe(other)
+  })
+
+  it('refuses a save after the file was deleted, and after a missing file appeared', async () => {
+    const file = join(dir, 'g.csv')
+    writeFileSync(file, csv)
+    server = await startGlossaryEditor({ source: { kind: 'csv', file, locale: 'tr' } })
+    const rows = [{ term: 'post', pos: 'noun', translation: 'yazı', notes: '' }]
+    const loaded = await stampOf(server)
+    unlinkSync(file)
+    expect((await post(server, 'save', { rows, stamp: loaded })).status).toBe(409)
+    expect(existsSync(file)).toBe(false)
+    const absent = await stampOf(server)
+    expect(absent).not.toBe(loaded)
+    writeFileSync(file, csv)
+    expect((await post(server, 'save', { rows, stamp: absent })).status).toBe(409)
+    expect(readFileSync(file, 'utf8')).toBe(csv)
+  })
+
+  it('refuses a CSV save with no stamp', async () => {
+    const file = join(dir, 'g.csv')
+    writeFileSync(file, csv)
+    server = await startGlossaryEditor({ source: { kind: 'csv', file } })
+    expect((await post(server, 'save', { rows: [{ term: 'post', pos: 'noun', translation: 'yazı', notes: '' }] })).status).toBe(400)
+    expect(readFileSync(file, 'utf8')).toBe(csv)
+  })
+
+  // A .part left by a crash, or planted as a symlink to another file, must
+  // not be written through: the write goes to a fresh file of its own.
+  it('replaces a leftover .part, and never writes through a symlinked one', async () => {
+    const file = join(dir, 'g.csv')
+    const victim = join(dir, 'victim.txt')
+    writeFileSync(file, csv)
+    writeFileSync(victim, 'keep me')
+    symlinkSync(victim, `${file}.part`)
+    server = await startGlossaryEditor({ source: { kind: 'csv', file } })
+    const rows = [{ term: 'post', pos: 'noun', translation: 'gönderi', notes: '' }]
+    const res = await post(server, 'save', { rows, stamp: await stampOf(server) })
+    expect(res.status).toBe(200)
+    expect(readFileSync(victim, 'utf8')).toBe('keep me')
+    expect(readFileSync(file, 'utf8')).toBe('en,tr,pos,description\npost,gönderi,noun,\n')
     expect(existsSync(`${file}.part`)).toBe(false)
   })
 
@@ -474,6 +582,22 @@ describe('startGlossaryEditor: ending', () => {
     expect(ended).toBe(false)
     await vi.advanceTimersByTimeAsync(21_000)
     expect(ended).toBe(true)
+  })
+
+  // Editing makes no requests, so without this a long edit would outlive
+  // the server and its Save would find nothing there.
+  it('lets the page hold the idle timer off with a ping, behind the same fences as a write', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    server = await startGlossaryEditor({ ...dbSource(), idleMs: 60_000 })
+    let ended = false
+    void server.done.then(() => (ended = true))
+    await vi.advanceTimersByTimeAsync(40_000)
+    expect((await post(server, 'ping', {})).status).toBe(200)
+    await vi.advanceTimersByTimeAsync(40_000)
+    expect(ended).toBe(false)
+    expect((await post(server, 'ping', {}, { origin: 'https://evil.example' })).status).toBe(403)
+    expect((await post(server, 'ping', {}, { 'content-type': 'text/plain' })).status).toBe(415)
+    expect((await call(`${server.url}ping`)).status).toBe(405)
   })
 
   // A page elsewhere probing 127.0.0.1 must not be able to keep the server
