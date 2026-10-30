@@ -1,0 +1,214 @@
+import { describe, expect, it } from 'vitest'
+import {
+  addRow, applyImport, createModel, currentRows, diffOf, duplicateRow, isChanged, problemsOf,
+  revertRow, setCell, toggleDelete, visibleRows,
+} from '../../../src/glossary/editor/model.js'
+import { sidecarKey } from '../../../src/glossary/editor/sidecar.js'
+import type { EffectiveRow, GlossaryRow } from '../../../src/glossary/types.js'
+
+const eff = (term: string, translation: string, pos = 'noun', origin: EffectiveRow['origin'] = 'wporg', notes = ''): EffectiveRow => ({
+  term, pos, translation, notes, origin,
+})
+
+describe('createModel', () => {
+  it('keeps effective rows with their origin and gives each an id', () => {
+    const m = createModel([eff('post', 'yazı'), eff('quiz', 'sınav', 'noun', 'added')], 'db')
+    expect(m.mode).toBe('db')
+    expect(m.rows.map((r) => r.origin)).toEqual(['wporg', 'added'])
+    expect(new Set(m.rows.map((r) => r.id)).size).toBe(2)
+  })
+
+  it('treats plain CSV rows as wporg, as loaded', () => {
+    const m = createModel([{ term: 'a', pos: '', translation: 'b', notes: '' }], 'csv')
+    expect(m.rows[0]!.origin).toBe('wporg')
+    expect(m.rows[0]!.deleted).toBe(false)
+  })
+})
+
+describe('setCell', () => {
+  it('stores the normalised value', () => {
+    const m = createModel([eff('post', 'yazı')], 'db')
+    setCell(m, m.rows[0]!.id, 'translation', '  gönderi \n  yeni ')
+    expect(m.rows[0]!.translation).toBe('gönderi yeni')
+  })
+})
+
+describe('diffOf', () => {
+  it('reports exactly one change when one of two post rows is edited', () => {
+    const a = eff('post', 'yazı', 'noun')
+    const b = eff('post', 'gönder', 'verb')
+    const m = createModel([a, b], 'db')
+    setCell(m, m.rows[1]!.id, 'translation', 'paylaş')
+    const d = diffOf(m)
+    expect(d.changed).toHaveLength(1)
+    expect(d.changed[0]!.from).toEqual(b)
+    expect(d.changed[0]!.to).toEqual({ term: 'post', pos: 'verb', translation: 'paylaş', notes: '' })
+    expect(d.added).toEqual([])
+    expect(d.deleted).toEqual([])
+  })
+
+  it('sends the loaded row, with origin and base, not the edited values', () => {
+    const base: GlossaryRow = { term: 'x', pos: 'noun', translation: 'old', notes: '' }
+    const loaded: EffectiveRow = { ...eff('x', 'mine', 'noun', 'changed'), base }
+    const m = createModel([loaded], 'db')
+    setCell(m, m.rows[0]!.id, 'translation', 'newer')
+    expect(diffOf(m).changed[0]!.from).toEqual(loaded)
+  })
+
+  it('has no change when an edit is typed back to the loaded value', () => {
+    const m = createModel([eff('post', 'yazı')], 'db')
+    const id = m.rows[0]!.id
+    setCell(m, id, 'translation', 'x')
+    setCell(m, id, 'translation', 'yazı')
+    expect(isChanged(m, id)).toBe(false)
+    expect(diffOf(m).changed).toEqual([])
+  })
+
+  it('puts a deleted loaded row in deleted and out of currentRows', () => {
+    const a = eff('post', 'yazı')
+    const m = createModel([a, eff('quiz', 'sınav')], 'db')
+    toggleDelete(m, m.rows[0]!.id)
+    expect(diffOf(m).deleted).toEqual([a])
+    expect(currentRows(m).map((r) => r.term)).toEqual(['quiz'])
+    expect(isChanged(m, m.rows[0]!.id)).toBe(true)
+  })
+
+  it('lists new rows as added, and drops a new row that is deleted again', () => {
+    const m = createModel([eff('post', 'yazı')], 'db')
+    const id = addRow(m)
+    setCell(m, id, 'term', 'quiz')
+    setCell(m, id, 'translation', 'sınav')
+    expect(diffOf(m).added).toEqual([{ term: 'quiz', pos: '', translation: 'sınav', notes: '' }])
+    toggleDelete(m, id)
+    expect(diffOf(m)).toEqual({ added: [], changed: [], deleted: [] })
+  })
+})
+
+describe('rows', () => {
+  it('addRow inserts after the given id, or at the end', () => {
+    const m = createModel([eff('a', '1'), eff('b', '2')], 'db')
+    const first = m.rows[0]!.id
+    const x = addRow(m, first)
+    expect(m.rows.map((r) => r.id)[1]).toBe(x)
+    const y = addRow(m)
+    expect(m.rows[m.rows.length - 1]!.id).toBe(y)
+    expect(m.rows.find((r) => r.id === x)!.origin).toBe('new')
+  })
+
+  it('duplicateRow copies the values as a new row beside the source', () => {
+    const m = createModel([eff('a', '1', 'verb', 'wporg', 'n')], 'db')
+    const id = duplicateRow(m, m.rows[0]!.id)
+    const copy = m.rows[1]!
+    expect(copy.id).toBe(id)
+    expect(copy).toMatchObject({ term: 'a', pos: 'verb', translation: '1', notes: 'n', origin: 'new', deleted: false })
+    expect(copy.base).toBeUndefined()
+  })
+
+  it('toggleDelete flips', () => {
+    const m = createModel([eff('a', '1')], 'db')
+    toggleDelete(m, m.rows[0]!.id)
+    expect(m.rows[0]!.deleted).toBe(true)
+    toggleDelete(m, m.rows[0]!.id)
+    expect(m.rows[0]!.deleted).toBe(false)
+  })
+})
+
+describe('revertRow', () => {
+  it('restores the base values of a changed row', () => {
+    const base: GlossaryRow = { term: 'x', pos: 'noun', translation: 'wporg', notes: 'n' }
+    const m = createModel([{ ...eff('x', 'mine', 'noun', 'changed'), base }], 'db')
+    revertRow(m, m.rows[0]!.id)
+    expect(m.rows[0]).toMatchObject({ translation: 'wporg', notes: 'n', deleted: false })
+    // Back at the wp.org row but not at the loaded one, so a save still has to drop the local edit.
+    expect(diffOf(m).changed[0]!.to).toEqual(base)
+  })
+
+  it('restores the loaded values of an edited wporg row and undeletes it', () => {
+    const m = createModel([eff('a', '1')], 'db')
+    const id = m.rows[0]!.id
+    setCell(m, id, 'translation', '2')
+    toggleDelete(m, id)
+    revertRow(m, id)
+    expect(m.rows[0]).toMatchObject({ translation: '1', deleted: false })
+    expect(isChanged(m, id)).toBe(false)
+  })
+
+  it('removes a new row', () => {
+    const m = createModel([eff('a', '1')], 'db')
+    const id = addRow(m)
+    revertRow(m, id)
+    expect(m.rows).toHaveLength(1)
+  })
+})
+
+describe('problemsOf', () => {
+  it('flags each kind', () => {
+    const m = createModel(
+      [
+        eff('', 'x'),
+        eff('a', ''),
+        eff('b', 'x', 'weird'),
+        eff('Dup', 'same', 'noun'),
+        eff('dup', 'same', 'noun'),
+        eff('dup', 'other', 'noun'),
+        eff('ok', 'x', ''),
+      ],
+      'db',
+    )
+    const p = problemsOf(m)
+    const at = (i: number) => p.get(m.rows[i]!.id)
+    expect(at(0)).toEqual(['empty-term'])
+    expect(at(1)).toEqual(['empty-translation'])
+    expect(at(2)).toEqual(['bad-pos'])
+    expect(at(3)).toEqual(['duplicate'])
+    expect(at(4)).toEqual(['duplicate'])
+    expect(at(5)).toBeUndefined()
+    expect(at(6)).toBeUndefined()
+  })
+
+  it('ignores deleted rows, so deleting one of a pair clears the duplicate', () => {
+    const m = createModel([eff('a', 'x'), eff('a', 'x')], 'db')
+    toggleDelete(m, m.rows[1]!.id)
+    expect(problemsOf(m).size).toBe(0)
+  })
+})
+
+describe('visibleRows', () => {
+  const m = createModel(
+    [eff('Quiz', 'sınav', 'noun', 'wporg', 'test'), eff('post', 'yazı', 'verb'), eff('lesson', 'ders', 'noun', 'added')],
+    'db',
+  )
+  it('matches the query on term, translation and notes, case-insensitively', () => {
+    expect(visibleRows(m, { query: 'QUIZ' })).toHaveLength(1)
+    expect(visibleRows(m, { query: 'yazı' })).toHaveLength(1)
+    expect(visibleRows(m, { query: 'TEST' })).toHaveLength(1)
+    expect(visibleRows(m, { query: '' })).toHaveLength(3)
+  })
+  it('filters by pos and local', () => {
+    expect(visibleRows(m, { query: '', pos: 'verb' }).map((r) => r.term)).toEqual(['post'])
+    expect(visibleRows(m, { query: '', local: true }).map((r) => r.term)).toEqual(['lesson'])
+  })
+  it('filters by problems', () => {
+    const p = createModel([eff('a', ''), eff('b', 'x')], 'db')
+    expect(visibleRows(p, { query: '', problems: true }).map((r) => r.term)).toEqual(['a'])
+  })
+  it('filters contested rows with a sidecar', () => {
+    const rec = { en: 'post', pos: 'verb', confidence: 'contested' } as never
+    const side = new Map([[sidecarKey('post', 'verb'), rec]])
+    expect(visibleRows(m, { query: '', contested: true }, side).map((r) => r.term)).toEqual(['post'])
+    expect(visibleRows(m, { query: '', contested: true })).toEqual([])
+  })
+})
+
+describe('applyImport', () => {
+  it('deletes the current rows of an imported term and adds the CSV rows as new', () => {
+    const m = createModel([eff('Post', 'yazı'), eff('post', 'gönder', 'verb'), eff('quiz', 'sınav')], 'db')
+    applyImport(m, [{ term: 'post', pos: 'noun', translation: 'gönderi', notes: '' }])
+    expect(m.rows.filter((r) => r.deleted).map((r) => r.translation)).toEqual(['yazı', 'gönder'])
+    expect(m.rows[m.rows.length - 1]).toMatchObject({ origin: 'new', translation: 'gönderi', deleted: false })
+    const d = diffOf(m)
+    expect(d.deleted).toHaveLength(2)
+    expect(d.added).toHaveLength(1)
+    expect(currentRows(m).map((r) => r.translation)).toEqual(['sınav', 'gönderi'])
+  })
+})
