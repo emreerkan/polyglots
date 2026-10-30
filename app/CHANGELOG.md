@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-30
+
 ### Added
 
 - Fetch lists every project while it checks the list and downloads the exports, with a count and a spinner on the one in progress; the CLI shows the same on stderr.
