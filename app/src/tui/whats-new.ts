@@ -13,7 +13,7 @@ import { isNewer } from '../update/index.js'
 // flags, and a patch like "the entry table is no longer written" is right
 // there and noise here.
 export const WHATS_NEW: Readonly<Record<string, readonly string[]>> = {
-  unreleased: ['Glossary editor: sort, and a Settings dialog'],
+  '1.6.0': ['Glossary editor: sort, and a Settings dialog'],
   '1.5.0': ['Edit the glossary in your browser', 'Glossary edits now survive a sync'],
   '1.4.0': ['Fetch shows each project as it works on it'],
   '1.2.0': [
