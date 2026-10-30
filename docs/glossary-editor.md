@@ -23,13 +23,14 @@ Your changes are a layer on top of the synced glossary. They are not a copy of
 it:
 
 - `polyglots glossary sync` keeps your changes. If wp.org changed the same row
-  since you edited it, wp.org wins, and the sync lists each change it removed.
+  since you edited it, wp.org wins, and the sync prints a `removed local edit:` line for each one it removed.
 - **Discard all local edits** removes the layer and leaves the synced glossary.
 - **Import CSV** loads a reviewed CSV into the table. Each term in the CSV
-  replaces the same term in your glossary.
+  replaces the same term in your glossary. The rows apply only when you press
+  **Save**, unlike `polyglots glossary import`, which writes at once.
 
 The server stops on Ctrl+C, on **Close**, and after 30 minutes with no browser
-open on it. The page tells the server it is open every few seconds, so a tab
+open on it. The page tells the server it is open every five minutes, so a tab
 you leave open does not stop it.
 
 ## Editing a CSV file
@@ -60,7 +61,7 @@ polyglots glossary import reviewed.csv [--locale <locale>]
 
 loads a CSV as local edits without opening the editor. It refuses a CSV with
 problems and names the rows. When `--locale` differs from the locale in the
-CSV's header, it says so before it imports.
+CSV's header, it says so after it imports.
 
 ## In the browser, without polyglots
 
@@ -71,7 +72,7 @@ installed, or to prepare a CSV you then give to `polyglots glossary import`.
 
 ## What review and translate do with it
 
-Review and translate send each glossary row's part of speech and comment with
-the term, so the model can tell `Post` the noun from `post` the verb. This
+Review prompts, also in translate's review pass, carry each glossary row's part
+of speech and comment with the term, so the model can tell `Post` the noun from `post` the verb. This
 changes what a review asks, so the first review after you update, and the first
 after any glossary edit, has no cached verdicts and starts over.

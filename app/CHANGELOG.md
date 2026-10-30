@@ -17,7 +17,8 @@ Entries say what changed. For why and how, read the commit.
 
 ### Changed
 
-- Review and translate prompts carry each glossary row's part of speech and note; the first review after updating, and the first after any glossary edit, starts without cached verdicts.
+- Review prompts, also in translate's review pass, carry each glossary row's part of speech and note.
+- The first review after updating, and the first after any glossary edit, starts without cached verdicts.
 
 ## [1.4.0] - 2026-10-30
 
