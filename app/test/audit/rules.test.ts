@@ -609,6 +609,33 @@ describe('glossary term forms', () => {
   })
 })
 
+describe('glossary terms in markup', () => {
+  const terms = (sourceTerm: string, msgid: string) => {
+    const glossary: GlossaryEntry[] = [{ locale: 'tr', sourceTerm, translation: 'zzz', partOfSpeech: 'noun' }]
+    const e = entry(msgid, 'yyy')
+    return runRules(e, buildRuleContext({ locale: 'tr', glossary, nplurals: 2, entries: [e] })).filter(
+      (f) => f.rule === 'glossary',
+    )
+  }
+
+  // On a Masteriyo run "span" was flagged nineteen times from the counts in
+  // status labels, and "login" from a <login> tag a translator must not touch.
+  it('does not find a term in a tag name or its attributes', () => {
+    expect(terms('span', 'Active <span class="count">(%s)</span>')).toEqual([])
+    expect(terms('count', 'Active <span class="count">(%s)</span>')).toEqual([])
+    expect(terms('login', 'Go to <login>the page</login>')).toEqual([])
+  })
+
+  it('still finds a term in the text between tags', () => {
+    expect(terms('page', 'Go to <login>the page</login>')).toHaveLength(1)
+    expect(terms('active', 'Active <span class="count">(%s)</span>')).toHaveLength(1)
+  })
+
+  it('leaves a comparison sign alone', () => {
+    expect(terms('items', 'Show when items < 5 and pages > 2')).toHaveLength(1)
+  })
+})
+
 /**
  * A glossary row's translation is one string, and translators put several
  * wordings in it because GlotPress does not search strictly: nl stores

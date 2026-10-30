@@ -10,6 +10,11 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Fixed
+
+- `review` with several files reviews a `-repaired.po` or `-problems.po` file named in the command; it leaves out only the ones a glob matched.
+- The glossary rule no longer finds a term in an HTML tag's name or attributes.
+
 ## [1.6.1] - 2026-10-30
 
 ### Fixed

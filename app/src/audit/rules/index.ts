@@ -849,7 +849,12 @@ function wordForms(word: string): string[] {
  * word, so `list` is not found inside `listen`.
  */
 export function glossaryMatches(msgid: string, ctx: RuleContext): GlossaryMatch[] {
-  const source = lowerSource(msgid)
+  // Tags out first, names and attributes with them: a translator keeps markup
+  // as it is, so a term found there asks for a change nobody may make. On a
+  // Masteriyo run "span" was flagged nineteen times from status counts and
+  // "login" from a <login> tag. HTML_TAG wants a letter after the bracket, so
+  // "items < 5" is left as text.
+  const source = lowerSource(msgid.replace(HTML_TAG, ' '))
   const byTerm = new Map<string, GlossaryMatch>()
   for (const { item, term, forms } of loweredTerms(ctx)) {
     if (term.length < 3) continue

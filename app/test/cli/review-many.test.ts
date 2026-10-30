@@ -339,7 +339,7 @@ describe('review with several files', () => {
       await writeFile(repaired, po('tr'))
       await writeFile(problems, po('tr'))
       const calls: ReviewOptions[] = []
-      const r = await run(['review', a, repaired, b, problems], {
+      const r = await run(['review', join(home, '*.po')], {
         reviewFile: async (opts) => {
           calls.push(opts)
           return reviewSummary(opts.file)
@@ -352,11 +352,44 @@ describe('review with several files', () => {
       expect(r.stdout).toMatch(/done\s+2/)
     })
 
+    // Only a glob matches an output by accident. A name written out is the
+    // same request a single file named on its own is: on a project run the
+    // repaired file of one phase was named beside two others to be checked by
+    // the rules, and was dropped.
+    it('reviews a review output named beside other files', async () => {
+      const repaired = join(home, 'a-tr-repaired.po')
+      await writeFile(repaired, po('tr'))
+      const calls: ReviewOptions[] = []
+      const r = await run(['review', repaired, b, '--out-dir', join(home, 'out')], {
+        reviewFile: async (opts) => {
+          calls.push(opts)
+          return reviewSummary(opts.file)
+        },
+      })
+      expect(r.code).toBe(0)
+      expect(calls.map((c) => c.file)).toEqual([repaired, b])
+      expect(r.stderr).not.toContain('Left out')
+    })
+
+    it('keeps a named output when a glob beside it matches it too', async () => {
+      const repaired = join(home, 'a-tr-repaired.po')
+      await writeFile(repaired, po('tr'))
+      const calls: ReviewOptions[] = []
+      const r = await run(['review', repaired, join(home, '*.po'), '--out-dir', join(home, 'out')], {
+        reviewFile: async (opts) => {
+          calls.push(opts)
+          return reviewSummary(opts.file)
+        },
+      })
+      expect(r.code).toBe(0)
+      expect(calls.map((c) => c.file).sort()).toEqual([a, repaired, b].sort())
+    })
+
     it('reviews the one file left after outputs are left out the way it reviews one file', async () => {
       const repaired = join(home, 'a-tr-repaired.po')
       await writeFile(repaired, po('tr'))
       const calls: ReviewOptions[] = []
-      const r = await run(['review', a, repaired], {
+      const r = await run(['review', join(home, 'a-*.po')], {
         reviewFile: async (opts) => {
           calls.push(opts)
           return reviewSummary(opts.file)
@@ -367,13 +400,13 @@ describe('review with several files', () => {
       expect(r.stdout).toMatch(/flagged\s+3/)
     })
 
-    it('refuses when every file named is a review output', async () => {
+    it('refuses when every file the globs matched is a review output', async () => {
       const repaired = join(home, 'a-tr-repaired.po')
       const problems = join(home, 'b-tr-problems.po')
       await writeFile(repaired, po('tr'))
       await writeFile(problems, po('tr'))
       const calls: ReviewOptions[] = []
-      const r = await run(['review', repaired, problems], {
+      const r = await run(['review', join(home, '*-p*.po'), join(home, '*-repaired.po')], {
         reviewFile: async (opts) => {
           calls.push(opts)
           return reviewSummary(opts.file)

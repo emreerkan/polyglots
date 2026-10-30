@@ -44,6 +44,16 @@ export function expandFileArgs(patterns: string[]): string[] {
   return out
 }
 
+/**
+ * The files among the arguments that were written out by name rather than
+ * found by a glob, resolved as expandFileArgs resolves them, so a caller can
+ * tell the two apart in its output. A path that exists is a name even when it
+ * holds glob characters, the same rule expandFileArgs follows.
+ */
+export function namedFiles(patterns: string[]): Set<string> {
+  return new Set(patterns.filter((pattern) => existsSync(pattern) && isFile(pattern)).map((pattern) => resolve(pattern)))
+}
+
 export function parsePositiveInt(flag: string, raw: string): number {
   const value = Number(raw)
   if (!/^\d+$/.test(raw.trim()) || !Number.isInteger(value) || value <= 0) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync, realpathSync } from 'node:fs'
 import { docsUrl } from './docs-links.js'
-import { basename } from 'node:path'
+import { basename, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { Writable } from 'node:stream'
 import { text } from 'node:stream/consumers'
@@ -45,6 +45,7 @@ import { CODEX_EFFORTS, DEFAULT_CONFIG, isHttpUrl, loadConfig, loadSecrets, mask
 import {
   UsageError,
   expandFileArgs,
+  namedFiles,
   isSecretName,
   parseCsvDelimiter,
   parseDraftEngine,
@@ -1513,18 +1514,23 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
       // those spends calls on the review itself, prints a requester message
       // for a file no contributor sent, and with --parallel can rewrite
       // foo-tr-repaired.po while another job reads it. The pickers refuse to
-      // mark them for the same reason. One file named on its own is left
-      // alone: someone who points at a single file by name means it, and the
-      // single-file command stays exactly as it was.
+      // mark them for the same reason.
+      //
+      // Only what a glob found is left out. A file written out by name is
+      // meant, whether it stands alone or beside others: this used to drop
+      // every output once more than one file was given, and a project run
+      // that named one phase's repaired file to have the rules check it had
+      // it skipped with a hint nobody was waiting to read.
       if (files.length > 1) {
-        const outputs = files.filter(isReviewOutput)
+        const named = namedFiles(patterns)
+        const outputs = files.filter((file) => isReviewOutput(file) && !named.has(resolve(file)))
         if (outputs.length === files.length) {
           throw new UsageError(
-            `Every file named is a review output (-repaired.po or -problems.po): ${outputs.join(', ')}. Name the submitted files instead.`,
+            `Every file matched is a review output (-repaired.po or -problems.po): ${outputs.join(', ')}. Name the submitted files instead.`,
           )
         }
         if (outputs.length > 0) {
-          files = files.filter((file) => !isReviewOutput(file))
+          files = files.filter((file) => !outputs.includes(file))
           cli.err(hintLine(cli.ui.err, `Left out ${outputs.length === 1 ? 'a review output' : `${outputs.length} review outputs`}, which are not reviewed again: ${outputs.join(', ')}`))
         }
       }
