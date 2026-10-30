@@ -1777,8 +1777,11 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
       // Closed by the page or the idle wait: the address is dead now, and
       // the person may come back to a tab that cannot save.
       if (end === 'closed') {
-        // Shell-quoted, so a CSV path with a space can be pasted back as it is.
-        const arg = (v: string) => (/[\s'"$`\\]/.test(v) ? `'${v.replace(/'/g, `'\\''`)}'` : v)
+        // Shell-quoted, so a CSV path can be pasted back as it is. Quoted
+        // whenever it holds anything outside a plain set, rather than only
+        // when it holds a character known to be special: a list of specials
+        // missed ; & ( ) * ~ # and others, and a missed one runs as syntax.
+        const arg = (v: string) => (/^[A-Za-z0-9_./-]+$/.test(v) ? v : `'${v.replace(/'/g, `'\\''`)}'`)
         const again = [
           'polyglots glossary edit',
           ...(flags.csv === undefined ? [] : ['--csv', arg(flags.csv)]),

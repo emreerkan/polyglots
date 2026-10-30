@@ -127,6 +127,21 @@ describe('glossary edit', () => {
     expect(out).not.toContain('Stopped')
   })
 
+  // The hint is pasted back into a shell, so any character a shell reads as
+  // syntax (; & ( ) * ~ # and the rest) must arrive quoted, not just spaces.
+  it('quotes a reopen argument holding any character outside the plain set', async () => {
+    const closed: EditGlossary = async (opts, onReady) => {
+      onReady({ url: 'http://127.0.0.1:5/tok/', mode: 'CSV', locale: opts.source.locale ?? 'tr', opened: true })
+      return 'closed'
+    }
+    const reopen = async (argv: string[]) => (await run(argv, { editGlossary: closed })).out.split('Reopen it with: ')[1]?.trim()
+    expect(await reopen(['glossary', 'edit', '--csv', 'a;b&(c)*.csv'])).toBe("polyglots glossary edit --csv 'a;b&(c)*.csv'")
+    expect(await reopen(['glossary', 'edit', '--csv', "it's~#.csv"])).toBe("polyglots glossary edit --csv 'it'\\''s~#.csv'")
+    expect(await reopen(['glossary', 'edit', '--csv', 'dir/x_1-2.csv', '--locale', 'nl/formal'])).toBe(
+      'polyglots glossary edit --csv dir/x_1-2.csv --locale nl/formal',
+    )
+  })
+
   it('hands the CLI opener to the command, so a test or demo decides whether a browser starts', async () => {
     const opened: string[] = []
     let given: EditGlossaryOptions['openBrowser']
