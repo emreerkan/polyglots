@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-30
+
 ### Fixed
 
 - `translate` counts the fuzzy entries it filled from the memory in its summary, history and batch report.
