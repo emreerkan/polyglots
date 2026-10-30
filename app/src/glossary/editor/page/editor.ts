@@ -746,8 +746,14 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
         ev.preventDefault()
         finishEdit(false)
       } else if (ev.key === 'Tab') {
+        // The next cell opens too, so a row is filled in one pass. At either
+        // end of the table the edit closes and focus stays, as Enter on the
+        // last row does. A deleted row or one the commit filtered away does
+        // not open, and leaves the cell in focus only.
         ev.preventDefault()
-        finishEdit(true, step(0, ev.shiftKey ? -1 : 1, true))
+        const to = step(0, ev.shiftKey ? -1 : 1, true)
+        finishEdit(true, to)
+        if (to) startEdit(to.id, to.field)
       }
       return
     }

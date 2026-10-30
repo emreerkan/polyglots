@@ -169,6 +169,29 @@ describe('mountEditor', () => {
     expect(document.activeElement).toBe(cell(2, 'term'))
   })
 
+  // Tab from an open cell is how a row gets filled in one pass, so the next
+  // cell opens too; from a cell that is only in focus, Tab only moves.
+  it('commits on Tab from an open cell and opens the next one, wrapping to the next row', async () => {
+    await mountEditor(root, fakeHost())
+    const td = cell(1, 'term')
+    td.focus()
+    key(td, 'Enter')
+    const input = td.querySelector('input')!
+    input.value = 'courses'
+    key(input, 'Tab')
+    expect(norm(cell(1, 'term').textContent)).toBe('courses')
+    const select = cell(1, 'pos').querySelector('select')!
+    expect(document.activeElement).toBe(select)
+    key(select, 'Tab', { shiftKey: true })
+    expect(document.activeElement).toBe(cell(1, 'term').querySelector('input'))
+    key(document.activeElement!, 'Escape')
+    const notes = cell(1, 'notes')
+    notes.focus()
+    key(notes, 'Enter')
+    key(notes.querySelector('input')!, 'Tab')
+    expect(document.activeElement).toBe(cell(2, 'term').querySelector('input'))
+  })
+
   it('disables Save while a problem remains, and says how many', async () => {
     await mountEditor(root, fakeHost())
     edit(1, 'translation', '')
