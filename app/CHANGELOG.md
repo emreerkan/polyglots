@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-10-30
+
 ### Fixed
 
 - `review` with several files reviews a `-repaired.po` or `-problems.po` file named in the command; it leaves out only the ones a glob matched.
