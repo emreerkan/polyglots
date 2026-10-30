@@ -5,7 +5,7 @@ import React from 'react'
 import { saveConfig } from '../../src/config.js'
 import { CommandsProvider } from '../../src/tui/commands.js'
 import { SyncGlossary } from '../../src/tui/screens/SyncGlossary.js'
-import { fakeCommands, keys, makeHome, tick, waitForText, render, cleanup, type Home } from './helpers.js'
+import { fakeCommands, flat, keys, makeHome, tick, waitFor, waitForText, render, cleanup, type Home } from './helpers.js'
 
 let home: Home
 
@@ -48,7 +48,7 @@ describe('SyncGlossary with no locale configured', () => {
     stdin.write('de-at')
     await waitForText(lastFrame, 'de-at')
     stdin.write(keys.enter)
-    await waitForText(lastFrame, 'Synced 42 glossary entries for de-at.')
+    await waitForText(lastFrame, 'Synced 42 glossary entries for de-at; kept 0 local edits.')
     expect(vi.mocked(commands.syncGlossary).mock.calls[0]![0]).toMatchObject({ locale: 'de-at' })
 
     stdin.write(keys.enter)
@@ -63,7 +63,7 @@ describe('SyncGlossary with no locale configured', () => {
     stdin.write('tr_TR ')
     await waitForText(lastFrame, 'tr_TR')
     stdin.write(keys.enter)
-    await waitForText(lastFrame, 'Synced 42 glossary entries for tr.')
+    await waitForText(lastFrame, 'Synced 42 glossary entries for tr; kept 0 local edits.')
     expect(vi.mocked(commands.syncGlossary).mock.calls[0]![0]).toMatchObject({ locale: 'tr' })
   })
 
@@ -71,7 +71,7 @@ describe('SyncGlossary with no locale configured', () => {
     let back = 0
     const syncGlossary = vi.fn(async ({ locale }: { locale: string }) => {
       if (locale !== 'de') throw new Error(`No glossary entries found for locale "${locale}"; existing cache left untouched`)
-      return { entries: 7 }
+      return { entries: 7, kept: 0, removed: [] }
     })
     const commands = fakeCommands({ syncGlossary })
     const { lastFrame, stdin } = mount(commands, () => back++)
@@ -92,7 +92,7 @@ describe('SyncGlossary with no locale configured', () => {
     stdin.write('de')
     await waitForText(lastFrame, /Locale:\s+de\s*$/m)
     stdin.write(keys.enter)
-    await waitForText(lastFrame, 'Synced 7 glossary entries for de.')
+    await waitForText(lastFrame, 'Synced 7 glossary entries for de; kept 0 local edits.')
     expect(syncGlossary).toHaveBeenCalledTimes(2)
   })
 })
@@ -105,7 +105,7 @@ describe('SyncGlossary with a locale configured', () => {
     let calls = 0
     const syncGlossary = vi.fn(async (_: { locale: string }) => {
       if (++calls === 1) throw new Error('network down')
-      return { entries: 7 }
+      return { entries: 7, kept: 0, removed: [] }
     })
     const { lastFrame, stdin } = mount(fakeCommands({ syncGlossary }))
     await waitForText(lastFrame, 'enter to sync')
@@ -113,7 +113,31 @@ describe('SyncGlossary with a locale configured', () => {
     await waitForText(lastFrame, /Sync failed: network down/)
     await waitForText(lastFrame, 'enter to retry')
     stdin.write(keys.enter)
-    await waitForText(lastFrame, 'Synced 7 glossary entries for de.')
+    await waitForText(lastFrame, 'Synced 7 glossary entries for de; kept 0 local edits.')
     expect(syncGlossary.mock.calls.map((c) => c[0].locale)).toEqual(['de', 'de'])
+  })
+})
+
+describe('SyncGlossary with local edits', () => {
+  it('counts the kept edits and lists every removed one', async () => {
+    const syncGlossary = vi.fn(async (_: { locale: string }) => ({
+      entries: 42,
+      kept: 3,
+      removed: [
+        {
+          kind: 'add' as const,
+          term: 'archive',
+          pos: 'noun',
+          local: { term: 'archive', pos: 'noun', translation: 'arşivim', notes: '' },
+          wporg: [{ term: 'archive', pos: 'noun', translation: 'arşiv', notes: '' }],
+        },
+      ],
+    }))
+    const { lastFrame, stdin } = mount(fakeCommands({ syncGlossary }))
+    await waitForText(lastFrame, 'enter to sync')
+    stdin.write(keys.enter)
+    await waitFor(() => flat(lastFrame()).includes('kept 3 local edits'))
+    expect(flat(lastFrame())).toContain('Synced 42 glossary entries for tr; kept 3 local edits.')
+    expect(flat(lastFrame())).toContain('removed local edit: archive (noun): arşivim → wp.org: arşiv')
   })
 })

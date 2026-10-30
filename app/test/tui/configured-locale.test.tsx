@@ -165,7 +165,7 @@ describe('SyncGlossary with a configured locale', () => {
     view.stdin.write('x')
     await tick()
     view.stdin.write(keys.enter)
-    await waitForText(view.lastFrame, 'Synced 42 glossary entries for tr.')
+    await waitForText(view.lastFrame, 'Synced 42 glossary entries for tr; kept 0 local edits.')
     expect(vi.mocked(commands.syncGlossary).mock.calls[0]![0]).toMatchObject({ locale: 'tr' })
   })
 })

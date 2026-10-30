@@ -25,7 +25,7 @@ import { planRulesFetch, writeRulesFetch } from './commands/rules-fetch.js'
 import { formatBytes, planTmFetch, runTmFetch } from './commands/tm-fetch.js'
 import { openRulesDraft, saveRulesDraft, type RulesDraft } from './rules/edit.js'
 import { moveLegacyProperNouns } from './rules/legacy-names.js'
-import { syncGlossary } from './commands/glossary-sync.js'
+import { removedEditLine, syncGlossary, syncedLine } from './commands/glossary-sync.js'
 import { isReviewOutput, outputPath, reviewFile } from './commands/review.js'
 import { splitPo } from './commands/split.js'
 import { watchKeys } from './cli/keys.js'
@@ -1734,7 +1734,8 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
     .action(async (flags: { locale?: string }) => {
       const locale = requireLocale(flags.locale, cli.config())
       const result = await cli.syncGlossary({ locale })
-      cli.out(okLine(cli.ui.out, `Synced ${result.entries} glossary entries for ${locale}.`))
+      cli.out(okLine(cli.ui.out, syncedLine(result, locale)))
+      for (const r of result.removed) cli.out(`  ${removedEditLine(r)}`)
     })
   glossary
     .command('export [file]')

@@ -1,5 +1,8 @@
 import type Database from 'better-sqlite3'
 import type { GlossaryEntry, Locale } from '../types.js'
+// A cycle: the edits module reads this one's rows. Both only call each other
+// from inside functions, so neither binding is read while modules load.
+import { reconcileGlossaryEdits, type RemovedEdit } from './glossary-edits.js'
 
 interface GlossaryRow {
   locale: string
@@ -16,18 +19,25 @@ function toEntry(row: GlossaryRow): GlossaryEntry {
   return entry
 }
 
-export function replaceGlossary(db: Database.Database, locale: Locale, entries: GlossaryEntry[]): void {
+/**
+ * Replaces the wp.org copy of a locale and drops the local edits the new copy
+ * invalidates, returning those. Both happen in one transaction, so a sync that
+ * fails part way leaves the rows and the edits as they were: removing the
+ * edits first and then failing the insert would lose them for nothing.
+ */
+export function replaceGlossary(db: Database.Database, locale: Locale, entries: GlossaryEntry[]): RemovedEdit[] {
   const del = db.prepare('DELETE FROM glossary WHERE locale = ?')
   const ins = db.prepare(`
     INSERT INTO glossary (locale, source_term, translation, part_of_speech, notes, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
   `)
   const updatedAt = new Date().toISOString()
-  db.transaction(() => {
+  return db.transaction(() => {
     del.run(locale)
     for (const e of entries) {
       ins.run(locale, e.sourceTerm, e.translation, e.partOfSpeech ?? null, e.notes ?? null, updatedAt)
     }
+    return reconcileGlossaryEdits(db, locale)
   })()
 }
 

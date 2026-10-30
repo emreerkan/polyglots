@@ -356,7 +356,7 @@ export function fakeCommands(overrides: Partial<TuiCommands> = {}): TuiCommands 
       for (const file of files) opts.onProgress?.({ file, entries: 3, upserted: 2 })
       return { files: files.length, entries: 3 * files.length, upserted: 2 * files.length }
     }),
-    syncGlossary: vi.fn(async () => ({ entries: 42 })),
+    syncGlossary: vi.fn(async () => ({ entries: 42, kept: 0, removed: [] })),
     splitPo: vi.fn(async (opts: SplitOptions) => ({
       file: opts.file,
       dir: opts.file.replace(/\.po$/, '-split'),

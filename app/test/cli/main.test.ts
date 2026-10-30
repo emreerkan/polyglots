@@ -328,7 +328,10 @@ describe('glossary sync', () => {
     calls: Array<{ locale: string }>
   }
 
-  function fakeSync(outcome: { entries: number } | Error = { entries: 42 }): FakeSync {
+  type Outcome = Awaited<ReturnType<CliDeps['syncGlossary'] & object>>
+  const synced = (entries: number, patch: Partial<Outcome> = {}): Outcome => ({ entries, kept: 0, removed: [], ...patch })
+
+  function fakeSync(outcome: Outcome | Error = synced(42)): FakeSync {
     const calls: Array<{ locale: string }> = []
     return {
       calls,
@@ -344,20 +347,49 @@ describe('glossary sync', () => {
     await mkdir(join(home, 'config'), { recursive: true })
     await writeFile(join(home, 'config', 'config.json'), JSON.stringify({ defaultLocale: 'de' }))
     const h = harness()
-    const sync = fakeSync({ entries: 42 })
+    const sync = fakeSync(synced(42))
     const code = await h.run(['glossary', 'sync'], { syncGlossary: sync.fn })
     expect(code).toBe(0)
     expect(sync.calls).toEqual([{ locale: 'de' }])
-    expect(h.stdout.text).toBe('✓ Synced 42 glossary entries for de.\n')
+    expect(h.stdout.text).toBe('✓ Synced 42 glossary entries for de; kept 0 local edits.\n')
   })
 
   it('passes a normalized --locale override through', async () => {
     const h = harness()
-    const sync = fakeSync({ entries: 3 })
+    const sync = fakeSync(synced(3))
     const code = await h.run(['glossary', 'sync', '--locale', 'PT-BR'], { syncGlossary: sync.fn })
     expect(code).toBe(0)
     expect(sync.calls).toEqual([{ locale: 'pt-br' }])
-    expect(h.stdout.text).toBe('✓ Synced 3 glossary entries for pt-br.\n')
+    expect(h.stdout.text).toBe('✓ Synced 3 glossary entries for pt-br; kept 0 local edits.\n')
+  })
+
+  it('counts the kept edits and lists every removed one with the wp.org version', async () => {
+    const h = harness()
+    const sync = fakeSync(
+      synced(42, {
+        kept: 2,
+        removed: [
+          {
+            kind: 'change',
+            term: 'post',
+            pos: 'noun',
+            local: { term: 'post', pos: 'noun', translation: 'gönderi', notes: '' },
+            wporg: [
+              { term: 'post', pos: 'noun', translation: 'ileti', notes: '' },
+              { term: 'Post', pos: 'noun', translation: 'yazı', notes: '' },
+            ],
+          },
+          { kind: 'delete', term: 'page', pos: 'noun', wporg: [{ term: 'page', pos: 'noun', translation: 'sayfa', notes: 'n' }] },
+        ],
+      }),
+    )
+    const code = await h.run(['glossary', 'sync', '--locale', 'tr'], { syncGlossary: sync.fn })
+    expect(code).toBe(0)
+    expect(h.stdout.text).toBe(
+      '✓ Synced 42 glossary entries for tr; kept 2 local edits.\n' +
+        '  removed local edit: post (noun): gönderi → wp.org: ileti, yazı\n' +
+        '  removed local edit: page (noun): deleted → wp.org: sayfa\n',
+    )
   })
 
   it('exits 1 with the error message when the sync throws', async () => {

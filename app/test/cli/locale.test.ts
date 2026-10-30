@@ -169,7 +169,7 @@ describe('no default locale', () => {
   it('still lets the locale be set, and then uses it', async () => {
     expect(await run(['config', 'set', 'defaultLocale', 'pt_BR'])).toBe(0)
     expect(JSON.parse(await readFile(join(home, 'config', 'config.json'), 'utf8')).defaultLocale).toBe('pt-br')
-    const syncGlossary = vi.fn(async () => ({ locale: 'pt-br', entries: 3 }))
+    const syncGlossary = vi.fn(async () => ({ entries: 3, kept: 0, removed: [] }))
     expect(await run(['glossary', 'sync'], { syncGlossary })).toBe(0)
     expect(syncGlossary).toHaveBeenCalledWith({ locale: 'pt-br' })
   })

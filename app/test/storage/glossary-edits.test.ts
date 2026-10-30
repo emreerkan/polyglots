@@ -279,3 +279,112 @@ describe('importing glossary rows', () => {
     })
   })
 })
+
+describe('keeping edits across a sync', () => {
+  let db: Database.Database
+  const now = (): Date => new Date('2026-02-01T00:00:00.000Z')
+  const wporg = [
+    { locale: 'tr', sourceTerm: 'post', translation: 'yazı', partOfSpeech: 'noun' },
+    { locale: 'tr', sourceTerm: 'post', translation: 'yayınla', partOfSpeech: 'verb' },
+    { locale: 'tr', sourceTerm: 'page', translation: 'sayfa', partOfSpeech: 'noun' },
+  ]
+
+  beforeEach(() => {
+    db = openDb(':memory:')
+    replaceGlossary(db, 'tr', wporg)
+  })
+
+  afterEach(() => db.close())
+
+  const find = (translation: string): EffectiveRow => {
+    const r = effectiveGlossary(db, 'tr').find((x) => x.translation === translation)
+    if (!r) throw new Error(`no row ${translation}`)
+    return r
+  }
+  const save = (d: Partial<GlossaryDiff>): string => saveGlossaryEdits(db, 'tr', diff(d), glossaryStamp(db, 'tr'), now)
+  const kinds = (): string[] =>
+    db.prepare<[], { kind: string; translation: string | null }>('SELECT kind, translation FROM glossary_edits ORDER BY id')
+      .all()
+      .map((e) => `${e.kind}:${e.translation ?? ''}`)
+
+  it('keeps a change whose base survives the sync', () => {
+    save({ changed: [{ from: find('yazı'), to: row('post', 'noun', 'gönderi') }] })
+    expect(replaceGlossary(db, 'tr', wporg)).toEqual([])
+    expect(kinds()).toEqual(['change:gönderi'])
+    expect(find('gönderi')).toMatchObject({ origin: 'changed' })
+  })
+
+  it('removes a change whose base changed and reports it with the new wp.org row', () => {
+    save({ changed: [{ from: find('yazı'), to: row('post', 'noun', 'gönderi') }] })
+    const removed = replaceGlossary(db, 'tr', [
+      { locale: 'tr', sourceTerm: 'post', translation: 'ileti', partOfSpeech: 'noun' },
+      ...wporg.slice(1),
+    ])
+    expect(removed).toEqual([
+      { kind: 'change', term: 'post', pos: 'noun', local: row('post', 'noun', 'gönderi'), wporg: [row('post', 'noun', 'ileti')] },
+    ])
+    expect(kinds()).toEqual([])
+  })
+
+  it('removes a delete whose base is gone and reports it without a local row', () => {
+    save({ deleted: [find('sayfa')] })
+    const removed = replaceGlossary(db, 'tr', [
+      ...wporg.slice(0, 2),
+      { locale: 'tr', sourceTerm: 'page', translation: 'sayfa', partOfSpeech: 'noun', notes: 'n' },
+    ])
+    expect(removed).toEqual([{ kind: 'delete', term: 'page', pos: 'noun', wporg: [row('page', 'noun', 'sayfa', 'n')] }])
+    expect(kinds()).toEqual([])
+  })
+
+  it('keeps an add beside an unchanged wp.org row of the same term and part of speech', () => {
+    // Cased differently from the wp.org row, as the snapshot's own rule allows.
+    save({ added: [row('Post', 'noun', 'gönderi'), row('archive', 'noun', 'arşiv')] })
+    expect(replaceGlossary(db, 'tr', wporg)).toEqual([])
+    expect(kinds()).toEqual(['add:gönderi', 'add:arşiv'])
+  })
+
+  it('keeps an add when only another part of speech of its term changed', () => {
+    save({ added: [row('post', 'noun', 'gönderi')] })
+    expect(replaceGlossary(db, 'tr', [wporg[0]!, wporg[2]!])).toEqual([])
+    expect(kinds()).toEqual(['add:gönderi'])
+  })
+
+  it('removes an add whose term and part of speech gained a wp.org row', () => {
+    save({ added: [row('archive', 'noun', 'arşiv')] })
+    const removed = replaceGlossary(db, 'tr', [
+      ...wporg,
+      { locale: 'tr', sourceTerm: 'Archive', translation: 'arşiv', partOfSpeech: 'noun' },
+    ])
+    expect(removed).toEqual([
+      { kind: 'add', term: 'archive', pos: 'noun', local: row('archive', 'noun', 'arşiv'), wporg: [row('Archive', 'noun', 'arşiv')] },
+    ])
+    expect(kinds()).toEqual([])
+  })
+
+  it('removes an add whose wp.org rows of that term and part of speech changed', () => {
+    save({ added: [row('post', 'noun', 'gönderi')] })
+    const removed = replaceGlossary(db, 'tr', [
+      { locale: 'tr', sourceTerm: 'post', translation: 'ileti', partOfSpeech: 'noun' },
+      ...wporg.slice(1),
+    ])
+    expect(removed.map((r) => [r.kind, r.term, r.local?.translation, r.wporg.map((w) => w.translation)])).toEqual([
+      ['add', 'post', 'gönderi', ['ileti']],
+    ])
+    expect(kinds()).toEqual([])
+  })
+
+  it('leaves the other locales edits alone', () => {
+    replaceGlossary(db, 'de', [{ locale: 'de', sourceTerm: 'post', translation: 'Beitrag', partOfSpeech: 'noun' }])
+    saveGlossaryEdits(db, 'de', diff({ added: [row('post', 'noun', 'Artikel')] }), glossaryStamp(db, 'de'), now)
+    expect(replaceGlossary(db, 'tr', [])).toEqual([])
+    expect(kinds()).toEqual(['add:Artikel'])
+  })
+
+  it('leaves both tables as they were when the reconciliation fails', () => {
+    save({ changed: [{ from: find('yazı'), to: row('post', 'noun', 'gönderi') }] })
+    db.exec("CREATE TRIGGER no_drop BEFORE DELETE ON glossary_edits BEGIN SELECT RAISE(ABORT, 'boom'); END")
+    expect(() => replaceGlossary(db, 'tr', [wporg[1]!])).toThrow('boom')
+    expect(kinds()).toEqual(['change:gönderi'])
+    expect(effectiveGlossary(db, 'tr').map((r) => r.translation)).toEqual(['sayfa', 'gönderi', 'yayınla'])
+  })
+})

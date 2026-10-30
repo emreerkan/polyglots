@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Box, Text } from 'ink'
-import type { SyncGlossaryResult } from '../../commands/glossary-sync.js'
+import { removedEditLine, syncedLine, type SyncGlossaryResult } from '../../commands/glossary-sync.js'
 import { configuredLocale } from '../../config.js'
 import { normalizeLocale } from '../../tmx/parse.js'
 import { resolveLocale } from '../../wporg/locales.js'
@@ -60,9 +60,12 @@ export function SyncGlossary({ onBack }: SyncGlossaryProps) {
       {editing && <Hint>enter to sync · esc back to menu</Hint>}
       {running && <Text>Fetching glossary for {locale}…</Text>}
       {task.state.status === 'done' && (
-        <Text bold>
-          Synced {task.state.result.entries} glossary entries for {locale}.
-        </Text>
+        <Box flexDirection="column">
+          <Text bold>{syncedLine(task.state.result, locale)}</Text>
+          {task.state.result.removed.map((r, i) => (
+            <Text key={i}>  {removedEditLine(r)}</Text>
+          ))}
+        </Box>
       )}
       {failed && <Text color="red">Sync failed: {task.state.status === 'error' ? task.state.message : ''}</Text>}
       {failed ? <Hint>{`${configured === undefined ? 'enter to edit the locale and retry' : 'enter to retry'} · q/esc back to menu`}</Hint> : finished && <Hint>{DONE_HINT}</Hint>}

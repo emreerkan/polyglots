@@ -18,6 +18,7 @@ interface EditRow {
   pos: string | null
   translation: string | null
   notes: string | null
+  base_snapshot: string | null
 }
 
 const key = (r: GlossaryRow): string => JSON.stringify([r.term, r.pos, r.translation, r.notes])
@@ -38,8 +39,25 @@ const editBase = (e: EditRow): GlossaryRow => ({
 })
 const plain = (r: GlossaryRow): GlossaryRow => ({ term: r.term, pos: r.pos, translation: r.translation, notes: r.notes })
 
-const selectEdits = `SELECT id, kind, base_term, base_pos, base_translation, base_notes, term, pos, translation, notes
-  FROM glossary_edits WHERE locale = ? ORDER BY id`
+const selectEdits = `SELECT id, kind, base_term, base_pos, base_translation, base_notes, term, pos, translation, notes,
+  base_snapshot FROM glossary_edits WHERE locale = ? ORDER BY id`
+
+/**
+ * The wp.org rows an add stands beside: same term under JS case folding, same
+ * part of speech exactly. The save writes an add's snapshot with this and the
+ * sync compares against it with this, and the two must never disagree: a
+ * sync that folded case differently from the save would see every add of a
+ * capitalised term as changed and remove it at the first sync.
+ */
+function besideAdd(wporg: GlossaryRow[], r: GlossaryRow): GlossaryRow[] {
+  const term = r.term.toLowerCase()
+  return wporg.filter((w) => w.term.toLowerCase() === term && w.pos === r.pos)
+}
+
+/** The stored form of an add's snapshot: the translations beside it, sorted, as JSON. */
+function addSnapshot(wporg: GlossaryRow[], r: GlossaryRow): string {
+  return JSON.stringify(besideAdd(wporg, r).map((w) => w.translation).sort())
+}
 
 /**
  * The setup screen reads a handle that cannot migrate, so a database last
@@ -208,11 +226,7 @@ export function saveGlossaryEdits(
     for (const r of diff.added) writes.push({ op: 'add', id: null, to: plain(r) })
 
     const at = nextTimestamp(db, locale, now())
-    const snapshot = (r: GlossaryRow): string => {
-      const term = r.term.toLowerCase()
-      const translations = wporg.filter((w) => w.term.toLowerCase() === term && w.pos === r.pos).map((w) => w.translation)
-      return JSON.stringify(translations.sort())
-    }
+    const snapshot = (r: GlossaryRow): string => addSnapshot(wporg, r)
     const insert = db.prepare(
       `INSERT INTO glossary_edits (locale, kind, base_term, base_pos, base_translation, base_notes,
          term, pos, translation, notes, base_snapshot, created_at, updated_at)
@@ -296,4 +310,59 @@ export function importGlossaryRows(
     saveGlossaryEdits(db, locale, diff, stamp)
     return { replaced: new Set(diff.deleted.map((r) => r.term.toLowerCase())).size, added: diff.added.length }
   })()
+}
+
+/**
+ * A local edit a sync removed because wp.org changed what it was made against.
+ * Term and part of speech are the base's for a change or delete and the row's
+ * for an add; `local` is absent for a delete. `wporg` holds the rows of that
+ * term and part of speech after the sync, empty when the term is gone.
+ */
+export interface RemovedEdit {
+  kind: 'add' | 'change' | 'delete'
+  term: string
+  pos: string
+  local?: GlossaryRow
+  wporg: GlossaryRow[]
+}
+
+/**
+ * Run by the sync inside its own transaction, after the new wp.org rows are
+ * in: removes every edit the new copy invalidates and returns what it removed.
+ *
+ * A change or delete stays while its base is still a wp.org row verbatim;
+ * otherwise the locale team touched the row and their version wins. An add has
+ * no base, so it is held against the snapshot taken when it was made: while
+ * the wp.org translations of its term and part of speech are the same set, the
+ * add stays, because a second translation beside an existing one is a legal
+ * edit and must not vanish at every sync. A NULL snapshot is read as none,
+ * which is what a save would have written for a term wp.org did not have.
+ */
+export function reconcileGlossaryEdits(db: Database.Database, locale: Locale): RemovedEdit[] {
+  if (!hasEditsTable(db)) return []
+  const wporg = allGlossary(db, locale).map(entryToRow)
+  const wporgKeys = new Set(wporg.map(key))
+  const drop = db.prepare('DELETE FROM glossary_edits WHERE id = ?')
+  const removed: RemovedEdit[] = []
+  for (const e of db.prepare<[string], EditRow>(selectEdits).all(locale)) {
+    const kind = e.kind === 'add' ? 'add' : e.kind === 'delete' ? 'delete' : 'change'
+    const anchor = kind === 'add' ? editRow(e) : editBase(e)
+    const kept = kind === 'add' ? addSnapshot(wporg, anchor) === (e.base_snapshot ?? '[]') : wporgKeys.has(key(anchor))
+    if (kept) continue
+    drop.run(e.id)
+    removed.push({
+      kind,
+      term: anchor.term,
+      pos: anchor.pos,
+      ...(kind === 'delete' ? {} : { local: editRow(e) }),
+      wporg: besideAdd(wporg, anchor),
+    })
+  }
+  return removed
+}
+
+/** How many local edits a locale has, which a sync reports as kept. */
+export function countGlossaryEdits(db: Database.Database, locale: Locale): number {
+  if (!hasEditsTable(db)) return 0
+  return db.prepare<[string], { n: number }>('SELECT count(*) AS n FROM glossary_edits WHERE locale = ?').get(locale)?.n ?? 0
 }

@@ -9,6 +9,7 @@ import { syncGlossary } from '../../../src/commands/glossary-sync.js'
 import { dataDir, dbFile } from '../../../src/paths.js'
 import { lookupGlossary, openDb, replaceGlossary } from '../../../src/storage/index.js'
 import { glossarySyncTimes } from '../../../src/storage/glossary.js'
+import { effectiveGlossary, glossaryStamp, saveGlossaryEdits } from '../../../src/storage/glossary-edits.js'
 import { glossaryExportUrl, glossaryUrl } from '../../../src/wporg/glossary.js'
 
 type Storage = typeof import('../../../src/storage/index.js')
@@ -120,6 +121,57 @@ describe('syncGlossary', () => {
     expect(replaceGlossary).not.toHaveBeenCalled()
     expect(lookupGlossary(db, 'keep-me', 'tr')).toHaveLength(1)
     expect(countRows(db, 'tr')).toBe(1)
+  })
+
+  const editCount = (): number =>
+    (db.prepare("SELECT count(*) AS n FROM glossary_edits WHERE locale = 'tr'").get() as { n: number }).n
+
+  it('keeps edits whose base survives and reports the ones the locale changed', async () => {
+    await syncGlossary({ locale: 'tr', db, fetch: fixtureFetch })
+    const plugin = effectiveGlossary(db, 'tr').find((r) => r.term === 'plugin')!
+    saveGlossaryEdits(
+      db,
+      'tr',
+      { added: [], deleted: [], changed: [{ from: plugin, to: { ...plugin, translation: 'eklentiler' } }] },
+      glossaryStamp(db, 'tr'),
+    )
+    // A change made against a row wp.org no longer has.
+    db.prepare(
+      `INSERT INTO glossary_edits (locale, kind, base_term, base_pos, base_translation, base_notes,
+         term, pos, translation, notes, created_at, updated_at)
+       VALUES ('tr', 'change', 'archive', 'noun', 'arşivler', '', 'archive', 'noun', 'arşivim', '', 'x', 'x')`,
+    ).run()
+
+    const result = await syncGlossary({ locale: 'tr', db, fetch: fixtureFetch })
+
+    expect(result.kept).toBe(1)
+    expect(result.removed).toEqual([
+      {
+        kind: 'change',
+        term: 'archive',
+        pos: 'noun',
+        local: { term: 'archive', pos: 'noun', translation: 'arşivim', notes: '' },
+        wporg: [{ term: 'archive', pos: 'noun', translation: 'arşiv', notes: '' }],
+      },
+    ])
+    expect(editCount()).toBe(1)
+  })
+
+  it('leaves edits as they were when the sync throws', async () => {
+    replaceGlossary(db, 'tr', [{ locale: 'tr', sourceTerm: 'keep-me', translation: 'sakla' }])
+    saveGlossaryEdits(
+      db,
+      'tr',
+      { added: [{ term: 'other', pos: '', translation: 'diğer', notes: '' }], changed: [], deleted: [] },
+      glossaryStamp(db, 'tr'),
+    )
+
+    await expect(
+      syncGlossary({ locale: 'tr', db, fetch: async () => '<html><body><p>nothing</p></body></html>' }),
+    ).rejects.toThrow(/no glossary entries/i)
+
+    expect(editCount()).toBe(1)
+    expect(effectiveGlossary(db, 'tr').map((r) => r.translation)).toEqual(['sakla', 'diğer'])
   })
 
   it('passes the locale through to the fetched url and stamps entries with it', async () => {
