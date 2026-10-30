@@ -231,8 +231,8 @@ test('the current wp.org glossary is asked of the site, and opens as a file name
   assert.deepEqual(asked, ['/polyglots/api/glossary/?locale=pt-br'])
 })
 
-// The dev server serves the script as a file and a proxy may answer with a
-// page; neither is a glossary, so neither opens as one.
+// The dev server has no api/ and a proxy may answer with a page; neither is
+// a glossary, so neither opens as one.
 test('a failed or foreign answer for the wp.org glossary is an error that names the locale', async () => {
   const answer = (body: string, status: number) => async () => new Response(body, { status })
   await assert.rejects(fetchWporgGlossary(answer('wp.org did not return a glossary', 502), '/', 'tr'), /tr glossary could not be loaded/)

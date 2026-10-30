@@ -5,9 +5,9 @@ import { WPORG_LOCALES, localeDisplayName, localeId } from '../../../app/src/wpo
 // A client-side tool, like the rules builder: the markup is here and the
 // script fills in the editor. The file is read and written in the browser;
 // nothing is sent anywhere. The one request is for wp.org's current export,
-// asked of public/api/glossary/ with only the locale slug, since the browser
-// cannot read wp.org's export itself. Work in progress is kept in localStorage
-// until it is exported.
+// asked of /polyglots/api/glossary/ (served by polyglots-admin, not this site)
+// with only the locale slug, since the browser cannot read wp.org's export
+// itself. Work in progress is kept in localStorage until it is exported.
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
 // One entry per GlotPress slug: a glossary belongs to the locale, not to a
 // translation set, so nl/formal would only repeat nl.

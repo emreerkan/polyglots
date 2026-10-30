@@ -68,15 +68,16 @@ export function discardSaved(storage: WebEnv['storage']): boolean {
 export const exportUrl = (slug: string): string => `https://translate.wordpress.org/locale/${slug}/default/glossary/-export/`
 
 /**
- * The locale's current wp.org export, asked of the site's own
- * api/glossary/ script: wp.org sends no CORS header, so the browser cannot
- * read the export itself. It comes back as a file to open, so it passes
- * through the same header and locale checks a CSV from disk does.
+ * The locale's current wp.org export, asked of /polyglots/api/glossary/ on
+ * the site's own origin, which polyglots-admin serves: wp.org sends no CORS
+ * header, so the browser cannot read the export itself. It comes back as a
+ * file to open, so it passes through the same header and locale checks a CSV
+ * from disk does.
  *
- * Anything that is not an export is an error, not an empty glossary: a 502
- * from the script, a network failure, and the dev server, which has no PHP
- * and returns the script's source with a 200. The message names the locale,
- * and the page offers wp.org's own download beside it.
+ * Anything that is not an export is an error, not an empty glossary: a
+ * failed status, a network failure, and a 200 that is not a CSV, as the dev
+ * server's 404 page or a proxy's error page can be. The message names the
+ * locale, and the page offers wp.org's own download beside it.
  */
 export async function fetchWporgGlossary(
   fetch: (url: string) => Promise<Response>,
