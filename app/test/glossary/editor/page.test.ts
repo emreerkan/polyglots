@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GLOSSARY_POS } from '../../../src/glossary/csv.js'
-import { diffOf, type EditorModel } from '../../../src/glossary/editor/model.js'
+import { createModel, currentRows, diffOf, setCell, type EditorModel } from '../../../src/glossary/editor/model.js'
 import { mountEditor } from '../../../src/glossary/editor/page/editor.js'
 import type { EditorHost, LoadedGlossary, SaveResult } from '../../../src/glossary/editor/page/host.js'
 import type { EffectiveRow } from '../../../src/glossary/types.js'
@@ -74,6 +74,26 @@ function edit(id: number, field: string, value: string): void {
 }
 
 describe('mountEditor', () => {
+  it('mounts from a restored model, keeping its edits against the as-opened values, and drops it after a save', async () => {
+    const restored = createModel([eff('course', 'kurs'), eff('lesson', 'ders')], 'csv')
+    setCell(restored, restored.rows[0]!.id, 'translation', 'ders kitabı')
+    const host = fakeHost({ mode: 'csv', rows: currentRows(restored), model: restored }, { saveLabel: 'Export' })
+    delete host.discard
+    const { model } = await mountEditor(root, host)
+    expect(diffOf(model()).changed.map((c) => [c.from.translation, c.to.translation])).toEqual([['kurs', 'ders kitabı']])
+    byText('Export').click()
+    await flush()
+    expect(diffOf(model()).changed).toEqual([])
+  })
+
+  it('shows the warning a host returns when the work cannot be kept', async () => {
+    const warn = 'Not kept.'
+    const host = fakeHost({ mode: 'csv', rows: [eff('a', 'b')] }, { persist: () => warn })
+    await mountEditor(root, host)
+    edit(1, 'translation', 'x')
+    expect((root.querySelector('.ge-notice') as HTMLElement).textContent).toBe('Not kept.')
+  })
+
   it('draws the columns in order, with the part of speech as a select of the GlotPress values', async () => {
     await mountEditor(root, fakeHost())
     const heads = [...root.querySelectorAll('thead th')].map((th) => norm(th.textContent)).slice(0, 4)

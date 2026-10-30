@@ -124,9 +124,9 @@ export function start(): void {
 
         cont.hidden = saved === undefined
         if (saved) {
-          const n = saved.rows.length
+          const n = saved.model.rows.filter((r) => !r.deleted).length
           const what = saved.file ?? `a new ${localeDisplayName(resolveLocale(saved.locale)?.id ?? saved.locale)} glossary`
-          $<HTMLElement>('[data-ge-continue-text]').textContent = `${what}, ${n} ${n === 1 ? 'row' : 'rows'}. It is kept in this browser until you export it.`
+          $<HTMLElement>('[data-ge-continue-text]').textContent = `${what}, ${n} ${n === 1 ? 'row' : 'rows'}. It is kept in this browser until you export it. Opening or starting another glossary keeps it until your first change there, which replaces it.`
         }
         root.hidden = true
         panel.hidden = false

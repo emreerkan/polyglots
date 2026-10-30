@@ -1,7 +1,7 @@
 import { GlossaryCsvError, formatGlossaryCsv, readGlossaryCsv } from '../../../../app/src/glossary/csv.js'
-import { currentRows, type EditorModel } from '../../../../app/src/glossary/editor/model.js'
+import { currentRows, type EditorModel, type EditorRow } from '../../../../app/src/glossary/editor/model.js'
 import type { EditorHost, LoadedGlossary } from '../../../../app/src/glossary/editor/page/host.js'
-import type { GlossaryRow } from '../../../../app/src/glossary/types.js'
+import type { EffectiveRow, GlossaryRow } from '../../../../app/src/glossary/types.js'
 
 /**
  * The editor's host on the website: no server, so a file is read from the
@@ -15,11 +15,17 @@ import type { GlossaryRow } from '../../../../app/src/glossary/types.js'
 
 export const STORAGE_KEY = 'polyglots-glossary-editor'
 
-/** The work kept between visits: the table as it stood, and which file it came from. */
+/**
+ * The work kept between visits: the whole table, not just its current values.
+ * Each row carries the value it was opened with, and the change list is
+ * computed against that, so keeping only the current values would turn every
+ * edit made before the tab closed into part of the original, and the list a
+ * reviewer checks before importing would silently come back shorter.
+ */
 export interface Saved {
   locale: string
   file?: string
-  rows: GlossaryRow[]
+  model: EditorModel
 }
 
 /** What the person chose on the start screen. */
@@ -42,6 +48,41 @@ export interface WebEnv {
 export const exportUrl = (slug: string): string => `https://translate.wordpress.org/locale/${slug}/default/glossary/-export/`
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+const ORIGINS = ['wporg', 'changed', 'added']
+
+function plainRow(v: unknown): GlossaryRow | undefined {
+  if (!isObject(v)) return undefined
+  const { term, pos, translation, notes } = v
+  if (typeof term !== 'string' || typeof pos !== 'string' || typeof translation !== 'string' || typeof notes !== 'string') return undefined
+  return { term, pos, translation, notes }
+}
+
+function effectiveRow(v: unknown): EffectiveRow | undefined {
+  const row = plainRow(v)
+  if (!row || !isObject(v) || typeof v.origin !== 'string' || !ORIGINS.includes(v.origin)) return undefined
+  const origin = v.origin as EffectiveRow['origin']
+  if (v.base === undefined) return { ...row, origin }
+  const base = plainRow(v.base)
+  return base ? { ...row, origin, base } : undefined
+}
+
+function editorRow(v: unknown): EditorRow | undefined {
+  const row = plainRow(v)
+  if (!row || !isObject(v) || typeof v.id !== 'number' || !Number.isInteger(v.id) || typeof v.deleted !== 'boolean') return undefined
+  if (typeof v.origin !== 'string' || ![...ORIGINS, 'new'].includes(v.origin)) return undefined
+  const out: EditorRow = { ...row, id: v.id, origin: v.origin as EditorRow['origin'], deleted: v.deleted }
+  if (v.base !== undefined) {
+    const base = plainRow(v.base)
+    if (!base) return undefined
+    out.base = base
+  }
+  if (v.loaded !== undefined) {
+    const loaded = effectiveRow(v.loaded)
+    if (!loaded) return undefined
+    out.loaded = loaded
+  }
+  return out
+}
 
 /**
  * What storage held, or undefined when it is not work this page wrote. The
@@ -50,15 +91,18 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
  * repaired, because a repaired row would be exported as if the person typed it.
  */
 export function restoreSaved(raw: unknown): Saved | undefined {
-  if (!isObject(raw) || typeof raw.locale !== 'string' || !Array.isArray(raw.rows)) return undefined
-  const rows: GlossaryRow[] = []
-  for (const r of raw.rows) {
-    if (!isObject(r)) return undefined
-    const { term, pos, translation, notes } = r
-    if (typeof term !== 'string' || typeof pos !== 'string' || typeof translation !== 'string' || typeof notes !== 'string') return undefined
-    rows.push({ term, pos, translation, notes })
+  if (!isObject(raw) || typeof raw.locale !== 'string' || !isObject(raw.model) || raw.model.mode !== 'csv' || !Array.isArray(raw.model.rows)) {
+    return undefined
   }
-  return { locale: raw.locale, ...(typeof raw.file === 'string' ? { file: raw.file } : {}), rows }
+  const rows: EditorRow[] = []
+  const ids = new Set<number>()
+  for (const r of raw.model.rows) {
+    const row = editorRow(r)
+    if (!row || ids.has(row.id)) return undefined
+    ids.add(row.id)
+    rows.push(row)
+  }
+  return { locale: raw.locale, ...(typeof raw.file === 'string' ? { file: raw.file } : {}), model: { mode: 'csv', rows } }
 }
 
 function readStored(storage: WebEnv['storage']): Saved | undefined {
@@ -81,6 +125,8 @@ function readStored(storage: WebEnv['storage']): Saved | undefined {
   }
 }
 
+const NOT_KEPT = 'This browser is not keeping your work. Export before you close the tab.'
+
 export function webHost(env: WebEnv): EditorHost {
   let locale = ''
   let file: string | undefined
@@ -88,6 +134,7 @@ export function webHost(env: WebEnv): EditorHost {
   // and without this it would store the work that was just exported, so the
   // next visit would offer to continue something already delivered.
   let exported: string | undefined
+  let wrote = false
 
   const csvOf = (m: EditorModel): string => formatGlossaryCsv(currentRows(m), locale)
 
@@ -110,18 +157,34 @@ export function webHost(env: WebEnv): EditorHost {
       const saved = readStored(env.storage)
       if (!saved) throw new GlossaryCsvError('The saved work is no longer there.')
       locale = saved.locale
+      // Continuing makes this session the owner of the stored work, so its
+      // export is what clears it.
+      wrote = true
       file = saved.file
-      return { mode: 'csv', locale, headerLocale: locale, ...(file === undefined ? {} : { file }), rows: saved.rows }
+      return {
+        mode: 'csv',
+        locale,
+        headerLocale: locale,
+        ...(file === undefined ? {} : { file }),
+        rows: currentRows(saved.model),
+        model: saved.model,
+      }
     },
 
     async save(m) {
       const text = csvOf(m)
       env.download(file ?? `glossary-${locale || 'new'}.csv`, text)
       exported = text
-      try {
-        env.storage?.removeItem(STORAGE_KEY)
-      } catch {
-        // Storage is a convenience; a refusal changes nothing the person sees.
+      // Only work this session wrote is cleared: someone who chose New or Open
+      // while saved work was waiting, and exported before editing, has not
+      // delivered that older work.
+      if (wrote) {
+        try {
+          env.storage?.removeItem(STORAGE_KEY)
+          wrote = false
+        } catch {
+          // Storage is a convenience; a refusal changes nothing the person sees.
+        }
       }
       return { ok: true }
     },
@@ -131,18 +194,24 @@ export function webHost(env: WebEnv): EditorHost {
       return picked ? JSON.parse(picked.text) : undefined
     },
 
+    // Runs on the person's first edit, not at load, so choosing New or Open
+    // while saved work is offered leaves that work in place until something
+    // is actually changed. The string it returns is the page's warning.
     persist(m) {
-      if (!env.storage) return
+      if (!env.storage) return NOT_KEPT
       try {
-        // An empty new table is not work worth offering to continue.
-        if (csvOf(m) === exported || (file === undefined && currentRows(m).length === 0)) {
-          env.storage.removeItem(STORAGE_KEY)
+        if (csvOf(m) === exported) {
+          if (wrote) env.storage.removeItem(STORAGE_KEY)
+          wrote = false
           return
         }
-        const saved: Saved = { locale, ...(file === undefined ? {} : { file }), rows: currentRows(m) }
+        const saved: Saved = { locale, ...(file === undefined ? {} : { file }), model: { mode: 'csv', rows: m.rows } }
         env.storage.setItem(STORAGE_KEY, JSON.stringify(saved))
+        wrote = true
       } catch {
-        // Private window or storage blocked: only a reload loses the work.
+        // Private window, storage blocked or full: say so, since a closed tab
+        // would otherwise lose the work without a word.
+        return NOT_KEPT
       }
     },
   }

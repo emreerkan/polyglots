@@ -1,8 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readGlossaryCsv } from '../../app/src/glossary/csv.js'
-import { createModel, setCell } from '../../app/src/glossary/editor/model.js'
-import { STORAGE_KEY, exportUrl, restoreSaved, webHost, type Start, type WebEnv } from '../src/components/glossary-editor/web-host.js'
+import { addRow, createModel, diffOf, setCell, toggleDelete } from '../../app/src/glossary/editor/model.js'
+import { STORAGE_KEY, exportUrl, webHost, type Start, type WebEnv } from '../src/components/glossary-editor/web-host.js'
 
 const CSV = 'en,tr,pos,description\nPost,Yazı,noun,\nPage,Sayfa,noun,A static page\n'
 
@@ -69,55 +69,104 @@ test('a CSV that is not a glossary export fails the load with its message', asyn
   await assert.rejects(host.load(), /first column must be "en"/)
 })
 
-test('saved work comes back on the next visit and is cleared by an export', async () => {
+const fresh = () => ({ downloads: [] as { name: string; text: string }[], saved: 'unset' as unknown })
+
+test('saved work comes back with its change list, and an export clears it', async () => {
   const { storage, map } = memory()
-  const first = { downloads: [] as { name: string; text: string }[] }
-  const host = webHost(env({ kind: 'file', name: 'g.csv', text: CSV }, storage, first))
+  const host = webHost(env({ kind: 'file', name: 'g.csv', text: CSV }, storage, fresh()))
   const data = await host.load()
   const m = createModel(data.rows, 'csv')
   setCell(m, m.rows[1]!.id, 'translation', 'Sayfa!')
+  addRow(m)
+  toggleDelete(m, m.rows[0]!.id)
   host.persist!(m)
   assert.ok(map.has(STORAGE_KEY))
 
-  const second = { downloads: [] as { name: string; text: string }[], saved: undefined as unknown }
+  const second = fresh()
   const again = webHost(env({ kind: 'saved' }, storage, second))
-  assert.ok(second.saved === undefined)
   const back = await again.load()
   assert.ok(second.saved !== undefined)
   assert.equal(back.file, 'g.csv')
   assert.equal(back.headerLocale, 'tr')
-  assert.equal(back.rows[1]!.translation, 'Sayfa!')
+  // The edits made before the tab closed are still edits against the file as
+  // opened, not part of the baseline.
+  const m2 = back.model!
+  assert.deepEqual(diffOf(m2), diffOf(m))
+  assert.equal(diffOf(m2).changed.length, 1)
+  assert.equal(diffOf(m2).changed[0]!.from.translation, 'Sayfa')
+  assert.equal(diffOf(m2).deleted.length, 1)
+  assert.equal(diffOf(m2).added.length, 1)
 
   // The editor persists again right after a successful save: that must not
   // bring the exported work back as something to continue.
-  const m2 = createModel(back.rows, 'csv')
   assert.deepEqual(await again.save(m2), { ok: true })
   again.persist!(m2)
   assert.equal(map.has(STORAGE_KEY), false)
 })
 
+test('choosing New or Open leaves waiting work in place until the first edit', async () => {
+  const { storage, map } = memory()
+  const first = webHost(env({ kind: 'file', name: 'g.csv', text: CSV }, storage, fresh()))
+  const m = createModel((await first.load()).rows, 'csv')
+  setCell(m, m.rows[0]!.id, 'translation', 'X')
+  first.persist!(m)
+  const waiting = map.get(STORAGE_KEY)
+
+  const seen = fresh()
+  const other = webHost(env({ kind: 'new', locale: 'de' }, storage, seen))
+  const data = await other.load()
+  assert.ok(seen.saved !== undefined, 'the saved work was offered')
+  assert.equal(map.get(STORAGE_KEY), waiting)
+  // Exporting before any edit must not delete work that was never delivered.
+  const m2 = createModel(data.rows, 'csv')
+  await other.save(m2)
+  other.persist!(m2)
+  assert.equal(map.get(STORAGE_KEY), waiting)
+})
+
 test('a malformed stored value is dropped, not thrown', async () => {
-  for (const bad of ['{not json', '"text"', '{"rows":5}', '{"rows":[{"term":1}]}', 'null']) {
+  const good = { locale: 'tr', model: { mode: 'csv', rows: [{ id: 1, term: 'a', pos: '', translation: 'b', notes: '', origin: 'wporg', deleted: false }] } }
+  const row = good.model.rows[0]!
+  const bads = [
+    '{not json', '"text"', 'null', '{"rows":5}', '{"locale":"tr","rows":[]}',
+    JSON.stringify({ ...good, model: { mode: 'db', rows: [] } }),
+    JSON.stringify({ ...good, model: { mode: 'csv', rows: [{ ...row, id: '1' }] } }),
+    JSON.stringify({ ...good, model: { mode: 'csv', rows: [{ ...row, origin: 'nope' }] } }),
+    JSON.stringify({ ...good, model: { mode: 'csv', rows: [row, row] } }),
+    JSON.stringify({ ...good, model: { mode: 'csv', rows: [{ ...row, loaded: { term: 1 } }] } }),
+    JSON.stringify({ ...good, model: { mode: 'csv', rows: [{ ...row, deleted: 'no' }] } }),
+  ]
+  for (const bad of bads) {
     const { storage, map } = memory(bad)
-    const seen = { downloads: [] as { name: string; text: string }[], saved: 'unset' as unknown }
+    const seen = fresh()
     const host = webHost(env({ kind: 'new', locale: 'tr' }, storage, seen))
     await host.load()
     assert.equal(seen.saved, undefined, bad)
     assert.equal(map.has(STORAGE_KEY), false, bad)
   }
+  const ok = memory(JSON.stringify(good))
+  const seen = fresh()
+  await webHost(env({ kind: 'new', locale: 'tr' }, ok.storage, seen)).load()
+  assert.ok(seen.saved !== undefined)
   const blocked = memory('{}', true)
-  const seen = { downloads: [] as { name: string; text: string }[], saved: 'unset' as unknown }
-  const host = webHost(env({ kind: 'new', locale: 'tr' }, blocked.storage, seen))
-  await host.load()
-  assert.equal(seen.saved, undefined)
-  host.persist!(createModel([], 'csv'))
+  const s2 = fresh()
+  await webHost(env({ kind: 'new', locale: 'tr' }, blocked.storage, s2)).load()
+  assert.equal(s2.saved, undefined)
 })
 
-test('restoreSaved keeps well formed work and nothing else', () => {
-  const ok = restoreSaved({ locale: 'tr', file: 'a.csv', rows: [{ term: 'Post', pos: 'noun', translation: 'Yazı', notes: '' }] })
-  assert.deepEqual(ok, { locale: 'tr', file: 'a.csv', rows: [{ term: 'Post', pos: 'noun', translation: 'Yazı', notes: '' }] })
-  assert.equal(restoreSaved({ rows: [] }), undefined)
-  assert.equal(restoreSaved([]), undefined)
+test('persist says so when the work cannot be kept', async () => {
+  const blocked = memory(undefined, true)
+  const host = webHost(env({ kind: 'new', locale: 'tr' }, blocked.storage, fresh()))
+  await host.load()
+  const m = createModel([], 'csv')
+  addRow(m)
+  assert.match(String(host.persist!(m)), /not keeping your work/)
+  const none = webHost(env({ kind: 'new', locale: 'tr' }, undefined, fresh()))
+  await none.load()
+  assert.match(String(none.persist!(m)), /not keeping your work/)
+  const fine = webHost(env({ kind: 'new', locale: 'tr' }, memory().storage, fresh()))
+  await fine.load()
+  assert.equal(fine.persist!(m), undefined)
 })
 
 test('the analysis picker returns parsed JSON, and nothing when cancelled', async () => {

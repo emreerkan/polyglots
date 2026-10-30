@@ -38,6 +38,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
   let stamp: string | undefined
   let sidecar: Map<string, SidecarRecord> | undefined
   let notice = ''
+  let keepWarning = ''
   let filter: Filter = { query: '' }
   // Ids in display order. Recomputed when the filter changes, not on every
   // edit: a row that stops matching the search while it is being fixed stays
@@ -127,7 +128,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
 
   function apply(next: LoadedGlossary): void {
     data = next
-    m = createModel(next.rows, next.mode)
+    m = next.model ?? createModel(next.rows, next.mode)
     stamp = next.stamp
     notice = next.notice ?? ''
     sidecar = undefined
@@ -230,7 +231,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     }
     patchRows(touched, refocus)
     drawChrome()
-    host.persist?.(m)
+    keep()
   }
 
   function drawChrome(): void {
@@ -267,11 +268,26 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     setHtml(reason, reasonHtml(m, problems))
     reason.hidden = problems.size === 0
 
-    const n = $<HTMLElement>('.ge-notice')
-    n.textContent = notice
-    n.hidden = notice === ''
-
+    drawNotice()
     drawPanel()
+  }
+
+  function drawNotice(): void {
+    const text = [notice, keepWarning].filter(Boolean).join(' ')
+    const n = $<HTMLElement>('.ge-notice')
+    n.textContent = text
+    n.hidden = text === ''
+  }
+
+  // A host that keeps work in progress can fail to (storage full or blocked);
+  // its word on that is shown with the other notices, so the person is not left
+  // believing a closed tab loses nothing. Cleared when a later keep succeeds.
+  function keep(): void {
+    const warning = host.persist?.(m)
+    const next = typeof warning === 'string' ? warning : ''
+    if (next === keepWarning) return
+    keepWarning = next
+    drawNotice()
   }
 
   function drawPanel(): void {
@@ -388,7 +404,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     insertVisible(id, cursor?.id)
     cursor = { id, field: 'term' }
     drawRows()
-    host.persist?.(m)
+    keep()
     focusCell(id, 'term')
   }
 
@@ -399,7 +415,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
     // Same term, another part of speech is why rows get duplicated.
     cursor = { id, field: 'pos' }
     drawRows()
-    host.persist?.(m)
+    keep()
     focusCell(id, 'pos')
   }
 
@@ -422,7 +438,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
         cursor = next === undefined ? undefined : { id: next, field: cursor.field }
       }
       drawRows()
-      host.persist?.(m)
+      keep()
       if (cursor) focusCell(cursor.id, cursor.field)
       return
     }
@@ -515,8 +531,11 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
 
   /** What was just written becomes what was loaded, so the page is clean again. */
   function rebase(): void {
-    apply({ ...data, rows: currentRows(m), ...(stamp === undefined ? {} : { stamp }) })
-    host.persist?.(m)
+    // Without the restored model: it describes the table before this save, and
+    // reusing it would bring back the edits that were just written.
+    const { model: _restored, ...rest } = data
+    apply({ ...rest, rows: currentRows(m), ...(stamp === undefined ? {} : { stamp }) })
+    keep()
   }
 
   async function discard(): Promise<void> {
@@ -548,7 +567,7 @@ export async function mountEditor(root: HTMLElement, host: EditorHost): Promise<
       applyImport(m, rows)
       if (file.notice) notice = file.notice
       refilter()
-      host.persist?.(m)
+      keep()
       setStatus(`Imported ${rows.length} ${rows.length === 1 ? 'row' : 'rows'} as unsaved changes. Check Changes before saving.`)
     } catch (e) {
       setStatus(message(e), 'error')

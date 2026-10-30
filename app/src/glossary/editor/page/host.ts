@@ -23,6 +23,12 @@ export interface LoadedGlossary {
   stamp?: string
   localEdits?: number
   sidecar?: unknown
+  /**
+   * A table restored as it stood, edits and as-opened values included. The page
+   * uses it instead of building one from `rows`, which would treat everything
+   * edited so far as the original. `rows` is still sent for hosts that read it.
+   */
+  model?: EditorModel
 }
 
 export type SaveResult = { ok: true; stamp?: string } | { ok: false; reason: 'stale' | 'problems' | 'error'; message: string }
@@ -40,7 +46,8 @@ export interface EditorHost {
   saveLabel: 'Save' | 'Export'
   openFile?(): Promise<LoadedGlossary | undefined>
   openSidecar?(): Promise<unknown>
-  persist?(m: EditorModel): void
+  // Returns a warning when the work could not be kept, which the page shows.
+  persist?(m: EditorModel): string | void
   // Tells a server that stops when idle that the page is still open. Editing
   // makes no requests, so without it a long edit outlives the server.
   ping?(): void
