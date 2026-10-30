@@ -24,9 +24,19 @@ function memory(initial?: string, broken = false) {
   return { map, storage }
 }
 
-function env(start: Start, storage: WebEnv['storage'], seen: { saved?: unknown; downloads: { name: string; text: string }[] }): WebEnv {
+function env(
+  start: Start,
+  storage: WebEnv['storage'],
+  seen: { saved?: unknown; downloads: { name: string; text: string }[]; asked?: Array<[string, string]> },
+  // null for a person who declines to choose; undefined would take the default.
+  answer: string | null = 'tr',
+): WebEnv {
   return {
     storage,
+    askLocale: async (name, header) => {
+      ;(seen.asked ??= []).push([name, header])
+      return answer ?? undefined
+    },
     start: async (saved) => {
       seen.saved = saved
       return start
@@ -67,6 +77,40 @@ test('a CSV that is not a glossary export fails the load with its message', asyn
   const seen = { downloads: [] as { name: string; text: string }[] }
   const host = webHost(env({ kind: 'file', name: 'x.csv', text: 'a,b\n1,2\n' }, memory().storage, seen))
   await assert.rejects(host.load(), /first column must be "en"/)
+})
+
+// An export writes the header it was opened with. A header with no locale, or
+// one wp.org does not list, would be written back as "en,,pos,description",
+// which GlotPress and polyglots both refuse, so the locale is asked for.
+test('asks for the locale when the header names none, and exports with the answer', async () => {
+  const seen = { downloads: [] as { name: string; text: string }[], asked: [] as Array<[string, string]> }
+  const host = webHost(env({ kind: 'file', name: 'x.csv', text: 'en,,pos,description\nPost,Yazı,noun,\n' }, memory().storage, seen))
+  const data = await host.load()
+  assert.deepEqual(seen.asked, [['x.csv', '']])
+  assert.equal(data.locale, 'tr')
+  assert.equal(data.headerLocale, 'tr')
+  await host.save(createModel(data.rows, 'csv'))
+  assert.equal(seen.downloads[0]!.text.split('\n')[0], 'en,tr,pos,description')
+})
+
+test('asks for the locale when the header names one wp.org does not list', async () => {
+  const seen = { downloads: [] as { name: string; text: string }[], asked: [] as Array<[string, string]> }
+  const host = webHost(env({ kind: 'file', name: 'x.csv', text: 'en,klingon,pos,description\n' }, memory().storage, seen, 'de'))
+  assert.equal((await host.load()).headerLocale, 'de')
+  assert.deepEqual(seen.asked, [['x.csv', 'klingon']])
+})
+
+test('does not ask when the header names a wp.org locale', async () => {
+  const seen = { downloads: [] as { name: string; text: string }[], asked: [] as Array<[string, string]> }
+  const host = webHost(env({ kind: 'file', name: 'x.csv', text: CSV }, memory().storage, seen))
+  assert.equal((await host.load()).headerLocale, 'tr')
+  assert.deepEqual(seen.asked, [])
+})
+
+test('refuses the file with a clear message when no locale is chosen', async () => {
+  const seen = { downloads: [] as { name: string; text: string }[] }
+  const host = webHost(env({ kind: 'file', name: 'x.csv', text: 'en,,pos,description\n' }, memory().storage, seen, null))
+  await assert.rejects(host.load(), /x\.csv.*names no locale/)
 })
 
 const fresh = () => ({ downloads: [] as { name: string; text: string }[], saved: 'unset' as unknown })

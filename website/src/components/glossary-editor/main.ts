@@ -75,6 +75,53 @@ export function start(): void {
     storage: storage(),
     download,
     pick: pickFile,
+    // The start screen again, with only the New card's locale picker and its
+    // button relabelled: the same list a new glossary is started from, so the
+    // header written on export is one wp.org lists. Cancel throws the file
+    // back to the start screen, where the loop below shows the reason.
+    askLocale: (name: string, header: string) =>
+      new Promise<string | undefined>((resolve) => {
+        const openCard = drop.closest<HTMLElement>('.start-card')
+        const newBtn = $<HTMLButtonElement>('[data-ge-new]')
+        const label = newBtn.textContent
+        const heading = newBtn.closest('.start-card')?.querySelector('h2')
+        const title = heading?.textContent ?? ''
+        const cancel = document.createElement('button')
+        cancel.type = 'button'
+        cancel.className = 'gbtn'
+        cancel.textContent = 'Cancel'
+        const done = (value: string | undefined): void => {
+          newBtn.removeEventListener('click', onUse, true)
+          cancel.remove()
+          newBtn.textContent = label
+          if (heading) heading.textContent = title
+          if (openCard) openCard.hidden = false
+          showError('')
+          panel.hidden = true
+          root.hidden = false
+          resolve(value)
+        }
+        // Captured and stopped, so the New button's own start listener, if a
+        // start screen is somehow waiting, does not also fire.
+        const onUse = (e: Event): void => {
+          e.stopImmediatePropagation()
+          done(select.value)
+        }
+        newBtn.addEventListener('click', onUse, true)
+        cancel.addEventListener('click', () => done(undefined))
+        newBtn.after(cancel)
+        newBtn.textContent = 'Open with this locale'
+        if (heading) heading.textContent = `Open ${name}`
+        if (openCard) openCard.hidden = true
+        cont.hidden = true
+        showError(
+          header === ''
+            ? `${name}'s header names no locale. Choose the locale its rows are in.`
+            : `${name}'s header names "${header}", which wp.org does not list. Choose the locale its rows are in.`,
+        )
+        root.hidden = true
+        panel.hidden = false
+      }),
     start: (saved: Saved | undefined) =>
       new Promise<Start>((resolve) => {
         const finish = (choice: Start): void => {

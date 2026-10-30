@@ -2,6 +2,7 @@ import { GlossaryCsvError, formatGlossaryCsv, readGlossaryCsv } from '../../../.
 import { currentRows, type EditorModel, type EditorRow } from '../../../../app/src/glossary/editor/model.js'
 import type { EditorHost, LoadedGlossary } from '../../../../app/src/glossary/editor/page/host.js'
 import type { EffectiveRow, GlossaryRow } from '../../../../app/src/glossary/types.js'
+import { resolveLocale } from '../../../../app/src/wporg/locales.js'
 
 /**
  * The editor's host on the website: no server, so a file is read from the
@@ -42,6 +43,12 @@ export interface WebEnv {
   download(name: string, text: string): void
   /** A file picked from disk, or undefined when the picker was cancelled. */
   pick(accept: string): Promise<{ name: string; text: string } | undefined>
+  /**
+   * The locale of an opened file whose header names none, or one wp.org does
+   * not list, asked with the picker New uses. Undefined when the person
+   * declines, and the file is then not opened.
+   */
+  askLocale(file: string, header: string): Promise<string | undefined>
 }
 
 /** The glossary export GlotPress offers for a locale, the file a person starts from. */
@@ -150,7 +157,23 @@ export function webHost(env: WebEnv): EditorHost {
       }
       if (choice.kind === 'file') {
         const read = readGlossaryCsv(choice.text)
-        locale = read.headerLocale
+        // The export writes the header back, so a header with no locale or an
+        // unknown one would come out as "en,,pos,description" or as the same
+        // unknown name, which neither GlotPress nor polyglots can import. A
+        // header that resolves is kept as written, so the file round-trips.
+        if (resolveLocale(read.headerLocale)) {
+          locale = read.headerLocale
+        } else {
+          const asked = await env.askLocale(choice.name, read.headerLocale)
+          if (asked === undefined) {
+            throw new GlossaryCsvError(
+              read.headerLocale === ''
+                ? `${choice.name}'s header names no locale. Choose its locale to open it.`
+                : `${choice.name}'s header names "${read.headerLocale}", which is not a wp.org locale. Choose its locale to open it.`,
+            )
+          }
+          locale = asked
+        }
         file = choice.name
         return { mode: 'csv', locale, headerLocale: locale, file, rows: read.rows }
       }
