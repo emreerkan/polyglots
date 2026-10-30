@@ -972,6 +972,40 @@ describe('auditEntries deciding from the memory', () => {
     expect(sent).toEqual(['broken'])
   })
 
+  /**
+   * A glossary miss is the one suspect an approval does not outrank. The
+   * memory records what the locale approved, the glossary what it says now,
+   * and when a GTE changes a term every string approved under the old one is
+   * an exact match: settled from the memory, they never reached the rule or
+   * the model, so the change reached nothing it was made for.
+   */
+  it('does not let the approval overrule a glossary miss', async () => {
+    const settled = { tm: memoryOf([['Sidebar', 'Yan menü']]), memoryExact: exactFor(['Sidebar']) }
+    const adjudicate = vi.fn(async (batch: { id: number; key: string }[]) => ok(batch))
+    await auditEntries({ entries: [entry('old', 'Sidebar', 'Yan menü')], ...base(), ...settled, adjudicate })
+    expect(adjudicate).toHaveBeenCalledTimes(1)
+
+    const [rulesOnly] = await auditEntries({ entries: [entry('old', 'Sidebar', 'Yan menü')], ...base({ noAi: true }), ...settled })
+    expect(rulesOnly).toMatchObject({ needsReview: true })
+    expect(rulesOnly!.findings.map((f) => f.rule)).toContain('glossary')
+  })
+
+  // The same disagreement on the other path: an entry left in English would
+  // be repaired with the old wording, written in by the tool itself.
+  it('does not repair from a memory wording the glossary has replaced', async () => {
+    const adjudicate = vi.fn(async (batch: { id: number; key: string }[]) => ok(batch))
+    const verdicts = await auditEntries({
+      entries: [entry('a', 'Sidebar', 'Sidebar')],
+      ...base(),
+      tm: memoryOf([['Sidebar', 'Yan menü']]),
+      memoryExact: exactFor(['Sidebar']),
+      adjudicate,
+    })
+
+    expect(adjudicate).toHaveBeenCalledTimes(1)
+    expect(verdicts[0]!.repairedBy).not.toBe('memory')
+  })
+
   it('repairs an entry left in English without asking the model', async () => {
     const adjudicate = vi.fn(async (batch: { id: number; key: string }[]) => ok(batch))
     const verdicts = await auditEntries({

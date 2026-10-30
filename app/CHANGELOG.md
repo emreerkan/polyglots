@@ -15,6 +15,11 @@ Entries say what changed. For why and how, read the commit.
 - The glossary editor sorts by term or translation from the column headers, and has a Settings dialog: sort, the filter it opens with, row height, wrapping, hidden columns, search scope, and what Enter and Tab do.
 - `glossary edit` keeps those settings in `glossary-editor.json` in the config directory; the website keeps them in the browser.
 
+### Changed
+
+- The glossary rule finds a term in its other English forms: plural or singular of the last word, and a hyphenated term written closed or open (`add-on`, `addon`, `add on`).
+- `review` no longer settles a translation from the memory when it misses a glossary term, nor repairs an untranslated entry with a memory wording that does.
+
 ## [1.5.0] - 2026-10-30
 
 ### Added

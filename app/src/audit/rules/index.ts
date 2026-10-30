@@ -779,14 +779,62 @@ export interface GlossaryMatch {
 // matcher runs for every row on every entry. Keyed on the array, which a
 // context holds for its whole life. Not on the locale: a source term is
 // English, and lowers by English rules in every locale.
-const LOWERED = new WeakMap<readonly GlossaryEntry[], Array<{ item: GlossaryEntry; term: string }>>()
+const LOWERED = new WeakMap<readonly GlossaryEntry[], Array<{ item: GlossaryEntry; term: string; forms: string[] }>>()
 
-function loweredTerms(ctx: RuleContext): Array<{ item: GlossaryEntry; term: string }> {
+function loweredTerms(ctx: RuleContext): Array<{ item: GlossaryEntry; term: string; forms: string[] }> {
   const cached = LOWERED.get(ctx.glossary)
   if (cached) return cached
-  const terms = ctx.glossary.map((item) => ({ item, term: lowerSource(item.sourceTerm) }))
+  const terms = ctx.glossary.map((item) => {
+    const term = lowerSource(item.sourceTerm)
+    return { item, term, forms: termForms(term) }
+  })
   LOWERED.set(ctx.glossary, terms)
   return terms
+}
+
+/**
+ * The English spellings a glossary term is found under: the term, its last
+ * word made plural or singular, and a hyphenated term written closed and open.
+ *
+ * A row names one form and sources use the others. On a Masteriyo run the tr
+ * glossary held "course", "quiz", "attempt", "highlights" and "add-on", and
+ * "All Courses", "Export quizzes", "Quiz Attempts", "Course Highlight" and
+ * "addon" were all passed over, so dozens of strings kept the wording the
+ * glossary had replaced. Only the last word is inflected, since that is the one
+ * English marks: "payment methods", not "payments method".
+ *
+ * The rules are the regular ones and nothing cleverer. They over-generate, and
+ * that is safe where it makes a word no source contains ("statu" from
+ * "status"); the one kind that is not is a form that is another real word, so
+ * "es" is stripped only after s, x, z, ch and sh, or "themes" would be found
+ * in "them". What is left ("new" found in "news") is a suspicion the reviewer
+ * or the model reads, which is what the rule only ever reports.
+ */
+export function termForms(term: string): string[] {
+  const spellings = term.includes('-') ? [term, term.replaceAll('-', ''), term.replaceAll('-', ' ')] : [term]
+  const forms = new Set<string>()
+  for (const spelling of spellings) {
+    const split = Math.max(spelling.lastIndexOf(' '), spelling.lastIndexOf('-')) + 1
+    const head = spelling.slice(0, split)
+    for (const word of wordForms(spelling.slice(split))) forms.add(head + word)
+  }
+  return [...forms].filter((f) => f.length >= 3)
+}
+
+function wordForms(word: string): string[] {
+  const forms = [word]
+  if (!/^\p{L}+$/u.test(word)) return forms
+  // Plural.
+  if (/(s|x|z|ch|sh)$/.test(word)) forms.push(`${word}es`)
+  if (/[aeiou]z$/.test(word)) forms.push(`${word}zes`)
+  if (/[^aeiou]y$/.test(word)) forms.push(`${word.slice(0, -1)}ies`)
+  if (!word.endsWith('s')) forms.push(`${word}s`)
+  // Singular.
+  if (word.endsWith('ies')) forms.push(`${word.slice(0, -3)}y`)
+  if (word.endsWith('zzes')) forms.push(word.slice(0, -3))
+  if (/(s|x|z|ch|sh)es$/.test(word)) forms.push(word.slice(0, -2))
+  if (word.endsWith('s') && !word.endsWith('ss')) forms.push(word.slice(0, -1))
+  return forms
 }
 
 /**
@@ -803,12 +851,12 @@ function loweredTerms(ctx: RuleContext): Array<{ item: GlossaryEntry; term: stri
 export function glossaryMatches(msgid: string, ctx: RuleContext): GlossaryMatch[] {
   const source = lowerSource(msgid)
   const byTerm = new Map<string, GlossaryMatch>()
-  for (const { item, term } of loweredTerms(ctx)) {
+  for (const { item, term, forms } of loweredTerms(ctx)) {
     if (term.length < 3) continue
     // The substring test first: hasWord builds a regex, and this runs for
     // every glossary row on every entry, which on a real glossary and file
     // was seconds of a run spent compiling patterns for terms not present.
-    if (!source.includes(term) || !hasWord(source, term)) continue
+    if (!forms.some((form) => source.includes(form) && hasWord(source, form))) continue
     const found = byTerm.get(term) ?? { term: item.sourceTerm, translations: [], rows: [] }
     // Compared under NFC, so a translation stored in both encodings is listed
     // once; the first spelling stored is the one kept. Rows follow the same

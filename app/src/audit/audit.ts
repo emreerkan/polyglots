@@ -219,7 +219,17 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
     // measured on, every title-case and untranslated hit on an identical match
     // was a label or a brand the locale had approved exactly as written. It
     // does not outrank an error, which is a rule having proved the text broken.
-    if (decision?.kind === 'approve' && errors.length === 0) {
+    //
+    // Nor a glossary miss, the one suspect that speaks for the locale rather
+    // than guessing at it. The memory is what was approved, the glossary what
+    // the locale says now, and they disagree exactly when a GTE has changed a
+    // term: every string approved under the old one is then an identical
+    // match. Settled here, those never reached the rule's reader or the model,
+    // and on the Masteriyo run nineteen strings kept "eğitim" after the
+    // glossary had made it "kurs". The cost is that a stem the rule cannot
+    // see through (kitap, kitabı) now goes to the model instead of settling.
+    const glossaryMiss = findings.some((f) => f.rule === 'glossary')
+    if (decision?.kind === 'approve' && errors.length === 0 && !glossaryMiss) {
       verdicts.set(entry.key, {
         key: entry.key,
         problem: false,
@@ -233,8 +243,10 @@ export async function auditEntries(opts: AuditOptions): Promise<Verdict[]> {
     if (decision?.kind === 'repair') {
       // The approved text is judged like any repair before it is accepted, so
       // a memory row that has itself gone wrong cannot be written in unseen.
+      // A glossary miss counts against it too, for the reason above: here the
+      // tool would be the one writing the replaced term into the file.
       const after = runRules({ ...entry, msgstr: decision.text }, ctx)
-      if (!after.some((f) => f.severity === 'error')) {
+      if (!after.some((f) => f.severity === 'error' || f.rule === 'glossary')) {
         verdicts.set(entry.key, {
           key: entry.key,
           problem: true,

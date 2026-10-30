@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AuditEntry, GlossaryEntry } from '../../src/types.js'
-import { buildRuleContext, glossaryAlternatives, runRules, tmKey } from '../../src/audit/rules/index.js'
+import { buildRuleContext, glossaryAlternatives, runRules, termForms, tmKey } from '../../src/audit/rules/index.js'
 import { profileFor } from '../../src/audit/rules/profiles.js'
 import { pluralDistribution } from '../../src/po/plural-forms.js'
 import { useLocaleFixture } from '../locale-fixture.js'
@@ -546,6 +546,66 @@ describe('glossary rule', () => {
     expect(found('IMAGE')).toHaveLength(1)
     expect(found('Insert row')).toHaveLength(1)
     expect(found('Image')[0]!.message).toContain('"image"')
+  })
+})
+
+/**
+ * A glossary row names one form of a term, and English sources use the
+ * others. On a Masteriyo run with "course", "quiz", "attempt", "highlights"
+ * and "add-on" in the tr glossary, "All Courses", "Export quizzes",
+ * "Deleting Quiz Attempts", "Course Highlight" and "addon" were all passed
+ * over, so dozens of strings kept the wording the glossary had replaced.
+ */
+describe('glossary term forms', () => {
+  const terms = (sourceTerm: string, translation: string, msgid: string, msgstr = 'zzz') => {
+    const glossary: GlossaryEntry[] = [{ locale: 'tr', sourceTerm, translation, partOfSpeech: 'noun' }]
+    const e = entry(msgid, msgstr)
+    return runRules(e, buildRuleContext({ locale: 'tr', glossary, nplurals: 2, entries: [e] })).filter(
+      (f) => f.rule === 'glossary',
+    )
+  }
+
+  it('finds a singular term in its plural', () => {
+    expect(terms('course', 'kurs', 'All Courses')).toHaveLength(1)
+    expect(terms('attempt', 'deneme', 'Deleting Quiz Attempts')).toHaveLength(1)
+    expect(terms('quiz', 'test', 'Export quizzes')).toHaveLength(1)
+    expect(terms('category', 'kategori', 'All categories')).toHaveLength(1)
+    expect(terms('box', 'kutu', 'Check boxes')).toHaveLength(1)
+  })
+
+  it('finds a plural term in its singular', () => {
+    expect(terms('highlights', 'öne çıkanlar', 'Course Highlight')).toHaveLength(1)
+    expect(terms('categories', 'kategoriler', 'Category')).toHaveLength(1)
+  })
+
+  it('inflects the last word of a phrase', () => {
+    expect(terms('payment method', 'ödeme yöntemi', 'Saved payment methods')).toHaveLength(1)
+  })
+
+  it('finds a hyphenated term written closed or open', () => {
+    expect(terms('add-on', 'modül', 'Install the addon')).toHaveLength(1)
+    expect(terms('add-on', 'modül', 'Install the add on')).toHaveLength(1)
+    expect(terms('add-on', 'modül', 'Install the Add-Ons')).toHaveLength(1)
+  })
+
+  it('still passes a translation that uses the term', () => {
+    expect(terms('course', 'kurs', 'All Courses', 'Tüm kurslar')).toHaveLength(0)
+  })
+
+  it('reports the term as the glossary stores it', () => {
+    expect(terms('course', 'kurs', 'All Courses')[0]!.message).toBe('glossary term not used: "course" -> "kurs"')
+  })
+
+  // Stripping "es" from every plural would turn "themes" into "them".
+  it('does not make a plural term into another word', () => {
+    expect(termForms('themes')).toContain('theme')
+    expect(termForms('themes')).not.toContain('them')
+    expect(terms('themes', 'temalar', 'Show them all')).toHaveLength(0)
+  })
+
+  it('does not find a term inside a longer word', () => {
+    expect(terms('course', 'kurs', 'Of coursework')).toHaveLength(0)
+    expect(terms('add-on', 'modül', 'Addons-manager')).toHaveLength(1)
   })
 })
 
