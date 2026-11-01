@@ -15,3 +15,11 @@ export interface ShipState {
 }
 export type ShipStep = 'push-main' | 'wait-ci' | 'tag' | 'push-tag' | 'wait-release' | 'deploy'
 export function planShip(s: ShipState): { steps: ShipStep[]; refusal?: undefined } | { steps?: undefined; refusal: string }
+export type RunState = { state: 'none'; id?: undefined } | { state: 'pending' | 'success' | 'failure'; id: number }
+export type RunResult = { state: 'success' | 'failure'; id: number } | { state: 'absent' } | { state: 'unreadable'; error: string }
+export function waitForRun(options: {
+  poll: () => RunState
+  wait: () => Promise<void>
+  neverAppeared?: number
+  unreadable?: number
+}): Promise<RunResult>

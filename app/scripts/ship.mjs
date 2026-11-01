@@ -23,7 +23,7 @@ import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
-import { planShip } from './ship-plan.mjs'
+import { planShip, waitForRun } from './ship-plan.mjs'
 
 const app = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repo = join(app, '..')
@@ -83,17 +83,11 @@ function state() {
 
 /** Waits for a workflow run on a commit to appear, then for it to finish. */
 async function watch(sha, workflow, what) {
-  let found = ciOn(sha, workflow)
-  // A run takes a few seconds to be registered after the push that starts it.
-  for (let i = 0; found.state === 'none' && i < 36; i++) {
-    await sleep(5000)
-    found = ciOn(sha, workflow)
-  }
-  if (found.state === 'none') fail(`No ${what} run appeared for ${sha.slice(0, 7)} after three minutes. Check GitHub Actions, then run npm run ship again.`)
-  if (found.state !== 'success') {
-    const watched = spawnSync('gh', ['run', 'watch', String(found.id), '--exit-status'], { cwd: repo, stdio: 'inherit' })
-    if (watched.status !== 0) fail(`${what} failed: gh run view ${found.id} --log-failed`)
-  }
+  console.log(`  waiting for ${what} on ${sha.slice(0, 7)}`)
+  const result = await waitForRun({ poll: () => ciOn(sha, workflow), wait: () => sleep(15000) })
+  if (result.state === 'absent') fail(`No ${what} run appeared for ${sha.slice(0, 7)} after three minutes. Check GitHub Actions, then run npm run ship again.`)
+  if (result.state === 'unreadable') fail(`Could not read ${what} from GitHub for ten minutes, so it may still be running: ${result.error}. Run npm run ship again to carry on.`)
+  if (result.state === 'failure') fail(`${what} failed: gh run view ${result.id} --log-failed`)
   console.log(`✓ ${what} passed`)
 }
 

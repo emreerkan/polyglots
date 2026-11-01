@@ -57,3 +57,44 @@ export function planShip(s) {
   steps.push('deploy')
   return { steps }
 }
+
+/**
+ * Waits for a workflow run to finish, by reading its state until it says so.
+ *
+ * Only a finished run's conclusion decides anything. This used to hand the
+ * wait to `gh run watch --exit-status` and read any non-zero exit as a failed
+ * run, but that command also exits non-zero when the GitHub API does: shipping
+ * 1.6.1 stopped three times on a 502 saying "CI failed" while the runs were
+ * queued, and all of them went on to pass. An error here is a read that did
+ * not work, so it is read again, and after enough of them in a row the answer
+ * is that the state is unknown, which is not the same as red.
+ *
+ * A pending run has no limit: a queue that takes an hour is GitHub's to clear,
+ * and giving up on it would only mean starting this again.
+ *
+ * @param {object} options
+ * @param {() => import('./ship-plan.d.mts').RunState} options.poll reads the run; throws when it cannot
+ * @param {() => Promise<void>} options.wait the pause between reads
+ * @param {number} [options.neverAppeared] reads with no run before giving up
+ * @param {number} [options.unreadable] failed reads in a row before giving up
+ * @returns {Promise<import('./ship-plan.d.mts').RunResult>}
+ */
+export async function waitForRun({ poll, wait, neverAppeared = 12, unreadable = 40 }) {
+  let absent = 0
+  let errors = 0
+  for (;;) {
+    let run
+    try {
+      run = poll()
+      errors = 0
+    } catch (error) {
+      if (++errors >= unreadable) return { state: 'unreadable', error: error instanceof Error ? error.message : String(error) }
+      await wait()
+      continue
+    }
+    if (run.state === 'success' || run.state === 'failure') return { state: run.state, id: run.id }
+    // A run takes a few seconds to be registered after the push that starts it.
+    if (run.state === 'none' && ++absent >= neverAppeared) return { state: 'absent' }
+    await wait()
+  }
+}
