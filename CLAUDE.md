@@ -130,7 +130,7 @@ stated in the same sentence as the repair count without contradicting it.
 **A `.po` carries no review status.** GlotPress marks only `fuzzy`. Waiting,
 current and changes-requested are properties of the server, not the file, so a
 downloaded catalogue cannot be scoped to a subset after the fact. The export URL
-filter is what decides it: `?filters[status]=waiting`.
+filter is what decides it: `--get waiting` exports `?filters[status]=waiting_or_fuzzy`.
 
 **Fuzzy entries are overwritten unconditionally** on a translate pass. That is the
 one data-loss path in the round trip, and the cache has no memory of a human

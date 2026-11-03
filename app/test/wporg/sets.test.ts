@@ -20,14 +20,14 @@ describe('translation sets in wp.org URLs', () => {
   it('looks a project up and exports it in the set', () => {
     expect(localePageUrl('wp-themes', 'koji', 'nl/formal')).toBe('https://translate.wordpress.org/locale/nl/formal/wp-themes/koji/')
     expect(exportUrl('wp-plugins', 'acme', 'dev', 'pt/ao90', 'waiting')).toBe(
-      'https://translate.wordpress.org/projects/wp-plugins/acme/dev/pt/ao90/export-translations/?filters%5Bstatus%5D=waiting&format=po',
+      'https://translate.wordpress.org/projects/wp-plugins/acme/dev/pt/ao90/export-translations/?filters%5Bstatus%5D=waiting_or_fuzzy&format=po',
     )
   })
 
   it('reads a plugin branch from a sub-project link in a set', () => {
     const html = `<table><tr><td class="set-name"><a href="/projects/wp-plugins/acme/stable/nl/formal/">Stable</a></td>
       <td class="stats untranslated">2</td><td class="stats waiting">7</td></tr></table>`
-    expect(readSubProjects(html, 'wp-plugins')).toEqual([{ branch: 'stable', untranslated: 2, waiting: 7 }])
+    expect(readSubProjects(html, 'wp-plugins')).toEqual([{ branch: 'stable', untranslated: 2, waiting: 7, fuzzy: 0 }])
   })
 
   it('names the file without a slash, and reads the set back for the requester link', () => {

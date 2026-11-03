@@ -100,12 +100,12 @@ describe('readSubProjects', () => {
   it('reads every sub-project of a plugin, with its branch and counts', () => {
     const rows = readSubProjects(fixture('plugin-page.html'), 'wp-plugins')
     expect(rows.map((r) => r.branch).sort()).toEqual(['dev', 'dev-readme', 'stable', 'stable-readme'])
-    expect(rows.find((r) => r.branch === 'stable')).toEqual({ branch: 'stable', untranslated: 0, waiting: 0 })
+    expect(rows.find((r) => r.branch === 'stable')).toEqual({ branch: 'stable', untranslated: 0, waiting: 0, fuzzy: 0 })
   })
 
   it('reads a theme as one row with no branch', () => {
     expect(readSubProjects(fixture('theme-page.html'), 'wp-themes')).toEqual([
-      { branch: undefined, untranslated: 3, waiting: 111 },
+      { branch: undefined, untranslated: 3, waiting: 111, fuzzy: 0 },
     ])
   })
 
@@ -113,7 +113,13 @@ describe('readSubProjects', () => {
   it('reads a count printed with a thousands separator', () => {
     const html = `<table><tr><td class="set-name"><a href="/projects/wp-plugins/big/dev/tr/default/">Dev</a></td>
       <td class="stats untranslated"><a>1,204</a></td><td class="stats waiting"><a>14,530</a></td></tr></table>`
-    expect(readSubProjects(html, 'wp-plugins')).toEqual([{ branch: 'dev', untranslated: 1204, waiting: 14530 }])
+    expect(readSubProjects(html, 'wp-plugins')).toEqual([{ branch: 'dev', untranslated: 1204, waiting: 14530, fuzzy: 0 }])
+  })
+
+  it('reads the fuzzy count beside the waiting one', () => {
+    const html = `<table><tr><td class="set-name"><a href="/projects/wp-plugins/acme/dev/tr/default/">Dev</a></td>
+      <td class="stats fuzzy"><a>5</a></td><td class="stats untranslated"><a>2</a></td><td class="stats waiting"><a>0</a></td></tr></table>`
+    expect(readSubProjects(html, 'wp-plugins')).toEqual([{ branch: 'dev', untranslated: 2, waiting: 0, fuzzy: 5 }])
   })
 
   it('finds nothing in a page without the table', () => {
@@ -130,7 +136,7 @@ describe('URLs and names', () => {
 
   it('builds an export URL for a theme and for a plugin branch', () => {
     expect(exportUrl('wp-themes', 'koji', undefined, 'tr', 'waiting')).toBe(
-      'https://translate.wordpress.org/projects/wp-themes/koji/tr/default/export-translations/?filters%5Bstatus%5D=waiting&format=po',
+      'https://translate.wordpress.org/projects/wp-themes/koji/tr/default/export-translations/?filters%5Bstatus%5D=waiting_or_fuzzy&format=po',
     )
     expect(exportUrl('wp-plugins', 'contact-form-7', 'dev', 'tr', 'untranslated')).toBe(
       'https://translate.wordpress.org/projects/wp-plugins/contact-form-7/dev/tr/default/export-translations/?filters%5Bstatus%5D=untranslated&format=po',

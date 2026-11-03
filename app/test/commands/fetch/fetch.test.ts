@@ -13,11 +13,11 @@ const fixture = (name: string) =>
 
 // A plugin page with chosen counts per sub-project, built in the shape the real
 // page has so the scraper reads it the same way.
-function pluginPage(slug: string, rows: Record<string, { untranslated: number; waiting: number }>): string {
+function pluginPage(slug: string, rows: Record<string, { untranslated: number; waiting: number; fuzzy?: number }>): string {
   const cells = Object.entries(rows)
     .map(
       ([branch, c]) => `<tr><td class="set-name"><a href="/projects/wp-plugins/${slug}/${branch}/tr/default/">${branch}</a></td>
-        <td class="stats untranslated"><a>${c.untranslated}</a></td><td class="stats waiting"><a>${c.waiting}</a></td></tr>`,
+        <td class="stats fuzzy"><a>${c.fuzzy ?? 0}</a></td><td class="stats untranslated"><a>${c.untranslated}</a></td><td class="stats waiting"><a>${c.waiting}</a></td></tr>`,
     )
     .join('')
   return `<table>${cells}</table>`
@@ -183,6 +183,31 @@ describe('resolveProjects', () => {
       const http = serve({ [localePageUrl('wp-themes', 'koji', 'tr')]: { status: 200, body: fixture('theme-page.html') } })
       expect(await resolveProjects(parseProjectLines('koji'), { ...opts, http })).toHaveLength(1)
     })
+  })
+
+  // A fuzzy string is one a reviewer has to decide on, as a waiting one is.
+  // Counting only waiting passed over projects whose every open string was
+  // fuzzy, and the export would have left those strings out anyway.
+  it('counts fuzzy strings as work to review', async () => {
+    const http = serve({
+      [localePageUrl('wp-plugins', 'acme', 'tr')]: {
+        status: 200,
+        body: pluginPage('acme', { dev: { untranslated: 0, waiting: 0, fuzzy: 2 }, stable: { untranslated: 0, waiting: 1, fuzzy: 4 } }),
+      },
+    })
+    const [r] = await resolveProjects([{ type: 'wp-plugins', slug: 'acme' }], { ...opts, readme: false, http })
+    expect(r).toMatchObject({ state: 'ready', branch: 'stable', count: 5 })
+  })
+
+  it('does not count fuzzy strings as untranslated', async () => {
+    const http = serve({
+      [localePageUrl('wp-plugins', 'acme', 'tr')]: {
+        status: 200,
+        body: pluginPage('acme', { dev: { untranslated: 0, waiting: 0, fuzzy: 3 } }),
+      },
+    })
+    const [r] = await resolveProjects([{ type: 'wp-plugins', slug: 'acme' }], { ...opts, status: 'untranslated', readme: false, http })
+    expect(r).toMatchObject({ state: 'empty' })
   })
 
   it('marks a project with nothing in the chosen status as empty', async () => {

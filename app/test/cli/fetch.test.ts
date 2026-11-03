@@ -87,7 +87,7 @@ function fakeWporg() {
     resolved.push(refs)
     return refs.map((r): Resolution => {
       if (r.slug === 'missing') return { input: r.slug, state: 'not-found', reason: 'no theme or plugin' }
-      if (r.slug === 'quiet') return { input: r.slug, state: 'empty', reason: 'nothing waiting' }
+      if (r.slug === 'quiet') return { input: r.slug, state: 'empty', reason: 'nothing waiting or fuzzy' }
       return { input: r.slug, state: 'ready', type: 'wp-themes', slug: r.slug, count: 5 }
     })
   }
@@ -255,7 +255,7 @@ describe('fetch', () => {
     const out = r.stdout.replace(/\s+/g, ' ')
     expect(out).toMatch(/koji .*5 waiting/)
     expect(out).toMatch(/missing .*not found/)
-    expect(out).toMatch(/quiet .*nothing waiting/)
+    expect(out).toMatch(/quiet .*nothing waiting or fuzzy/)
   })
 
   it('carries on past failures and ends with the tally and exit 1', async () => {

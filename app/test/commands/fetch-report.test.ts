@@ -82,7 +82,7 @@ describe('describeChecked', () => {
   it("names a plugin's readme beside its code", () => {
     const code = { input: 'acme', state: 'ready' as const, type: 'wp-plugins' as const, slug: 'acme', branch: 'dev', count: 4 }
     const readme = { ...code, input: 'wp-plugins/acme/stable-readme', branch: 'stable-readme', count: 2 }
-    expect(describeChecked([code], 'waiting')).toBe('plugin dev, 4 waiting')
-    expect(describeChecked([code, readme], 'waiting')).toBe('plugin dev, 4 waiting + readme, 2 waiting')
+    expect(describeChecked([code], 'waiting')).toBe('plugin dev, 4 waiting or fuzzy')
+    expect(describeChecked([code, readme], 'waiting')).toBe('plugin dev, 4 waiting or fuzzy + readme, 2 waiting or fuzzy')
   })
 })

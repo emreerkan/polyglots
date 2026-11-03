@@ -161,7 +161,7 @@ export const fetch: Scenario = {
       return refs.map((ref): Resolution => {
         if (ref.slug === 'lunar-forms') return { input: ref.slug, state: 'ready', type: 'wp-plugins', slug: 'lunar-forms', branch: 'stable', count: 286 }
         if (ref.slug === 'harbor') return { input: ref.slug, state: 'ready', type: 'wp-themes', slug: 'harbor', count: 41 }
-        return { input: ref.slug, state: 'empty', reason: 'nothing waiting' }
+        return { input: ref.slug, state: 'empty', reason: 'nothing waiting or fuzzy' }
       })
     },
     fetchProjects: async (ready) => {

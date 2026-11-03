@@ -1,6 +1,6 @@
 import { buildReport } from '../review/message.js'
 import type { Locale, ReviewSummary } from '../types.js'
-import type { FetchStatus } from '../wporg/projects.js'
+import { STATUS_WORDS, type FetchStatus } from '../wporg/projects.js'
 import type { ProjectOutcome } from './batch.js'
 import type { Fetched, Resolution } from './fetch.js'
 import type { TranslateSummary } from './translate.js'
@@ -37,7 +37,7 @@ export type Tally = Record<ProjectEnd['tally'], number>
 export function describeResolution(r: Resolution, status: FetchStatus): string {
   if (r.state === 'ready') {
     const where = r.type === 'wp-themes' ? 'theme' : `plugin ${r.branch ?? ''}`.trim()
-    return `${where}, ${r.count} ${status}`
+    return `${where}, ${r.count} ${STATUS_WORDS[status]}`
   }
   if (r.state === 'not-found') return 'not found'
   if (r.state === 'unreachable') return `could not check: ${r.reason}`
@@ -49,7 +49,7 @@ export function describeResolution(r: Resolution, status: FetchStatus): string {
 export function describeChecked(results: Resolution[], status: FetchStatus): string {
   const [code, readme] = results
   const line = code === undefined ? '' : describeResolution(code, status)
-  return readme?.state === 'ready' ? `${line} + readme, ${readme.count} ${status}` : line
+  return readme?.state === 'ready' ? `${line} + readme, ${readme.count} ${STATUS_WORDS[status]}` : line
 }
 
 export function describeDownload(f: Fetched): string {

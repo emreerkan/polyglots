@@ -8,6 +8,8 @@ import {
   localePageUrl,
   projectFileName,
   readSubProjects,
+  STATUS_WORDS,
+  workIn,
   type FetchStatus,
   type ProjectRef,
   type ProjectType,
@@ -152,7 +154,7 @@ function pickRow(
   const dev = rows.find((r) => r.branch === 'dev')
   const stable = rows.find((r) => r.branch === 'stable')
   if (!dev || !stable) return dev ?? stable
-  return stable[status] > dev[status] ? stable : dev
+  return workIn(stable, status) > workIn(dev, status) ? stable : dev
 }
 
 /**
@@ -170,8 +172,8 @@ function pickRow(
 function pickReadme(rows: SubProject[], status: FetchStatus): (SubProject & { branch: string }) | undefined {
   const dev = rows.find((r) => r.branch === 'dev-readme')
   const stable = rows.find((r) => r.branch === 'stable-readme')
-  const pick = !dev || !stable ? (stable ?? dev) : dev[status] > stable[status] ? dev : stable
-  return pick && pick[status] > 0 ? (pick as SubProject & { branch: string }) : undefined
+  const pick = !dev || !stable ? (stable ?? dev) : workIn(dev, status) > workIn(stable, status) ? dev : stable
+  return pick && workIn(pick, status) > 0 ? (pick as SubProject & { branch: string }) : undefined
 }
 
 /**
@@ -259,7 +261,7 @@ export async function resolveProjects(
         const row = pickReadme(page.rows, opts.status)
         if (row) {
           const path = `wp-plugins/${ref.slug}/${row.branch}`
-          readme = { input: path, state: 'ready', type, slug: ref.slug, branch: row.branch, count: row[opts.status] }
+          readme = { input: path, state: 'ready', type, slug: ref.slug, branch: row.branch, count: workIn(row, opts.status) }
         }
       }
       const row = pickRow(type, page.rows, ref.branch, opts.status)
@@ -267,10 +269,10 @@ export async function resolveProjects(
         resolution = { input, state: 'not-found', reason: `${type}/${ref.slug} has no ${ref.branch} sub-project` }
         break
       }
-      const count = row[opts.status]
+      const count = workIn(row, opts.status)
       resolution =
         count === 0
-          ? { input, state: 'empty', reason: `nothing ${opts.status}` }
+          ? { input, state: 'empty', reason: `nothing ${STATUS_WORDS[opts.status]}` }
           : {
               input,
               state: 'ready',

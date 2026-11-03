@@ -1431,7 +1431,7 @@ function buildProgram(cli: Cli, setExitCode: (code: number) => void): Command {
   program
     .command('fetch [names...]')
     .description('Fetch themes and plugins from translate.wordpress.org and review or translate every one')
-    .option('--get <status>', 'waiting (reviewed) or untranslated (translated)')
+    .option('--get <status>', 'waiting (waiting and fuzzy strings, reviewed) or untranslated (translated)')
     .option('--parallel <n>', `Projects to run at once, 1 to 8 (default: 1)`)
     .option('--out-dir <dir>', 'Where to save the exports (default: ~/Downloads/polyglots)')
     .option('--force', 'With --get untranslated, replace a file that already exists instead of keeping it')

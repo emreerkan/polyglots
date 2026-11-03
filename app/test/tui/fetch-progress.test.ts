@@ -18,7 +18,7 @@ describe('the fetch progress rows', () => {
       { input: 'koji', state: 'checked', results: [{ input: 'koji', state: 'ready', type: 'wp-themes', slug: 'koji', count: 3 }] },
       'waiting',
     )
-    expect(rows[0]).toEqual({ input: 'koji', state: 'done', detail: 'theme, 3 waiting' })
+    expect(rows[0]).toEqual({ input: 'koji', state: 'done', detail: 'theme, 3 waiting or fuzzy' })
     rows = checkRows(rows, { input: 'nope', state: 'checked', results: [{ input: 'nope', state: 'not-found', reason: '' }] }, 'waiting')
     expect(rows[1]).toEqual({ input: 'nope', state: 'done', detail: 'not found', dim: true })
   })
@@ -30,13 +30,13 @@ describe('the fetch progress rows', () => {
         input: 'acme',
         state: 'checked',
         results: [
-          { input: 'acme', state: 'empty', reason: 'nothing waiting' },
+          { input: 'acme', state: 'empty', reason: 'nothing waiting or fuzzy' },
           { input: 'wp-plugins/acme/stable-readme', state: 'ready', type: 'wp-plugins', slug: 'acme', branch: 'stable-readme', count: 2 },
         ],
       },
       'waiting',
     )
-    expect(rows[0]).toEqual({ input: 'acme', state: 'done', detail: 'nothing waiting + readme, 2 waiting' })
+    expect(rows[0]).toEqual({ input: 'acme', state: 'done', detail: 'nothing waiting or fuzzy + readme, 2 waiting or fuzzy' })
   })
 
   // The same line given twice is two rows; each event belongs to the first
@@ -44,7 +44,7 @@ describe('the fetch progress rows', () => {
   it('keeps a line given twice as two rows', () => {
     let rows = queuedRows(['koji', 'koji'])
     rows = checkRows(rows, { input: 'koji', state: 'checking' }, 'waiting')
-    rows = checkRows(rows, { input: 'koji', state: 'checked', results: [{ input: 'koji', state: 'empty', reason: 'nothing waiting' }] }, 'waiting')
+    rows = checkRows(rows, { input: 'koji', state: 'checked', results: [{ input: 'koji', state: 'empty', reason: 'nothing waiting or fuzzy' }] }, 'waiting')
     rows = checkRows(rows, { input: 'koji', state: 'checking' }, 'waiting')
     expect(rows.map((r) => r.state)).toEqual(['done', 'working'])
   })

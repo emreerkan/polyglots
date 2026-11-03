@@ -11,6 +11,16 @@ export type ProjectType = 'wp-themes' | 'wp-plugins'
 // submissions other contributors are waiting on.
 export type FetchStatus = 'waiting' | 'untranslated'
 
+// What each choice asks GlotPress for. "waiting" is the name a person picks,
+// and it means everything a reviewer has to decide on: fuzzy strings are that
+// too, whether a contributor left them so or an import of changed originals
+// did. Asking for waiting alone skipped projects whose open strings were all
+// fuzzy, and left the fuzzy ones out of every export that did run.
+const STATUS_FILTER: Record<FetchStatus, string> = { waiting: 'waiting_or_fuzzy', untranslated: 'untranslated' }
+
+// The same choice as the counts and messages name it.
+export const STATUS_WORDS: Record<FetchStatus, string> = { waiting: 'waiting or fuzzy', untranslated: 'untranslated' }
+
 /**
  * A project as a line of input named it.
  *
@@ -87,6 +97,12 @@ export interface SubProject {
   branch: string | undefined
   untranslated: number
   waiting: number
+  fuzzy: number
+}
+
+/** The strings in a sub-project that a run in this status would work on. */
+export function workIn(row: SubProject, status: FetchStatus): number {
+  return status === 'waiting' ? row.waiting + row.fuzzy : row.untranslated
 }
 
 const count = (text: string): number => Number.parseInt(text.replace(/[^\d]/g, ''), 10) || 0
@@ -113,6 +129,7 @@ export function readSubProjects(html: string, type: ProjectType): SubProject[] {
       branch: type === 'wp-plugins' ? path[1] : undefined,
       untranslated: count($(tr).find('td.stats.untranslated').text()),
       waiting: count($(tr).find('td.stats.waiting').text()),
+      fuzzy: count($(tr).find('td.stats.fuzzy').text()),
     })
   })
   return rows
@@ -132,7 +149,7 @@ export function exportUrl(
 ): string {
   const path = branch ? `${type}/${slug}/${branch}` : `${type}/${slug}`
   const { slug: localeSlug, set } = splitLocale(locale)
-  return `${ORIGIN}/projects/${path}/${localeSlug}/${set}/export-translations/?filters%5Bstatus%5D=${status}&format=po`
+  return `${ORIGIN}/projects/${path}/${localeSlug}/${set}/export-translations/?filters%5Bstatus%5D=${STATUS_FILTER[status]}&format=po`
 }
 
 // The shape `translationsUrl` reads a project back out of, so a fetched file's

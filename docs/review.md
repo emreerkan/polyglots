@@ -45,9 +45,10 @@ output named on its own is still reviewed.
 
 A `.po` file carries no review status. GlotPress only marks entries as fuzzy;
 "waiting" is a fact about the server, not the file. So the export has to be
-made with the filter set: in GlotPress, filter by Waiting and export "only
-matching the filter". `polyglots fetch --get waiting <project>` does this for
-you.
+made with the filter set: in GlotPress, filter by Waiting or Fuzzy and export
+"only matching the filter". `polyglots fetch --get waiting <project>` does this
+for you, and takes the fuzzy strings with the waiting ones, since both need a
+reviewer's decision.
 
 Entries with no translation are skipped and counted as "not submitted".
 
