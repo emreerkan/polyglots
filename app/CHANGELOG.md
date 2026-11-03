@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-11-03
+
 ### Changed
 
 - `fetch --get waiting` also gets fuzzy strings: it counts them when it checks a project, and exports `waiting_or_fuzzy`.
