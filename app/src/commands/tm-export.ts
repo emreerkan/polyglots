@@ -103,7 +103,10 @@ function toPo(rows: Row[], locale: Locale): string {
     headers: { 'MIME-Version': '1.0', 'Content-Type': 'text/plain; charset=UTF-8', Language: locale },
     translations,
   }
-  return po.compile(data).toString('utf8')
+  // Unfolded, like PoFile.save: an export has no original to diff against,
+  // but every .po this tool writes should come out in one shape, the one
+  // GlotPress uses, rather than two that disagree on where a line ends.
+  return po.compile(data, { foldLength: 0 }).toString('utf8')
 }
 
 /**

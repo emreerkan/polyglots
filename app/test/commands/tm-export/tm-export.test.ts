@@ -87,6 +87,13 @@ describe('exportTm', () => {
     expect(result.text).not.toContain('Ayarlar (benioku)')
   })
 
+  it('keeps long lines whole in a .po, as the catalogue writer does', async () => {
+    const long = 'Could not refresh campaigns. Your selection is unchanged. Try Refresh campaigns again later.'
+    upsertTm(db, [{ source: long, target: 'Kampanyalar yenilenemedi. Seçiminiz değişmedi. Daha sonra yeniden deneyin.', locale: 'tr' }])
+    const result = await exportTm({ locale: 'tr', format: 'po', db })
+    expect(result.text).toContain(`msgid "${long}"\n`)
+  })
+
   it('takes the format from the file name, and an explicit one wins', async () => {
     const asPo = join(home, 'named.po')
     await exportTm({ locale: 'tr', file: asPo, db })
