@@ -10,6 +10,11 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+### Changed
+
+- Saved `.po` files no longer fold long lines: they break only after a newline, as GlotPress writes them.
+- Dependencies updated: gettext-parser 10.0, openai 7.47, @modelcontextprotocol/sdk 1.32.2; website on astro 7.4.4.
+
 ## [1.6.3] - 2026-11-03
 
 ### Changed

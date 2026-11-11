@@ -516,6 +516,19 @@ describe('PoFile edge cases', () => {
     expect(saved).toContain('#: includes/admin/notices.php:18\n#. translators: %s: plugin name\n#, php-format\nmsgid "Thank you for installing %s."')
     expect(saved).toContain('# Keep the brand name untranslated.\n#: includes/admin/notices.php:31')
   })
+
+  it('keeps long lines whole, as GlotPress writes them, and breaks only after a newline', async () => {
+    const long = 'Could not refresh campaigns. Your selection is unchanged. Try Refresh campaigns again later.'
+    const src =
+      'msgid ""\nmsgstr ""\n"Content-Type: text/plain; charset=UTF-8\\n"\n\n' +
+      `#: a.php:1\nmsgid "${long}"\nmsgstr ""\n\n` +
+      '#: a.php:2\nmsgid ""\n"First line\\n"\n"Second line"\nmsgstr ""\n'
+    await writeFile(path, src)
+    await (await loadPo(path)).save(path)
+    const saved = await readFile(path, 'utf8')
+    expect(saved).toContain(`msgid "${long}"\n`)
+    expect(saved).toContain('msgid ""\n"First line\\n"\n"Second line"\n')
+  })
 })
 
 describe('PoFile with a non-UTF-8 charset', () => {

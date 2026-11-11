@@ -371,9 +371,19 @@ export class PoFile {
     const stamped: Record<string, string> = stamp
       ? { 'PO-Revision-Date': revisionDate(now), 'X-Generator': 'polyglots' }
       : {}
+    // foldLength 0 turns off gettext-parser's line folding. GlotPress, where
+    // nearly every file here comes from and goes back to, never folds: it
+    // breaks a string only after an embedded newline. Folding at 76 (9.x) or
+    // msgcat's 79 (10.x) rewrapped every long line on each save, so comparing
+    // a repaired file with its wp.org original showed thousands of lines of
+    // layout noise around the handful of real changes; across 51 originals
+    // the diff fell from about 25,000 lines to under 5,000.
     const buffer = po.compile(
       { ...this.raw, headers: { ...this.raw.headers, ...stamped } },
-      { sort: (a, b) => this.rank(unitKey(a.msgid, a.msgctxt)) - this.rank(unitKey(b.msgid, b.msgctxt)) },
+      {
+        foldLength: 0,
+        sort: (a, b) => this.rank(unitKey(a.msgid, a.msgctxt)) - this.rank(unitKey(b.msgid, b.msgctxt)),
+      },
     )
     const tmp = join(dirname(target), `.${basename(target)}.${randomBytes(6).toString('hex')}.tmp`)
     try {
