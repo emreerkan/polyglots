@@ -10,6 +10,8 @@ Entries say what changed. For why and how, read the commit.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-11
+
 ### Changed
 
 - Saved `.po` files and `tm export` `.po` output no longer fold long lines: they break only after a newline, as GlotPress writes them.
