@@ -19,7 +19,7 @@
     "font": "sh scripts/subset-font.sh"
   },
   "dependencies": {
-    "astro": "^7.4.5"
+    "astro": "^7.4.7"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
